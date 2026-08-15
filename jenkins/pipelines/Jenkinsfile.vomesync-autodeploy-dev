@@ -1,0 +1,96 @@
+// =============================================================================
+// VomeSync server — DEV auto-deploy
+//
+// On every push to main or develop, run CI then hand off to vomesync-deploy
+// with TARGET=dev. That job is the single source of truth for *how* a deploy
+// is performed (compose build/up, health check).
+//
+// Jenkins job: VomeSync/vomesync-autodeploy-dev (provisioned from casc.yaml).
+//
+// GitHub webhook (same one as the other VomeSync-server jobs):
+//   Payload URL:  https://<jenkins-host>/github-webhook/
+//   Content type: application/json
+//   Events:       push
+// Without an inbound webhook, pollSCM still picks up changes within ~5 minutes.
+// =============================================================================
+
+pipeline {
+	agent any
+
+	options {
+		ansiColor('xterm')
+		timestamps()
+		timeout(time: 40, unit: 'MINUTES')
+		buildDiscarder(logRotator(numToKeepStr: '10', daysToKeepStr: '14'))
+		disableConcurrentBuilds()
+	}
+
+	triggers {
+		pollSCM('H/5 * * * *')
+		githubPush()
+	}
+
+	parameters {
+		booleanParam(
+			name: 'SKIP_TESTS',
+			defaultValue: false,
+			description: 'Skip the pre-flight CI run (emergency rollback only)'
+		)
+	}
+
+	environment {
+		DEPLOY_JOB_NAME = 'VomeSync/vomesync-deploy'
+	}
+
+	stages {
+		stage('Resolve commit') {
+			steps {
+				script {
+					env.DEPLOY_SHA = sh(
+						script: 'git rev-parse --short HEAD',
+						returnStdout: true,
+					).trim()
+					currentBuild.description = "→ DEV @ ${env.DEPLOY_SHA}"
+					echo "Auto-deploying ${env.DEPLOY_SHA} to DEV"
+				}
+			}
+		}
+
+		stage('Pre-flight CI') {
+			when {
+				expression { !params.SKIP_TESTS }
+			}
+			steps {
+				build job: 'VomeSync/vomesync-ci', wait: true, propagate: true,
+					parameters: [booleanParam(name: 'FORCE_RUN', value: true)]
+			}
+		}
+
+		stage('Deploy to DEV') {
+			steps {
+				// RUN_TESTS_FIRST is always false from here: either Pre-flight CI
+				// already ran vomesync-ci for this commit, or the operator skipped
+				// tests. Re-running CI inside vomesync-deploy would double the wait
+				// and hold the serialised deploy job for no reason.
+				build job: env.DEPLOY_JOB_NAME, wait: true, propagate: true,
+					parameters: [
+						string(name: 'TARGET', value: 'dev'),
+						booleanParam(name: 'PULL_LATEST', value: true),
+						booleanParam(name: 'NO_CACHE', value: false),
+						booleanParam(name: 'RUN_TESTS_FIRST', value: false),
+						booleanParam(name: 'BACKUP_BEFORE_DEPLOY', value: false),
+						booleanParam(name: 'SKIP_APPROVAL', value: true),
+					]
+			}
+		}
+	}
+
+	post {
+		success {
+			echo "Auto-deploy ${env.DEPLOY_SHA} → DEV succeeded."
+		}
+		failure {
+			echo "Auto-deploy ${env.DEPLOY_SHA} → DEV FAILED — the DEV stack may still be on the previous commit."
+		}
+	}
+}

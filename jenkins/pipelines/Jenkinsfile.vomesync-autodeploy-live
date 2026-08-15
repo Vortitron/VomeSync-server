@@ -1,0 +1,105 @@
+// =============================================================================
+// VomeSync server — LIVE auto-deploy
+//
+// On every push to main, run CI, wait for an operator click in *this* job,
+// then hand off to vomesync-deploy with TARGET=live and SKIP_APPROVAL.
+//
+// The approval lives here, not in vomesync-deploy: that job is shared with
+// DEV and is serialised (disableConcurrentBuilds), so a LIVE build parked at
+// an input inside it would block every DEV deploy for hours.
+//
+// Jenkins job: VomeSync/vomesync-autodeploy-live (provisioned from casc.yaml).
+// =============================================================================
+
+pipeline {
+	agent any
+
+	options {
+		ansiColor('xterm')
+		timestamps()
+		timeout(time: 4, unit: 'HOURS')
+		buildDiscarder(logRotator(numToKeepStr: '15', daysToKeepStr: '30'))
+		disableConcurrentBuilds()
+	}
+
+	triggers {
+		pollSCM('H/5 * * * *')
+		githubPush()
+	}
+
+	parameters {
+		booleanParam(
+			name: 'SKIP_TESTS',
+			defaultValue: false,
+			description: 'Skip the pre-flight CI run (emergency rollback only)'
+		)
+		booleanParam(
+			name: 'SKIP_APPROVAL',
+			defaultValue: false,
+			description: 'Bypass the manual LIVE approval click. Only set true when GitHub branch protection (PR review + green CI) is enforced on main.'
+		)
+	}
+
+	environment {
+		DEPLOY_JOB_NAME = 'VomeSync/vomesync-deploy'
+	}
+
+	stages {
+		stage('Resolve commit') {
+			steps {
+				script {
+					env.DEPLOY_SHA = sh(
+						script: 'git rev-parse --short HEAD',
+						returnStdout: true,
+					).trim()
+					currentBuild.description = "→ LIVE @ ${env.DEPLOY_SHA}"
+					echo "Auto-deploying ${env.DEPLOY_SHA} to LIVE"
+				}
+			}
+		}
+
+		stage('Pre-flight CI') {
+			when {
+				expression { !params.SKIP_TESTS }
+			}
+			steps {
+				build job: 'VomeSync/vomesync-ci', wait: true, propagate: true,
+					parameters: [booleanParam(name: 'FORCE_RUN', value: true)]
+			}
+		}
+
+		stage('Approval') {
+			when {
+				expression { !params.SKIP_APPROVAL }
+			}
+			steps {
+				timeout(time: 3, unit: 'HOURS') {
+					input message: "Deploy ${env.DEPLOY_SHA} to VomeSync LIVE (sync.vome.io)?", ok: 'Yes, deploy to production'
+				}
+			}
+		}
+
+		stage('Deploy to LIVE') {
+			steps {
+				build job: env.DEPLOY_JOB_NAME, wait: true, propagate: true,
+					parameters: [
+						string(name: 'TARGET', value: 'live'),
+						booleanParam(name: 'PULL_LATEST', value: true),
+						booleanParam(name: 'NO_CACHE', value: false),
+						booleanParam(name: 'RUN_TESTS_FIRST', value: false),
+						booleanParam(name: 'BACKUP_BEFORE_DEPLOY', value: true),
+						booleanParam(name: 'SKIP_APPROVAL', value: true),
+					]
+			}
+		}
+	}
+
+	post {
+		success {
+			echo "Auto-deploy ${env.DEPLOY_SHA} → LIVE succeeded."
+		}
+		failure {
+			echo "Auto-deploy ${env.DEPLOY_SHA} → LIVE FAILED — sync.vome.io may still be on the previous commit."
+		}
+	}
+}

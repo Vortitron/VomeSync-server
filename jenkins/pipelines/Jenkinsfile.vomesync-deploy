@@ -13,15 +13,14 @@ pipeline {
     agent any
 
     parameters {
-        // 'all' leads because the first choice is the default, and a
-        // push-triggered build takes the defaults. Declarative pipelines
-        // re-register their parameters on every run, so this list — not the
-        // Job DSL one in VomeHome's casc.yaml — is what sticks after the
-        // first build. Keep the two in step.
+        // 'dev' leads because the first choice is the default. This job is
+        // manual-only; push-triggered deploys go through the autodeploy
+        // parents, which pass TARGET explicitly. Keep this list in step with
+        // the Job DSL parameters in konhas.com/jenkins/casc.yaml.
         choice(
             name: 'TARGET',
-            choices: ['all', 'dev', 'live'],
-            description: 'Which service tier to deploy'
+            choices: ['dev', 'live', 'all'],
+            description: 'Which service tier to deploy. Manual default is DEV — LIVE is an explicit choice (and still has an approval click unless SKIP_APPROVAL).'
         )
         booleanParam(
             name: 'PULL_LATEST',
@@ -42,6 +41,11 @@ pipeline {
             name: 'BACKUP_BEFORE_DEPLOY',
             defaultValue: true,
             description: 'Create a Redis backup before deploying live'
+        )
+        booleanParam(
+            name: 'SKIP_APPROVAL',
+            defaultValue: false,
+            description: 'Skip the LIVE approval click. Auto-deploy-live sets this after it has already waited for an operator (or when branch protection is the gate).'
         )
     }
 
@@ -137,7 +141,9 @@ pipeline {
         // buys only the live promotion, which is the whole point of the gate.
         stage('Approval') {
             when {
-                expression { params.TARGET == 'live' || params.TARGET == 'all' }
+                expression {
+                    (params.TARGET == 'live' || params.TARGET == 'all') && !params.SKIP_APPROVAL
+                }
             }
             options {
                 // VomeHome learned this one the hard way: an approval sitting

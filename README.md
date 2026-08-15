@@ -11,7 +11,7 @@ webserver/    Node.js API + WebSocket + friendly-domain HA forward proxy
 website/      Public switch directory (static)
 docker/       Compose stack (Redis, API, website, nginx)
 docs/         API, server architecture, operations
-jenkins/      CI / E2E / deploy pipelines
+jenkins/      CI, E2E, deploy, and auto-deploy Jenkinsfiles (jobs live in the VomeHome Jenkins instance)
 tests/e2e/    End-to-end tests against the compose stack
 ```
 
@@ -47,3 +47,17 @@ Cookie-less friendly-domain traffic (`open` / companion-app mode) is rate-limite
 - `docs/ARCHITECTURE_WEBSITE.md`
 - `docs/SETUP.md`
 - `docs/OPERATIONS.md`
+
+## Jenkins (this host)
+
+Jobs sit in the VomeHome Jenkins folder **VomeSync**. Display names:
+
+| UI name | Trigger | Effect |
+|---|---|---|
+| Server CI | push `main` / `develop` | lint + unit/integration |
+| Server E2E | push `main` / `develop` | isolated compose E2E (not live) |
+| Server Deploy (manual) | button | DEV / LIVE / all |
+| Server Auto-Deploy (DEV) | push `main` / `develop` | unattended DEV compose up |
+| Server Auto-Deploy (LIVE) | push `main` | waits for a Jenkins click, then LIVE |
+
+Jenkinsfiles: `jenkins/pipelines/`. Operator map: `konhas.com/jenkins/PIPELINES.md`. GitHub webhook payload URL is `$JENKINS_PUBLIC_URL/github-webhook/` (`application/json`, push events).

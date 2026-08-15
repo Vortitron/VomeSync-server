@@ -136,4 +136,15 @@ Post-restore checks:
 - Revoke compromised v2 access keys (owner-signed revoke).
 - Purge `session_token:*` keys if you suspect website token misuse.
 
+## Jenkins on this host
+
+Production compose lives at `/var/www/VomeSync-server/docker`. The VomeHome Jenkins folder **VomeSync** auto-deploys:
+
+- Push to `main` or `develop` → **Server Auto-Deploy (DEV)** (unattended after CI).
+- Push to `main` → **Server Auto-Deploy (LIVE)** waits for a Jenkins approval click, then deploys LIVE.
+
+Manual hotfix: **Server Deploy (manual)** with `TARGET=dev` or `TARGET=live`. Do not use `TARGET=all` while an auto-deploy is in flight — that parks on the LIVE approval and blocks the shared deploy job.
+
+Job map: the VomeHome repo `jenkins/PIPELINES.md`. Jenkinsfiles: `jenkins/pipelines/` in this repo.
+
 
