@@ -61,6 +61,14 @@ class RelayManager {
 		// onClose }.  The browser-facing proxy (proxy/uiProxy) owns the socketId
 		// lifecycle; this map lets component frames find their browser handler.
 		this.tunnels = new Map();
+		// Forwarded responses arriving in pieces: requestId -> { queue, ended,
+		// error, onChunk, onEnd }.  A response whose body never ends -- the
+		// Supervisor log tail, an event stream, a camera feed -- cannot be
+		// buffered whole, so the component sends the head first and the body
+		// after it.  Chunks can arrive before the browser-facing proxy has
+		// attached its handlers, so they queue until it does rather than falling
+		// into a gap of a few milliseconds.
+		this.streams = new Map();
 		// Injectable so tests don't need a live portal.
 		this.verifyFn = (secret) => relayPortal.verifySecret(secret);
 	}
@@ -153,12 +161,35 @@ class RelayManager {
 			return;
 		}
 		if (data.type === 'http_proxy_response') {
+			// A streaming response announces itself with the head and no body;
+			// the body follows as http_proxy_chunk frames. Register before
+			// resolving so chunks that arrive in the same tick are not lost.
+			if (data.streaming) {
+				this.streams.set(data.requestId, {
+					queue: [], ended: false, error: null, onChunk: null, onEnd: null
+				});
+				this._resolvePending(data.requestId, {
+					streaming: true,
+					requestId: data.requestId,
+					status: data.status || 0,
+					headers: data.headers
+				});
+				return;
+			}
 			this._resolvePending(data.requestId, {
 				status: data.status || 0,
 				headers: data.headers,
 				bodyB64: data.bodyB64,
 				error: data.error
 			});
+			return;
+		}
+		if (data.type === 'http_proxy_chunk') {
+			this._pushStream(data.requestId, data.dataB64);
+			return;
+		}
+		if (data.type === 'http_proxy_end') {
+			this._endStream(data.requestId, data.error || null);
 			return;
 		}
 		// Full-UI WebSocket bridge: route component frames to the browser handler.
@@ -193,6 +224,87 @@ class RelayManager {
 		if (data.type === 'ping' && conn) {
 			this._safeSend(conn.ws, { type: 'pong', timestamp: Date.now() });
 		}
+	}
+
+	/** Buffer or deliver one body chunk of a streaming forward. */
+	_pushStream(requestId, dataB64) {
+		const entry = this.streams.get(requestId);
+		if (!entry || entry.ended) {
+			return;
+		}
+		let chunk;
+		try {
+			chunk = Buffer.from(String(dataB64 || ''), 'base64');
+		} catch (_err) {
+			return;
+		}
+		if (entry.onChunk) {
+			entry.onChunk(chunk);
+		} else {
+			entry.queue.push(chunk);
+		}
+	}
+
+	/** Mark a streaming forward finished (or failed) and release it. */
+	_endStream(requestId, error) {
+		const entry = this.streams.get(requestId);
+		if (!entry) {
+			return;
+		}
+		entry.ended = true;
+		entry.error = error;
+		if (entry.onEnd) {
+			this.streams.delete(requestId);
+			entry.onEnd(error);
+		}
+	}
+
+	/**
+	 * Attach the browser-facing handlers for a streaming forward.
+	 *
+	 * Flushes whatever queued while the caller was getting ready, then hands
+	 * over live.  Returns a detach function; call it when the browser goes away
+	 * so a log tail nobody is reading stops being carried.
+	 */
+	attachStream(requestId, { onChunk, onEnd } = {}) {
+		const entry = this.streams.get(requestId);
+		if (!entry) {
+			// Already finished and released: nothing to deliver.
+			if (typeof onEnd === 'function') {
+				onEnd(null);
+			}
+			return () => {};
+		}
+		entry.onChunk = typeof onChunk === 'function' ? onChunk : () => {};
+		entry.onEnd = typeof onEnd === 'function' ? onEnd : () => {};
+		const queued = entry.queue;
+		entry.queue = [];
+		for (const chunk of queued) {
+			entry.onChunk(chunk);
+		}
+		if (entry.ended) {
+			this.streams.delete(requestId);
+			entry.onEnd(entry.error);
+			return () => {};
+		}
+		return () => {
+			this.streams.delete(requestId);
+		};
+	}
+
+	/**
+	 * Tell the component to stop producing a streaming response.
+	 *
+	 * Without this a browser that closed its tab leaves the component reading a
+	 * log tail forever, one open HTTP request per abandoned page.
+	 */
+	abortStream(serverId, requestId) {
+		this.streams.delete(requestId);
+		const conn = this.connections.get(serverId);
+		if (!conn || conn.ws.readyState !== WebSocket.OPEN) {
+			return;
+		}
+		this._safeSend(conn.ws, { type: 'http_proxy_abort', requestId });
 	}
 
 	/** Resolve and clear a pending RPC/forward waiter by requestId (no-op if gone). */
@@ -304,8 +416,13 @@ class RelayManager {
 			}, FORWARD_HTTP_MS + RPC_BUFFER_MS);
 			this.pending.set(requestId, { resolve, timer });
 			try {
+				// `stream: true` says only that this side can take a response in
+				// pieces. A component that predates it ignores the key and
+				// answers whole, exactly as before, so nothing has to be
+				// upgraded in step.
 				conn.ws.send(JSON.stringify({
-					type: 'http_proxy', requestId, method, path, headers, bodyB64
+					type: 'http_proxy', requestId, method, path, headers, bodyB64,
+					stream: true
 				}));
 			} catch (err) {
 				clearTimeout(timer);

@@ -358,3 +358,126 @@ describe('extractSecret', () => {
 		expect(_extractSecret({ headers: {}, url: '/ws/relay' })).toBe('');
 	});
 });
+
+describe('RelayManager streaming forwards', () => {
+	let mgr;
+	beforeEach(() => { mgr = new RelayManager(); });
+
+	function startStream(serverId = 'rly-1') {
+		const ws = connect(mgr, serverId);
+		const promise = mgr.forwardHttp(serverId, { path: '/api/hassio/supervisor/logs/follow' });
+		const requestId = JSON.parse(ws.sent[0]).requestId;
+		return { ws, promise, requestId };
+	}
+
+	test('offers streaming on every forward so nothing has to be upgraded in step', async () => {
+		const ws = connect(mgr, 'rly-1');
+		const promise = mgr.forwardHttp('rly-1', { path: '/' });
+		const sent = JSON.parse(ws.sent[0]);
+		expect(sent.stream).toBe(true);
+		// Settle it so the forward's timeout does not outlive the test.
+		mgr.handleMessage('rly-1', JSON.stringify({
+			type: 'http_proxy_response', requestId: sent.requestId, status: 204
+		}));
+		await promise;
+	});
+
+	test('a streaming response resolves on the head, before the body exists', async () => {
+		const { promise, requestId } = startStream();
+		mgr.handleMessage('rly-1', JSON.stringify({
+			type: 'http_proxy_response', requestId, status: 200,
+			headers: [['Content-Type', 'text/plain']], streaming: true
+		}));
+		const result = await promise;
+		expect(result.streaming).toBe(true);
+		expect(result.status).toBe(200);
+		expect(result.requestId).toBe(requestId);
+	});
+
+	test('chunks arriving before the reader attaches are kept, not dropped', async () => {
+		const { promise, requestId } = startStream();
+		mgr.handleMessage('rly-1', JSON.stringify({
+			type: 'http_proxy_response', requestId, status: 200, streaming: true
+		}));
+		await promise;
+		// The browser-facing proxy has not attached yet — this is the real gap.
+		mgr.handleMessage('rly-1', JSON.stringify({
+			type: 'http_proxy_chunk', requestId,
+			dataB64: Buffer.from('first line\n').toString('base64')
+		}));
+
+		const seen = [];
+		mgr.attachStream(requestId, { onChunk: (c) => seen.push(c.toString()), onEnd: () => {} });
+		expect(seen).toEqual(['first line\n']);
+	});
+
+	test('chunks after attaching go straight through', async () => {
+		const { promise, requestId } = startStream();
+		mgr.handleMessage('rly-1', JSON.stringify({
+			type: 'http_proxy_response', requestId, status: 200, streaming: true
+		}));
+		await promise;
+		const seen = [];
+		let ended = false;
+		mgr.attachStream(requestId, {
+			onChunk: (c) => seen.push(c.toString()),
+			onEnd: () => { ended = true; }
+		});
+		mgr.handleMessage('rly-1', JSON.stringify({
+			type: 'http_proxy_chunk', requestId, dataB64: Buffer.from('later').toString('base64')
+		}));
+		mgr.handleMessage('rly-1', JSON.stringify({ type: 'http_proxy_end', requestId }));
+		expect(seen).toEqual(['later']);
+		expect(ended).toBe(true);
+		expect(mgr.streams.has(requestId)).toBe(false);
+	});
+
+	test('a stream that finished before anyone attached still ends the response', async () => {
+		const { promise, requestId } = startStream();
+		mgr.handleMessage('rly-1', JSON.stringify({
+			type: 'http_proxy_response', requestId, status: 200, streaming: true
+		}));
+		await promise;
+		mgr.handleMessage('rly-1', JSON.stringify({
+			type: 'http_proxy_chunk', requestId, dataB64: Buffer.from('all of it').toString('base64')
+		}));
+		mgr.handleMessage('rly-1', JSON.stringify({ type: 'http_proxy_end', requestId }));
+
+		const seen = [];
+		let ended = false;
+		mgr.attachStream(requestId, {
+			onChunk: (c) => seen.push(c.toString()),
+			onEnd: () => { ended = true; }
+		});
+		expect(seen).toEqual(['all of it']);
+		expect(ended).toBe(true);
+	});
+
+	test('aborting tells the component to stop reading and forgets the stream', async () => {
+		const { ws, promise, requestId } = startStream();
+		mgr.handleMessage('rly-1', JSON.stringify({
+			type: 'http_proxy_response', requestId, status: 200, streaming: true
+		}));
+		await promise;
+		mgr.abortStream('rly-1', requestId);
+
+		const abort = JSON.parse(ws.sent[ws.sent.length - 1]);
+		expect(abort.type).toBe('http_proxy_abort');
+		expect(abort.requestId).toBe(requestId);
+		expect(mgr.streams.has(requestId)).toBe(false);
+	});
+
+	test('a non-streaming response is unaffected', async () => {
+		const ws = connect(mgr, 'rly-1');
+		const promise = mgr.forwardHttp('rly-1', { path: '/' });
+		const requestId = JSON.parse(ws.sent[0]).requestId;
+		mgr.handleMessage('rly-1', JSON.stringify({
+			type: 'http_proxy_response', requestId, status: 200,
+			bodyB64: Buffer.from('<html>').toString('base64')
+		}));
+		const result = await promise;
+		expect(result.streaming).toBeUndefined();
+		expect(Buffer.from(result.bodyB64, 'base64').toString()).toBe('<html>');
+		expect(mgr.streams.size).toBe(0);
+	});
+});

@@ -421,6 +421,41 @@ function createUiProxy(deps = {}) {
 					await loginGuard.observe(access.serverId, clientIp(req), verdict);
 				}
 			}
+			// A response arriving in pieces is written out as it comes: its
+			// length is not known up front and its end may be a long way off,
+			// so there is no Content-Length and nothing to buffer.
+			if (result.streaming) {
+				applyResponseHeaders(res, filterResponseHeaders(result.headers));
+				res.writeHead(result.status);
+				let detach = () => {};
+				let finished = false;
+				// The browser closing the tab has to stop the component reading,
+				// or an abandoned log tail is carried until the relay drops.
+				res.on('close', () => {
+					if (finished) {
+						return;
+					}
+					finished = true;
+					detach();
+					relay.abortStream(access.serverId, result.requestId);
+				});
+				detach = relay.attachStream(result.requestId, {
+					onChunk: (chunk) => {
+						if (!finished) {
+							res.write(chunk);
+						}
+					},
+					onEnd: () => {
+						if (finished) {
+							return;
+						}
+						finished = true;
+						detach();
+						res.end();
+					}
+				});
+				return;
+			}
 			const body = result.bodyB64 ? Buffer.from(result.bodyB64, 'base64') : Buffer.alloc(0);
 			applyResponseHeaders(res, filterResponseHeaders(result.headers));
 			res.setHeader('Content-Length', body.length);
