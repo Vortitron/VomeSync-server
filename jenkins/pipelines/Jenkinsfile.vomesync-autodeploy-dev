@@ -11,7 +11,8 @@
 //   Payload URL:  https://<jenkins-host>/github-webhook/
 //   Content type: application/json
 //   Events:       push
-// Without an inbound webhook, pollSCM still picks up changes within ~5 minutes.
+// The webhook is the only trigger: see the note above the triggers block for
+// why there is no pollSCM fallback.
 // =============================================================================
 
 pipeline {
@@ -25,8 +26,14 @@ pipeline {
 		disableConcurrentBuilds()
 	}
 
+	// A declarative triggers block self-registers on the job every time this
+	// pipeline runs, which is why pollSCM is not here: it would put the trigger
+	// straight back after any change made in casc.yaml.  It is gone because the
+	// git plugin reports "Working Directory does not exist -> Changes found" on
+	// every poll of these jobs, so a five-minute poll ran a full CI build every
+	// five minutes forever -- thousands of them -- whether or not anything had
+	// changed.  The GitHub webhook is what triggers these jobs.
 	triggers {
-		pollSCM('H/5 * * * *')
 		githubPush()
 	}
 
