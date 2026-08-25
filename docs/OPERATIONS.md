@@ -140,8 +140,14 @@ Post-restore checks:
 
 Production compose lives at `/var/www/VomeSync-server/docker`. The VomeHome Jenkins folder **VomeSync** auto-deploys:
 
-- Push to `main` or `develop` → **Server Auto-Deploy (DEV)** (unattended after CI).
+- Push to `Develop` → **Server Auto-Deploy (DEV)** (unattended after CI).
 - Push to `main` → **Server Auto-Deploy (LIVE)** waits for a Jenkins approval click, then deploys LIVE.
+
+`Develop` is the working branch and `main` is what LIVE deploys, the same
+shape as the VomeHome portal lanes. Mind the capital D — git refs are
+case-sensitive, and the sibling repo's CI job spent a while pointed at
+`*/develop` while the branch was named `Develop`, so it silently built
+`main` every time instead.
 
 Manual hotfix: **Server Deploy (manual)** with `TARGET=dev` or `TARGET=live`. Do not use `TARGET=all` while an auto-deploy is in flight — that parks on the LIVE approval and blocks the shared deploy job.
 
