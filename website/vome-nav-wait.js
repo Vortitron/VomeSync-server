@@ -1,14 +1,14 @@
 /**
- * Navbar wait heartbeat.
+ * Navbar wait sweep.
  *
  * Slow navigations and in-flight fetches after a click used to look like
- * nothing had happened.  The bloom on ``[data-vome-bloom]`` beats until
- * the next page is shown or the gesture-triggered request finishes.
+ * nothing had happened.  The fat bit on ``[data-vome-bloom]`` sweeps
+ * along the stripe until the next page is shown or the gesture-triggered
+ * request finishes.
  *
- * Polling (dashboard live status) does not pulse: only ``fetch()`` that
- * starts in the same turn as a click / submit counts (including after a
- * blocking ``confirm()``).  Opt out with ``data-vome-no-wait`` on the
- * link, button or form.
+ * Directory polling does not sweep: only ``fetch()`` that starts in
+ * the same turn as a click / submit counts.  Opt out with
+ * ``data-vome-no-wait`` on the link, button or form.
  */
 (function () {
 	'use strict';

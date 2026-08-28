@@ -141,10 +141,11 @@ flowchart LR
 
 ## 7) Chrome
 
-The sticky navbar carries a **teal dual-band bloom** (two channels meeting —
-not the burnt-orange stripe used on vome.io).  A same-origin click makes it
-heartbeat until the next page or gesture-triggered `fetch` finishes
-(`website/vome-nav-wait.js`, shared behaviour with VomeHome).  Directory
-polling does not pulse the bar.
+The sticky navbar carries a **teal dual-band** stripe (two channels meeting —
+not the burnt-orange stripe used on vome.io), in a darker teal so it
+sits inside the bar rather than over the chrome.  The fat glow stays
+off until a same-origin click, then sweeps along the line until the
+next page or gesture-triggered `fetch` finishes (`website/vome-nav-wait.js`,
+shared behaviour with VomeHome).  Directory polling does not sweep the bar.
 
 
