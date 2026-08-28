@@ -36,6 +36,7 @@ describe('Website chrome bloom', () => {
 		expect(css).toContain('vome-nav-sweep');
 		expect(css).not.toContain('vome-nav-heartbeat');
 		expect(css).not.toContain('scaleY');
+		expect(css).toMatch(/\.navbar \{[^}]*overflow:\s*visible/s);
 		const js = fs.readFileSync(path.join(websiteRoot, 'vome-nav-wait.js'), 'utf8');
 		expect(js).toContain('[data-vome-bloom]');
 		expect(js).toContain('vome-bloom--waiting');
