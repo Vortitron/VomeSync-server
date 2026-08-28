@@ -22,6 +22,26 @@ function createMockResponse(jsonBody, ok = true, status = 200) {
 	};
 }
 
+describe('Website chrome bloom', () => {
+	const websiteRoot = path.resolve(__dirname, '../../../website');
+
+	test('navbar uses a teal dual-band bloom and a click-wait heartbeat', () => {
+		const html = fs.readFileSync(path.join(websiteRoot, 'index.html'), 'utf8');
+		expect(html).toContain('data-vome-bloom');
+		expect(html).toContain('vome-bloom');
+		expect(html).toContain('vome-nav-wait.js');
+		const css = fs.readFileSync(path.join(websiteRoot, 'styles.css'), 'utf8');
+		expect(css).toContain('#10b981');
+		expect(css).toContain('#0f766e');
+		expect(css).toContain('scaleY');
+		expect(css).toContain('vome-nav-heartbeat');
+		const js = fs.readFileSync(path.join(websiteRoot, 'vome-nav-wait.js'), 'utf8');
+		expect(js).toContain('[data-vome-bloom]');
+		expect(js).toContain('vome-bloom--waiting');
+		expect(js).toContain('gesturePending');
+	});
+});
+
 describe('Website SPA (v2 directory)', () => {
 	test('supports icon+banner, /switch/<uid> deep links, and v2 access-key comments', async () => {
 		// Arrange DOM

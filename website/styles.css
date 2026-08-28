@@ -100,6 +100,8 @@ main.container > * {
 	background: rgba(18, 18, 18, 0.8);
 	backdrop-filter: blur(12px);
 	border-bottom: 1px solid var(--border);
+	overflow: visible;
+	isolation: isolate;
 }
 
 .navbar .container {
@@ -107,6 +109,86 @@ main.container > * {
 	align-items: center;
 	justify-content: space-between;
 	height: 64px;
+}
+
+/* Teal dual-band bloom (two channels meeting) — not the VomeHome
+   burnt-orange stripe.  Click-wait scales this as a lub-dub, matching
+   vome.io / home.vome.io. */
+.vome-bloom {
+	isolation: isolate;
+	overflow: visible;
+}
+.vome-bloom > * {
+	position: relative;
+	z-index: 1;
+}
+.vome-bloom::before,
+.vome-bloom::after {
+	content: '';
+	position: absolute;
+	z-index: 0;
+	pointer-events: none;
+}
+.vome-bloom::before {
+	inset: 0;
+	transform-origin: 50% 50%;
+	background:
+		linear-gradient(
+			180deg,
+			transparent 0%,
+			#042f2e 28%,
+			#0f766e 38%,
+			transparent 48%,
+			transparent 52%,
+			#115e59 62%,
+			#10b981 72%,
+			#042f2e 82%,
+			transparent 100%
+		);
+}
+.vome-bloom::after {
+	left: -10%;
+	right: -10%;
+	top: 22%;
+	height: 56%;
+	transform-origin: 50% 50%;
+	background: radial-gradient(
+		ellipse 80% 90% at 50% 50%,
+		rgba(16, 185, 129, 0.55) 0%,
+		rgba(13, 148, 136, 0.32) 40%,
+		transparent 74%
+	);
+	opacity: 0.85;
+}
+.vome-bloom--waiting::before {
+	animation: vome-nav-heartbeat-stripe 0.85s ease-in-out infinite;
+}
+.vome-bloom--waiting::after {
+	animation: vome-nav-heartbeat 0.85s ease-in-out infinite;
+}
+@keyframes vome-nav-heartbeat {
+	0%, 100% { transform: scaleY(1) scaleX(1); opacity: 0.7; }
+	10% { transform: scaleY(2.45) scaleX(1.04); opacity: 1; }
+	20% { transform: scaleY(0.62) scaleX(0.97); opacity: 0.35; }
+	32% { transform: scaleY(2.95) scaleX(1.06); opacity: 1; }
+	48% { transform: scaleY(1) scaleX(1); opacity: 0.7; }
+}
+@keyframes vome-nav-heartbeat-stripe {
+	0%, 100% { transform: scaleY(1); }
+	10% { transform: scaleY(1.55); }
+	20% { transform: scaleY(0.88); }
+	32% { transform: scaleY(1.8); }
+	48% { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+	.vome-bloom--waiting::before,
+	.vome-bloom--waiting::after {
+		animation: vome-nav-heartbeat-soft 1.6s ease-in-out infinite;
+	}
+}
+@keyframes vome-nav-heartbeat-soft {
+	0%, 100% { transform: scaleY(1); opacity: 0.7; }
+	50% { transform: scaleY(1.2); opacity: 1; }
 }
 
 .nav-brand {
