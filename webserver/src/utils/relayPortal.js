@@ -59,8 +59,15 @@ async function verifySecret(secret) {
  * (companion-app mode).  Fails closed exactly like verifySecret — any miss or
  * error yields null, which the proxy treats as "cookie required".
  *
+ * The reply also carries **where** to send an admitted request (`upstream`:
+ * over the relay, or straight to a hosted instance's `host:port`) and, for a
+ * device-key hostname, the key it was admitted by — the proxy needs the first
+ * to forward at all, and the second to tell the owner which of their own
+ * devices this was.
+ *
  * @param {string} host e.g. "nyvyn.home.vome.io"
- * @returns {Promise<{serverId: string, webhooks: boolean, open: boolean}|null>}
+ * @returns {Promise<{serverId: string, webhooks: boolean, open: boolean,
+ *   gate: boolean, keyId: ?string, upstream: {kind: string, target: ?string}}|null>}
  */
 async function fetchForwardPolicy(host) {
 	if (!config.relay.internalSecret || !host || typeof host !== 'string') {
@@ -83,10 +90,17 @@ async function fetchForwardPolicy(host) {
 		if (!data || data.ok !== true || !data.server_id) {
 			return null;
 		}
+		const upstream = data.upstream && typeof data.upstream === 'object' ? data.upstream : {};
 		return {
 			serverId: String(data.server_id),
 			webhooks: data.webhooks === true,
-			open: data.open === true
+			open: data.open === true,
+			gate: data.gate === true,
+			keyId: data.key_id ? String(data.key_id) : null,
+			upstream: {
+				kind: upstream.kind === 'direct' ? 'direct' : 'relay',
+				target: upstream.target ? String(upstream.target) : null
+			}
 		};
 	} catch (err) {
 		logger.error('Forward policy lookup failed:', err.message || err);

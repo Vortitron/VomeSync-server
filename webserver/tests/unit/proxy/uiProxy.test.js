@@ -431,10 +431,18 @@ describe('uiProxy.handleUpgrade', () => {
 		expect(socket.written).toContain('502');
 	});
 
-	test('aborts with 502 when the home is offline', () => {
-		const proxy = createUiProxy({ relayManager: { isConnected: () => false }, verifyAccessToken: () => ({ serverId: 'rly-1' }) });
+	test('aborts with 502 when the home is offline', async () => {
+		// Awaited: resolving where a home lives (relay tunnel or a hosted
+		// instance's own port) is a lookup, so the handler is asynchronous
+		// even for a request that carries a valid cookie.
+		const proxy = createUiProxy({
+			relayManager: { isConnected: () => false },
+			verifyAccessToken: () => ({ serverId: 'rly-1' }),
+			fetchForwardPolicy: async () => null
+		});
 		const socket = fakeSocket();
-		proxy.handleUpgrade(fakeReq({ url: '/api/websocket', headers: { host: 'h.vome.io' } }), socket, Buffer.alloc(0));
+		await proxy.handleUpgrade(
+			fakeReq({ url: '/api/websocket', headers: { host: 'h.vome.io' } }), socket, Buffer.alloc(0));
 		expect(socket.written).toContain('502');
 	});
 });
@@ -774,5 +782,227 @@ describe('uiProxy blocks brute-forced logins', () => {
 		const res = await runHttp(proxy, { url: '/lovelace', headers: host });
 		expect(res.statusCode).toBe(200);
 		expect(loginGuard.isBlocked).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * The access log and the two ways a request can be admitted without a Vome
+ * sign-in.  These are the parts a customer actually experiences: a memorable
+ * address that asks who you are, a device address that does not, and a record
+ * of both that the owner can read afterwards.
+ */
+describe('uiProxy access reporting', () => {
+	const host = { host: '127.0.0.1:8099', 'x-ha-original-host': 'gamlabio.home.vome.io' };
+	const browsing = { ...host, accept: 'text/html,application/xhtml+xml' };
+
+	function reportingProxy({ policy = null, cookieOk = false, relayOverrides = {} } = {}) {
+		const recorded = [];
+		const accessEvents = { record: (event) => { recorded.push(event); return true; } };
+		const relay = {
+			isConnected: () => true,
+			forwardHttp: async () => ({ status: 200, headers: [], bodyB64: undefined }),
+			...relayOverrides
+		};
+		const proxy = createUiProxy({
+			relayManager: relay,
+			verifyAccessToken: () => (cookieOk ? { serverId: 'rly-1', userId: 'u1' } : null),
+			fetchForwardPolicy: async () => policy,
+			checkRateLimit: async () => ({ allowed: true }),
+			accessEvents
+		});
+		return { proxy, recorded };
+	}
+
+	async function run(proxy, reqOpts) {
+		const req = fakeReq(reqOpts);
+		const res = fakeRes();
+		proxy.httpHandler(req, res);
+		await tick();
+		req.emit('end');
+		await res.done;
+		return res;
+	}
+
+	test('an unauthenticated arrival is sent to the gate and recorded', async () => {
+		const { proxy, recorded } = reportingProxy({ policy: { serverId: 'rly-1', upstream: { kind: 'relay' } } });
+		const res = await run(proxy, { url: '/lovelace/0', headers: browsing });
+		expect(res.statusCode).toBe(302);
+		// The gate, not /remote/authorise: it can offer the door password to
+		// somebody with no Vome account.
+		expect(res.headers.Location).toContain('/remote/gate');
+		expect(recorded.map((e) => e.event)).toEqual(['gate_shown']);
+		expect(recorded[0].serverId).toBe('rly-1');
+	});
+
+	test('assets and polls are not recorded, only arrivals', async () => {
+		// A live session is hundreds of requests. A log that faithfully
+		// records all of them is one nobody can read.
+		const { proxy, recorded } = reportingProxy({ policy: { serverId: 'rly-1' } });
+		await run(proxy, { url: '/frontend_latest/app.js', headers: host });
+		await run(proxy, { url: '/api/states', headers: host });
+		expect(recorded).toEqual([]);
+	});
+
+	test('a device key is recorded as itself, not as open access', async () => {
+		const { proxy, recorded } = reportingProxy({
+			policy: {
+				serverId: 'rly-1', open: true, keyId: 'key-7',
+				upstream: { kind: 'relay' }
+			}
+		});
+		await run(proxy, { url: '/', headers: browsing });
+		expect(recorded[0].event).toBe('key_used');
+		expect(recorded[0].keyId).toBe('key-7');
+	});
+
+	test('open mode without a key reads as open mode', async () => {
+		const { proxy, recorded } = reportingProxy({
+			policy: { serverId: 'rly-1', open: true, upstream: { kind: 'relay' } }
+		});
+		await run(proxy, { url: '/', headers: browsing });
+		expect(recorded[0].event).toBe('open_admitted');
+		expect(recorded[0].keyId).toBeNull();
+	});
+
+	test('a failed Home Assistant login is reported with the real address', async () => {
+		// The whole point: Core sees our last hop, we see the visitor.
+		const { proxy, recorded } = reportingProxy({
+			policy: { serverId: 'rly-1', open: true, upstream: { kind: 'relay' } },
+			relayOverrides: {
+				forwardHttp: async () => ({
+					status: 200,
+					headers: [],
+					bodyB64: Buffer.from(JSON.stringify({
+						type: 'form', errors: { base: 'invalid_auth' }
+					})).toString('base64')
+				})
+			}
+		});
+		await run(proxy, {
+			method: 'POST',
+			url: '/auth/login_flow/abc',
+			headers: { ...host, 'x-real-ip': '203.0.113.9', 'user-agent': 'curl/8' }
+		});
+		const failure = recorded.find((e) => e.event === 'login_failed');
+		expect(failure).toBeTruthy();
+		expect(failure.clientIp).toBe('203.0.113.9');
+		expect(failure.userAgent).toBe('curl/8');
+		expect(failure.host).toBe('gamlabio.home.vome.io');
+	});
+
+	test('a successful login is recorded too', async () => {
+		const { proxy, recorded } = reportingProxy({
+			policy: { serverId: 'rly-1', open: true, upstream: { kind: 'relay' } },
+			relayOverrides: {
+				forwardHttp: async () => ({
+					status: 200,
+					headers: [],
+					bodyB64: Buffer.from(JSON.stringify({ type: 'create_entry' })).toString('base64')
+				})
+			}
+		});
+		await run(proxy, { method: 'POST', url: '/auth/login_flow/abc', headers: host });
+		expect(recorded.some((e) => e.event === 'login_ok')).toBe(true);
+	});
+});
+
+describe('uiProxy hosted (direct) upstreams', () => {
+	const host = { host: '127.0.0.1:8099', 'x-ha-original-host': 'gamlabio.home.vome.io' };
+
+	test('a hosted home is forwarded to its own port, not over the relay', async () => {
+		// Until this existed, a hosted home's friendly domain was routed at
+		// the container by nginx — which meant the gate, the rate limit and
+		// the brute-force block applied to relay homes only.
+		const forwardHttp = jest.fn(async () => ({ status: 200, headers: [], bodyB64: undefined }));
+		const direct = require('../../../src/proxy/directUpstream');
+		const spy = jest.spyOn(direct, 'forwardHttp').mockImplementation(async (target, req, res) => {
+			res.writeHead(200);
+			res.end('from the instance');
+			return { status: 200 };
+		});
+		const proxy = createUiProxy({
+			relayManager: { isConnected: () => true, forwardHttp },
+			verifyAccessToken: () => ({ serverId: 'vm-1', userId: 'u1' }),
+			fetchForwardPolicy: async () => ({
+				serverId: 'vm-1', upstream: { kind: 'direct', target: '10.0.0.9:8130' }
+			}),
+			checkRateLimit: async () => ({ allowed: true })
+		});
+		const req = fakeReq({ url: '/lovelace', headers: host });
+		const res = fakeRes();
+		proxy.httpHandler(req, res);
+		await tick();
+		req.emit('end');
+		await res.done;
+		expect(spy).toHaveBeenCalled();
+		expect(spy.mock.calls[0][0]).toBe('10.0.0.9:8130');
+		expect(forwardHttp).not.toHaveBeenCalled();
+		spy.mockRestore();
+	});
+
+	test('falls back to the relay when the upstream cannot be resolved', async () => {
+		// A portal blip must not take a linked home's remote access down.
+		const forwardHttp = jest.fn(async () => ({ status: 200, headers: [], bodyB64: undefined }));
+		const proxy = createUiProxy({
+			relayManager: { isConnected: () => true, forwardHttp },
+			verifyAccessToken: () => ({ serverId: 'rly-1', userId: 'u1' }),
+			fetchForwardPolicy: async () => null,
+			checkRateLimit: async () => ({ allowed: true })
+		});
+		const req = fakeReq({ url: '/lovelace', headers: host });
+		const res = fakeRes();
+		proxy.httpHandler(req, res);
+		await tick();
+		req.emit('end');
+		await res.done;
+		expect(forwardHttp).toHaveBeenCalled();
+	});
+});
+
+describe('uiProxy hosted (direct) upgrades', () => {
+	const host = { host: '127.0.0.1:8099', 'x-ha-original-host': 'gamlabio.home.vome.io' };
+
+	function fakeSocket() {
+		return { writable: true, written: '', destroyed: false,
+			write(s) { this.written += s; }, destroy() { this.destroyed = true; } };
+	}
+
+	test('a hosted home\'s frontend socket is piped to its own port', async () => {
+		const direct = require('../../../src/proxy/directUpstream');
+		const spy = jest.spyOn(direct, 'forwardUpgrade').mockImplementation(() => {});
+		const proxy = createUiProxy({
+			relayManager: { isConnected: () => true },
+			verifyAccessToken: () => ({ serverId: 'vm-1' }),
+			fetchForwardPolicy: async () => ({
+				serverId: 'vm-1', upstream: { kind: 'direct', target: '10.0.0.9:8130' }
+			})
+		});
+		const socket = fakeSocket();
+		await proxy.handleUpgrade(
+			fakeReq({ url: '/api/websocket', headers: host }), socket, Buffer.alloc(0));
+		expect(spy).toHaveBeenCalled();
+		expect(spy.mock.calls[0][0]).toBe('10.0.0.9:8130');
+		spy.mockRestore();
+	});
+
+	test('a LAN tunnel is refused on a hosted home rather than dialled', async () => {
+		// /t/<slug>/ routes exist inside somebody's house, reached over the
+		// tunnel; a hosted instance has none, and dialling its own port for one
+		// would proxy the request to Home Assistant instead.
+		const direct = require('../../../src/proxy/directUpstream');
+		const spy = jest.spyOn(direct, 'forwardUpgrade').mockImplementation(() => {});
+		const proxy = createUiProxy({
+			relayManager: { isConnected: () => true },
+			verifyAccessToken: () => ({ serverId: 'vm-1' }),
+			fetchForwardPolicy: async () => ({
+				serverId: 'vm-1', upstream: { kind: 'direct', target: '10.0.0.9:8130' }
+			})
+		});
+		const socket = fakeSocket();
+		await proxy.handleUpgrade(
+			fakeReq({ url: '/t/nas/ws', headers: host }), socket, Buffer.alloc(0));
+		expect(spy).not.toHaveBeenCalled();
+		expect(socket.written).toContain('404');
+		spy.mockRestore();
 	});
 });

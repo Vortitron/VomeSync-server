@@ -11,6 +11,18 @@
  *   browser ──HTTPS/WSS──▶ nginx (*.home.vome.io) ──▶ this proxy ──relay WS──▶ component ──▶ HA
  *                                                                          └──────────────▶ LAN /t/<slug>/
  *
+ * A **hosted** instance is reached the other way: this process can dial its own
+ * port, so its policy carries an upstream and the last hop is a plain HTTP
+ * proxy (see ./directUpstream).  nginx used to route those straight at the
+ * container, which meant everything here — the gate, the rate limits, the
+ * brute-force block, the access log — applied to relay homes only, while a
+ * hosted home's memorable hostname sat in front of a bare login form.
+ *
+ * Whatever is admitted or refused is reported to the portal for the owner to
+ * read (see ../utils/accessEvents).  Home Assistant cannot tell them itself:
+ * it sees our last hop, not the visitor, so its own "invalid authentication
+ * from …" notification names a piece of our plumbing.
+ *
  * HTTP: each request is buffered and handed to relayManager.forwardHttp, then the
  * component's response (status + headers + base64 body) is written back verbatim.
  * WebSocket (`/api/websocket`): the browser socket is bridged to a component-side
@@ -45,6 +57,8 @@ const relayPortal = require('../utils/relayPortal');
 const uiAccess = require('./uiAccess');
 const loginGuardFactory = require('./loginGuard');
 const relayBridge = require('../websocket/relayBridge');
+const directUpstream = require('./directUpstream');
+const accessEventsFactory = require('../utils/accessEvents');
 const authManager = require('../utils/auth');
 const { abortUpgrade } = require('../websocket/upgradeRouter');
 
@@ -235,6 +249,7 @@ function createUiProxy(deps = {}) {
 	const checkLimit = deps.checkRateLimit
 		|| ((id, action, max, windowMs) => authManager.checkRateLimit(id, action, max, windowMs));
 	const loginGuard = deps.loginGuard || loginGuardFactory.createLoginGuard();
+	const accessEvents = deps.accessEvents || accessEventsFactory.getAccessEvents();
 	const cookieName = config.relay.forwardCookieName;
 	const maxBody = config.relay.forwardMaxBodyBytes;
 	// noServer: the dedicated proxy server's `upgrade` event calls handleUpgrade.
@@ -254,6 +269,68 @@ function createUiProxy(deps = {}) {
 		const policy = await fetchPolicy(host);
 		policyCache.set(host, { policy, expiresAt: Date.now() + POLICY_CACHE_TTL_MS });
 		return policy;
+	}
+
+	/**
+	 * Tell the owner something happened.  Never awaited on a request path.
+	 *
+	 * This proxy holds the only copy of a visitor's real address, so an event
+	 * that stays here is an answer the customer never gets.
+	 */
+	function report(req, serverId, event, extra = {}) {
+		if (!serverId) {
+			return;
+		}
+		accessEvents.record({
+			serverId,
+			event,
+			clientIp: clientIp(req),
+			host: originalHost(req),
+			method: req.method,
+			path: String(req.url || '').split('?', 1)[0],
+			userAgent: (req.headers || {})['user-agent'],
+			...extra
+		});
+	}
+
+	/**
+	 * True for a request that represents somebody arriving, as opposed to the
+	 * hundreds of asset and poll requests that follow.
+	 *
+	 * Without this the log would faithfully record every XHR of a live app
+	 * session — complete, and unreadable.
+	 */
+	function isArrival(req) {
+		const accept = String((req.headers || {}).accept || '');
+		return String(req.method || '').toUpperCase() === 'GET'
+			&& accept.includes('text/html')
+			&& !isStaticFrontendPath(req.url);
+	}
+
+	/** The home behind a host if it is already known, without asking the portal. */
+	function cachedServerId(host) {
+		const hit = policyCache.get(host);
+		return hit && hit.policy ? hit.policy.serverId : null;
+	}
+
+	/**
+	 * How to reach the home behind this request.
+	 *
+	 * Falls back to the relay whenever the policy is unavailable: a
+	 * cookie-bearing request for a linked home has to keep working through a
+	 * portal blip, and that was the only kind of home this proxy ever served.
+	 */
+	async function upstreamFor(req) {
+		try {
+			const policy = await policyFor(originalHost(req));
+			if (policy && policy.upstream
+				&& policy.upstream.kind === 'direct' && policy.upstream.target) {
+				return policy.upstream;
+			}
+		} catch (err) {
+			logger.error('Upstream lookup failed:', err.message || err);
+		}
+		return { kind: 'relay', target: null };
 	}
 
 	/** Resolve + authorise a request; returns access or null (caller responds). */
@@ -316,17 +393,54 @@ function createUiProxy(deps = {}) {
 			return null;
 		}
 		if (policy.open) {
-			return { serverId: policy.serverId };
+			// `keyId` marks admittance by a device key (a secret hostname the
+			// owner issued to one device) rather than by the address being
+			// open to everyone.  The owner's log has to tell those apart.
+			return {
+				serverId: policy.serverId,
+				keyId: policy.keyId || null,
+				mode: policy.keyId ? 'key' : 'open'
+			};
 		}
 		if (policy.webhooks
 			&& WEBHOOK_METHODS.has(String(req.method || '').toUpperCase())
 			&& isWebhookPath(req.url)) {
-			return { serverId: policy.serverId };
+			return { serverId: policy.serverId, mode: 'webhook' };
 		}
 		return null;
 	}
 
+	/**
+	 * Start reading the request body immediately, whatever happens next.
+	 *
+	 * The admittance checks below are asynchronous (rate limit, policy
+	 * lookup), and a handler that subscribes to the request only *after*
+	 * awaiting them is racing the stream it is meant to be reading.  Doing
+	 * this first lets those checks take as long as they need.
+	 */
+	function readBody(req) {
+		return new Promise((resolve) => {
+			const chunks = [];
+			let size = 0;
+			let tooLarge = false;
+			req.on('data', (chunk) => {
+				size += chunk.length;
+				if (size > maxBody) {
+					tooLarge = true;
+					return;
+				}
+				chunks.push(chunk);
+			});
+			req.on('error', () => resolve({ error: true }));
+			req.on('end', () => resolve({
+				tooLarge,
+				body: tooLarge ? Buffer.alloc(0) : Buffer.concat(chunks)
+			}));
+		});
+	}
+
 	async function httpHandler(req, res) {
+		const bodyPromise = readBody(req);
 		let access = authorise(req);
 		// Cookie-bearing traffic is Vome-vouched: neither the rate limit nor
 		// the brute-force block applies to it.
@@ -334,6 +448,11 @@ function createUiProxy(deps = {}) {
 		if (!access) {
 			const limited = await limitUnauthenticated(req);
 			if (limited) {
+				// Attributed only if the host is already resolved: spending the
+				// budget before touching the portal is the point of the limit,
+				// and a flood must not become portal load by way of the log.
+				report(req, cachedServerId(originalHost(req)), 'rate_limited',
+					{ outcome: 'denied', detail: 'Too many requests' });
 				res.writeHead(429, {
 					'Retry-After': String(limited.retryAfter),
 					'Content-Type': 'text/plain'
@@ -355,6 +474,10 @@ function createUiProxy(deps = {}) {
 			const blocked = await loginGuard.isBlocked(access.serverId, clientIp(req));
 			if (blocked) {
 				logger.warn(`Blocked login attempt for ${originalHost(req)}`);
+				report(req, access.serverId, 'login_blocked', {
+					outcome: 'blocked',
+					detail: `Blocked for another ${blocked.retryAfter}s after repeated failures`
+				});
 				res.writeHead(429, {
 					'Retry-After': String(blocked.retryAfter),
 					'Content-Type': 'text/plain'
@@ -364,104 +487,155 @@ function createUiProxy(deps = {}) {
 			}
 		}
 		if (!access) {
+			// The gate, not a bare sign-in: it can also offer the home's own
+			// door password, which is the only way in for a visitor who has no
+			// Vome account and never will (portal /remote/gate).
 			const dest = `${config.relay.forwardAuthoriseUrl}?host=${encodeURIComponent(originalHost(req))}`;
+			if (isArrival(req)) {
+				const policy = await policyFor(originalHost(req));
+				report(req, policy && policy.serverId, 'gate_shown', { outcome: 'denied' });
+			}
 			res.writeHead(302, { Location: dest });
 			res.end();
 			return;
 		}
-		const chunks = [];
-		let size = 0;
-		let tooLarge = false;
-		req.on('data', (chunk) => {
-			size += chunk.length;
-			if (size > maxBody) {
-				tooLarge = true;
-				return;
-			}
-			chunks.push(chunk);
-		});
-		req.on('error', () => {
+		if (isArrival(req)) {
+			report(req, access.serverId,
+				vouched ? 'session_opened'
+					: (access.mode === 'key' ? 'key_used'
+						: (access.mode === 'webhook' ? 'webhook_delivered' : 'open_admitted')),
+				{ outcome: 'allowed', keyId: access.keyId || null });
+		} else if (access.mode === 'webhook') {
+			// Webhooks are never navigations, and are the one cookie-less path
+			// a customer may genuinely want to audit call by call.
+			report(req, access.serverId, 'webhook_delivered', { outcome: 'allowed' });
+		}
+
+		const isLoginFlow = loginGuardFactory.isLoginFlowRequest(req.method, req.url);
+		const upstream = await upstreamFor(req);
+		const collected = await bodyPromise;
+		if (collected.error) {
 			res.writeHead(400);
 			res.end('Bad request');
-		});
-		req.on('end', async () => {
-			if (tooLarge) {
-				res.writeHead(413);
-				res.end('Request too large');
-				return;
+			return;
+		}
+		if (collected.tooLarge) {
+			res.writeHead(413);
+			res.end('Request too large');
+			return;
+		}
+		const headers = collectRequestHeaders(req, cookieName);
+
+		// A hosted instance we can dial ourselves: same gate, same log, one hop
+		// instead of a tunnel.  The response is streamed rather than buffered —
+		// this path replaces a direct nginx proxy that never held one.
+		if (upstream.kind === 'direct') {
+			const result = await directUpstream.forwardHttp(upstream.target, req, res, {
+				headers,
+				body: collected.body,
+				classify: Boolean(isLoginFlow)
+			});
+			if (result && isLoginFlow) {
+				await observeLogin(req, access, vouched, result.status, result.bodyB64);
 			}
-			const bodyB64 = chunks.length ? Buffer.concat(chunks).toString('base64') : undefined;
-			const headers = collectRequestHeaders(req, cookieName);
-			let result;
-			try {
-				result = await relay.forwardHttp(access.serverId, {
-					method: req.method, path: req.url, headers, bodyB64
-				});
-			} catch (err) {
-				logger.error('UI forward failed:', err.message || err);
-				res.writeHead(502);
-				res.end('Forwarding failed.');
-				return;
-			}
-			if (result.offline) {
-				res.writeHead(502);
-				res.end('Home Assistant is offline.');
-				return;
-			}
-			if (!result.status) {
-				res.writeHead(502);
-				res.end(result.error || 'Forwarding failed.');
-				return;
-			}
-			// Home Assistant answers a wrong password with 200 and the error in
-			// the body, so the verdict is only visible here, on the way back.
-			if (!vouched && loginGuardFactory.isLoginFlowRequest(req.method, req.url)) {
-				const verdict = loginGuardFactory.classifyLoginResponse(result.status, result.bodyB64);
-				if (verdict) {
-					await loginGuard.observe(access.serverId, clientIp(req), verdict);
+			return;
+		}
+
+		const bodyB64 = collected.body.length ? collected.body.toString('base64') : undefined;
+		let result;
+		try {
+			result = await relay.forwardHttp(access.serverId, {
+				method: req.method, path: req.url, headers, bodyB64
+			});
+		} catch (err) {
+			logger.error('UI forward failed:', err.message || err);
+			res.writeHead(502);
+			res.end('Forwarding failed.');
+			return;
+		}
+		if (result.offline) {
+			res.writeHead(502);
+			res.end('Home Assistant is offline.');
+			return;
+		}
+		if (!result.status) {
+			res.writeHead(502);
+			res.end(result.error || 'Forwarding failed.');
+			return;
+		}
+		if (isLoginFlow) {
+			await observeLogin(req, access, vouched, result.status, result.bodyB64);
+		}
+		// A response arriving in pieces is written out as it comes: its
+		// length is not known up front and its end may be a long way off,
+		// so there is no Content-Length and nothing to buffer.
+		if (result.streaming) {
+			applyResponseHeaders(res, filterResponseHeaders(result.headers));
+			res.writeHead(result.status);
+			let detach = () => {};
+			let finished = false;
+			// The browser closing the tab has to stop the component reading,
+			// or an abandoned log tail is carried until the relay drops.
+			res.on('close', () => {
+				if (finished) {
+					return;
 				}
-			}
-			// A response arriving in pieces is written out as it comes: its
-			// length is not known up front and its end may be a long way off,
-			// so there is no Content-Length and nothing to buffer.
-			if (result.streaming) {
-				applyResponseHeaders(res, filterResponseHeaders(result.headers));
-				res.writeHead(result.status);
-				let detach = () => {};
-				let finished = false;
-				// The browser closing the tab has to stop the component reading,
-				// or an abandoned log tail is carried until the relay drops.
-				res.on('close', () => {
+				finished = true;
+				detach();
+				relay.abortStream(access.serverId, result.requestId);
+			});
+			detach = relay.attachStream(result.requestId, {
+				onChunk: (chunk) => {
+					if (!finished) {
+						res.write(chunk);
+					}
+				},
+				onEnd: () => {
 					if (finished) {
 						return;
 					}
 					finished = true;
 					detach();
-					relay.abortStream(access.serverId, result.requestId);
-				});
-				detach = relay.attachStream(result.requestId, {
-					onChunk: (chunk) => {
-						if (!finished) {
-							res.write(chunk);
-						}
-					},
-					onEnd: () => {
-						if (finished) {
-							return;
-						}
-						finished = true;
-						detach();
-						res.end();
-					}
-				});
-				return;
-			}
-			const body = result.bodyB64 ? Buffer.from(result.bodyB64, 'base64') : Buffer.alloc(0);
-			applyResponseHeaders(res, filterResponseHeaders(result.headers));
-			res.setHeader('Content-Length', body.length);
-			res.writeHead(result.status);
-			res.end(body);
-		});
+					res.end();
+				}
+			});
+			return;
+		}
+		const body = result.bodyB64 ? Buffer.from(result.bodyB64, 'base64') : Buffer.alloc(0);
+		applyResponseHeaders(res, filterResponseHeaders(result.headers));
+		res.setHeader('Content-Length', body.length);
+		res.writeHead(result.status);
+		res.end(body);
+	}
+
+	/**
+	 * Classify a login-flow response and act on it: count it against the
+	 * brute-force guard, and tell the owner.
+	 *
+	 * Home Assistant answers a wrong password with 200 and the error in the
+	 * body, so the verdict is only visible here, on the way back.  Cookie-borne
+	 * traffic is not guarded (Vome already vouched for it) but a failed login
+	 * is still reported — an owner mistyping their own password is exactly the
+	 * line that explains the notification they are about to get.
+	 */
+	async function observeLogin(req, access, vouched, status, bodyB64) {
+		const verdict = loginGuardFactory.classifyLoginResponse(status, bodyB64);
+		if (!verdict) {
+			return;
+		}
+		let blocked = null;
+		if (!vouched) {
+			blocked = await loginGuard.observe(access.serverId, clientIp(req), verdict);
+		}
+		report(req, access.serverId,
+			verdict === 'failure' ? 'login_failed' : 'login_ok',
+			{
+				outcome: verdict === 'failure' ? 'denied' : 'allowed',
+				keyId: access.keyId || null,
+				detail: blocked
+					? `Blocked from trying again for ${blocked.retryAfter}s`
+					: (vouched ? 'Signed in to Vome' : null)
+			});
 	}
 
 	async function handleUpgrade(req, socket, head) {
@@ -480,12 +654,12 @@ function createUiProxy(deps = {}) {
 				abortUpgrade(socket, 429, 'Too many requests');
 				return;
 			}
-			// Only `open` (companion-app) mode admits a cookie-less WebSocket;
-			// the webhook policy never applies here.
+			// Only `open` (companion-app or device-key) mode admits a
+			// cookie-less WebSocket; the webhook policy never applies here.
 			try {
 				const policy = await policyFor(originalHost(req));
 				if (policy && policy.open) {
-					access = { serverId: policy.serverId };
+					access = { serverId: policy.serverId, keyId: policy.keyId || null };
 				}
 			} catch (err) {
 				logger.error('Forward policy check failed:', err.message || err);
@@ -493,6 +667,20 @@ function createUiProxy(deps = {}) {
 		}
 		if (!access) {
 			abortUpgrade(socket, 401, 'Unauthorized');
+			return;
+		}
+		const upstream = await upstreamFor(req);
+		if (upstream.kind === 'direct') {
+			// A hosted instance answers its own socket; we are a pipe.  LAN
+			// tunnels are relay-only by definition — those routes exist inside
+			// a house, not on our fleet.
+			if (isLanTunnel) {
+				abortUpgrade(socket, 404, 'Not found');
+				return;
+			}
+			directUpstream.forwardUpgrade(upstream.target, req, socket, head, {
+				headers: collectRequestHeaders(req, cookieName)
+			});
 			return;
 		}
 		if (!relay.isConnected(access.serverId)) {
