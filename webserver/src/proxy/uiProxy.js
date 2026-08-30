@@ -388,9 +388,9 @@ function createUiProxy(deps = {}) {
 				+ `Max-Age=${config.relay.forwardPassCookieMaxAge}; Secure; HttpOnly; SameSite=Lax`
 		});
 		res.end();
-		report(req, access.serverId, 'session_opened', {
-			outcome: 'allowed', detail: 'Signed in to Vome'
-		});
+		// Deliberately not reported here: the browser comes straight back with
+		// the cookie, and that request is the arrival the owner's log wants.
+		// Recording both would show every sign-in twice.
 		return true;
 	}
 
