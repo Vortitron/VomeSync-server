@@ -92,6 +92,11 @@ const config = {
 		forwardPolicyUrl: process.env.RELAY_FORWARD_POLICY_URL || 'https://vome.io/api/internal/relay/forward-policy',
 		// Cookie carrying the access token (scoped to .vome.io by the portal).
 		forwardCookieName: process.env.RELAY_FORWARD_COOKIE || 'vome_fwd',
+		// Lifetime of the cookie written when a browser trades in a one-time
+		// pass (uiProxy.exchangePass).  Matches the portal's own cookie TTL:
+		// the pass carries the same claims, so a different lifetime here would
+		// just be a second, quieter expiry rule.
+		forwardPassCookieMaxAge: parsePositiveInt(process.env.RELAY_FORWARD_TTL_SECONDS, 43200),
 		// Largest request body the proxy will buffer before forwarding (25 MiB).
 		forwardMaxBodyBytes: parsePositiveInt(process.env.RELAY_FORWARD_MAX_BODY, 26214400),
 		// ── Rate limits for *unauthenticated* forwarded traffic ──────────────

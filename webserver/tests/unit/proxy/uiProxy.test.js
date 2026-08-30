@@ -1006,3 +1006,78 @@ describe('uiProxy hosted (direct) upgrades', () => {
 		spy.mockRestore();
 	});
 });
+
+describe('uiProxy one-time pass exchange', () => {
+	const { mintAccessToken } = require('../../../src/proxy/uiAccess');
+
+	function passProxy() {
+		return createUiProxy({
+			relayManager: { isConnected: () => true, forwardHttp: async () => ({ status: 200, headers: [] }) },
+			fetchForwardPolicy: async () => null,
+			checkRateLimit: async () => ({ allowed: true })
+		});
+	}
+
+	function run(proxy, url, headers) {
+		const req = fakeReq({ url, headers });
+		const res = fakeRes();
+		proxy.httpHandler(req, res);
+		return { req, res };
+	}
+
+	test('trades a valid pass for a host-only cookie and strips it from the URL', async () => {
+		// The portal's cookie is scoped to .vome.io, which by the rules of
+		// cookies cannot reach a customer's own ha.example.com — so gating a
+		// custom domain would otherwise make it unopenable.
+		const host = 'ha.example.com';
+		const token = mintAccessToken({ serverId: 'vm-1', userId: 'u1', host });
+		const { res } = run(passProxy(), `/lovelace?vome_pass=${encodeURIComponent(token)}`,
+			{ host: '127.0.0.1:8099', 'x-ha-original-host': host });
+		await res.done;
+		expect(res.statusCode).toBe(302);
+		expect(res.headers.Location).toBe('/lovelace');
+		const cookie = res.headers['Set-Cookie'];
+		expect(cookie).toContain('vome_fwd=');
+		expect(cookie).toContain('Secure');
+		expect(cookie).toContain('HttpOnly');
+		// No Domain attribute: a pass minted for this address must not be
+		// offered to any other.
+		expect(cookie).not.toContain('Domain=');
+	});
+
+	test('keeps the rest of the query', async () => {
+		const host = 'gamlabio.home.vome.io';
+		const token = mintAccessToken({ serverId: 'rly-1', host });
+		const { res } = run(passProxy(), `/lovelace/0?edit=1&vome_pass=${encodeURIComponent(token)}`,
+			{ host: '127.0.0.1:8099', 'x-ha-original-host': host });
+		await res.done;
+		expect(res.headers.Location).toBe('/lovelace/0?edit=1');
+	});
+
+	test('a pass minted for another host is refused, not honoured', async () => {
+		const token = mintAccessToken({ serverId: 'rly-1', host: 'somewhere-else.home.vome.io' });
+		const { res } = run(passProxy(), `/?vome_pass=${encodeURIComponent(token)}`,
+			{ host: '127.0.0.1:8099', 'x-ha-original-host': 'gamlabio.home.vome.io' });
+		await res.done;
+		expect(res.statusCode).toBe(302);
+		expect(res.headers['Set-Cookie']).toBeUndefined();
+		expect(res.headers.Location).toBe('/');
+	});
+
+	test('rubbish in the parameter sets no cookie', async () => {
+		const { res } = run(passProxy(), '/?vome_pass=not-a-token',
+			{ host: '127.0.0.1:8099', 'x-ha-original-host': 'gamlabio.home.vome.io' });
+		await res.done;
+		expect(res.headers['Set-Cookie']).toBeUndefined();
+	});
+
+	test('an ordinary request is untouched', async () => {
+		const { req, res } = run(passProxy(), '/lovelace',
+			{ host: '127.0.0.1:8099', 'x-ha-original-host': 'gamlabio.home.vome.io' });
+		req.emit('end');
+		await res.done;
+		// No cookie, no pass: it goes to the gate like any other visitor.
+		expect(res.statusCode).toBe(302);
+		expect(res.headers.Location).toContain('/remote/gate');
+	});
+});

@@ -135,6 +135,12 @@ function originalHost(req) {
 const AUTH_PATH_RE = /^\/auth(\/|$)/;
 
 /**
+ * Query parameter carrying a one-time forwarding pass (see exchangePass).
+ * Shared with the portal, which appends it when it sends a browser home.
+ */
+const PASS_PARAM = 'vome_pass';
+
+/**
  * Home Assistant frontend/static files.  A cold UI load pulls hundreds of JS
  * chunks; Chrome with DevTools open then fetches a `.js.map` for each one.
  * Those are not a login-guessing surface, so they use a larger bucket than
@@ -333,6 +339,61 @@ function createUiProxy(deps = {}) {
 		return { kind: 'relay', target: null };
 	}
 
+	/**
+	 * Exchange a one-time pass in the query for a cookie on *this* host.
+	 *
+	 * The portal sets its cookie on the registrable base (`.vome.io`), which
+	 * reaches every `*.home.vome.io` address and cannot, by the rules of
+	 * cookies, reach a customer's own `ha.example.com`.  So an owner who put
+	 * Vome's gate in front of a custom domain would have protected it by
+	 * making it unopenable — the sign-in would succeed and the browser would
+	 * arrive with nothing to show for it.
+	 *
+	 * The gate therefore also sends the pass in the URL, and this trades it
+	 * for a host-only cookie and redirects to the same address without it.
+	 * The token is short-lived, is spent immediately, and is gone from the
+	 * address bar before Home Assistant ever loads — so it never reaches the
+	 * page, the history or a Referer header.
+	 *
+	 * Returns true when it has answered the request.
+	 */
+	function exchangePass(req, res) {
+		const [path, query] = String(req.url || '').split('?');
+		if (!query || !query.includes(`${PASS_PARAM}=`)) {
+			return false;
+		}
+		const params = new URLSearchParams(query);
+		const token = params.get(PASS_PARAM);
+		if (!token) {
+			return false;
+		}
+		const host = originalHost(req);
+		const access = verify(token, host);
+		if (!access) {
+			// A bad pass is not an error worth explaining to whoever sent it;
+			// drop it and let the request carry on to the gate.
+			params.delete(PASS_PARAM);
+			const rest = params.toString();
+			res.writeHead(302, { Location: rest ? `${path}?${rest}` : path });
+			res.end();
+			return true;
+		}
+		params.delete(PASS_PARAM);
+		const rest = params.toString();
+		res.writeHead(302, {
+			Location: rest ? `${path}?${rest}` : path,
+			// Host-only (no Domain attribute): this pass was minted for this
+			// address and should not be offered to any other.
+			'Set-Cookie': `${cookieName}=${encodeURIComponent(token)}; Path=/; `
+				+ `Max-Age=${config.relay.forwardPassCookieMaxAge}; Secure; HttpOnly; SameSite=Lax`
+		});
+		res.end();
+		report(req, access.serverId, 'session_opened', {
+			outcome: 'allowed', detail: 'Signed in to Vome'
+		});
+		return true;
+	}
+
 	/** Resolve + authorise a request; returns access or null (caller responds). */
 	function authorise(req) {
 		const host = originalHost(req);
@@ -441,6 +502,11 @@ function createUiProxy(deps = {}) {
 
 	async function httpHandler(req, res) {
 		const bodyPromise = readBody(req);
+		// Before anything else: a browser arriving from the gate carries its
+		// pass in the URL, and leaves with it in a cookie instead.
+		if (exchangePass(req, res)) {
+			return;
+		}
 		let access = authorise(req);
 		// Cookie-bearing traffic is Vome-vouched: neither the rate limit nor
 		// the brute-force block applies to it.
@@ -724,5 +790,6 @@ module.exports = {
 	HOP_BY_HOP,
 	VOME_HOP_HEADERS,
 	POLICY_CACHE_TTL_MS,
-	AUTH_PATH_RE
+	AUTH_PATH_RE,
+	PASS_PARAM
 };
