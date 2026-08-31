@@ -1043,6 +1043,9 @@ describe('uiProxy one-time pass exchange', () => {
 		// No Domain attribute: a pass minted for this address must not be
 		// offered to any other.
 		expect(cookie).not.toContain('Domain=');
+		// And nothing in between keeps a copy of a response that hands out
+		// a credential.
+		expect(res.headers['Cache-Control']).toBe('no-store');
 	});
 
 	test('keeps the rest of the query', async () => {

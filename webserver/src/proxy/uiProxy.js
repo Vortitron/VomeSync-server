@@ -382,6 +382,9 @@ function createUiProxy(deps = {}) {
 		const rest = params.toString();
 		res.writeHead(302, {
 			Location: rest ? `${path}?${rest}` : path,
+			// Nothing between us and the browser should keep a copy of a
+			// response that hands out a credential.
+			'Cache-Control': 'no-store',
 			// Host-only (no Domain attribute): this pass was minted for this
 			// address and should not be offered to any other.
 			'Set-Cookie': `${cookieName}=${encodeURIComponent(token)}; Path=/; `
