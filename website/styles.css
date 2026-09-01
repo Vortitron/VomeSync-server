@@ -100,6 +100,8 @@ main.container > * {
 	background: rgba(18, 18, 18, 0.8);
 	backdrop-filter: blur(12px);
 	border-bottom: 1px solid var(--border);
+	overflow: visible;
+	isolation: isolate;
 }
 
 .navbar .container {
@@ -107,6 +109,81 @@ main.container > * {
 	align-items: center;
 	justify-content: space-between;
 	height: 64px;
+}
+
+/* Teal dual-band bloom (two channels meeting) — not the VomeHome
+   burnt-orange stripe.  Darker than the emerald highlight so it
+   sits *in* the bar, not over the chrome.  The fat bit stays off
+   until click-wait, then sweeps along the line. */
+.vome-bloom {
+	isolation: isolate;
+	overflow: visible;
+}
+.vome-bloom > * {
+	position: relative;
+	z-index: 1;
+}
+.vome-bloom::before,
+.vome-bloom::after {
+	content: '';
+	position: absolute;
+	z-index: 0;
+	pointer-events: none;
+}
+.vome-bloom::before {
+	inset: 0;
+	background:
+		linear-gradient(
+			180deg,
+			#121212 0%,
+			#121212 22%,
+			#042f2e 34%,
+			#134e4a 40%,
+			#042f2e 46%,
+			transparent 50%,
+			transparent 52%,
+			#042f2e 58%,
+			#115e59 66%,
+			#0f766e 72%,
+			#042f2e 80%,
+			#121212 90%,
+			#121212 100%
+		);
+}
+.vome-bloom::after {
+	top: 28%;
+	height: 50%;
+	width: 18%;
+	left: -18%;
+	opacity: 0;
+	background: radial-gradient(
+		ellipse closest-side,
+		rgba(15, 118, 110, 0.55) 0%,
+		rgba(4, 47, 46, 0.4) 48%,
+		transparent 72%
+	);
+}
+.vome-bloom--waiting::after {
+	animation: vome-nav-sweep 1.35s ease-in-out infinite;
+}
+@keyframes vome-nav-sweep {
+	0% { left: -18%; opacity: 0; }
+	12% { opacity: 1; }
+	88% { opacity: 1; }
+	100% { left: 100%; opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.vome-bloom--waiting::after {
+		animation: none;
+		opacity: 0;
+	}
+	.vome-bloom--waiting::before {
+		animation: vome-nav-wait-soft 1.6s ease-in-out infinite;
+	}
+}
+@keyframes vome-nav-wait-soft {
+	0%, 100% { filter: saturate(1); }
+	50% { filter: saturate(0.55); }
 }
 
 .nav-brand {

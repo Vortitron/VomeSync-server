@@ -165,7 +165,7 @@ services:
       - HCAPTCHA_SECRET=
       - HCAPTCHA_BYPASS_TOKEN=test-bypass-token
       - RELAY_INTERNAL_SECRET=${RELAY_INTERNAL_SECRET:-}
-      - RELAY_PORTAL_VERIFY_URL=${RELAY_PORTAL_VERIFY_URL:-https://vome.io/api/internal/relay/verify}
+      - RELAY_PORTAL_VERIFY_URL=${RELAY_PORTAL_VERIFY_URL_DEV:-https://staging.vome.io/api/internal/relay/verify}
       - RELAY_RPC_TIMEOUT_MS=${RELAY_RPC_TIMEOUT_MS:-20000}
       - RELAY_FORWARD_SECRET=${RELAY_FORWARD_SECRET:-dev-forward-secret-change-in-production}
     ports:

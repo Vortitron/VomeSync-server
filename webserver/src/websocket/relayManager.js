@@ -27,7 +27,12 @@ const logger = require('../utils/logger');
 const config = require('../config/config');
 const relayPortal = require('../utils/relayPortal');
 const uiAccess = require('../proxy/uiAccess');
+const accessEventsFactory = require('../utils/accessEvents');
 const { abortUpgrade } = require('./upgradeRouter');
+
+// A home's self-reported batch is capped here as well as at the component:
+// the component is trusted to be honest, not to be correct.
+const HOME_EVENT_BATCH_MAX = 100;
 
 const HEARTBEAT_INTERVAL_MS = 30000;
 const IDLE_PING_AFTER_MS = 30000;
@@ -221,8 +226,46 @@ class RelayManager {
 			});
 			return;
 		}
+		// The home reporting what *it* saw: logins Core rejected, which for a
+		// device on the owner's own network never passed our edge at all
+		// (custom_components/vomesync/login_watch.py).  Fire and forget — the
+		// component waits for nothing, and a bad batch is dropped, not answered.
+		if (data.type === 'access_events') {
+			this._recordHomeEvents(serverId, data.events);
+			return;
+		}
 		if (data.type === 'ping' && conn) {
 			this._safeSend(conn.ws, { type: 'pong', timestamp: Date.now() });
+		}
+	}
+
+	/**
+	 * Queue a home's self-reported access events for its owner's log.
+	 *
+	 * The server_id comes from the authenticated socket and never from the
+	 * payload: a component may say what happened in its own house, and nothing
+	 * at all about anyone else's.
+	 */
+	_recordHomeEvents(serverId, events) {
+		if (!Array.isArray(events)) {
+			return;
+		}
+		const emitter = accessEventsFactory.getAccessEvents();
+		for (const event of events.slice(0, HOME_EVENT_BATCH_MAX)) {
+			if (!event || typeof event !== 'object') {
+				continue;
+			}
+			emitter.record({
+				serverId,
+				source: 'home',
+				event: event.event,
+				outcome: event.outcome,
+				clientIp: event.client_ip,
+				path: event.path,
+				userAgent: event.user_agent,
+				detail: event.detail,
+				count: event.count
+			});
 		}
 	}
 

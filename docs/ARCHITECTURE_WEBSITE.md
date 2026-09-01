@@ -139,8 +139,13 @@ flowchart LR
 	QuickView --> Actions
 ```
 
-## 6) Deep‑Link and Share Flows
+## 7) Chrome
 
-- Switch detail URLs are shareable.
-- Manage‑on‑website deep links are time‑limited and regenerate when needed.
+The sticky navbar carries a **teal dual-band** stripe (two channels meeting —
+not the burnt-orange stripe used on vome.io), in a darker teal so it
+sits inside the bar rather than over the chrome.  The fat glow stays
+off until a same-origin click, then sweeps along the line until the
+next page or gesture-triggered `fetch` finishes (`website/vome-nav-wait.js`,
+shared behaviour with VomeHome).  Directory polling does not sweep the bar.
+
 

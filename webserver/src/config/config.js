@@ -65,13 +65,38 @@ const config = {
 		// it to the portal host with a firewall rule.  0 disables the proxy.
 		forwardPort: parseInt(process.env.FORWARD_PORT, 10) || 0,
 		// Where the proxy sends an unauthenticated browser to obtain a cookie.
-		forwardAuthoriseUrl: process.env.RELAY_FORWARD_AUTHORISE_URL || 'https://vome.io/remote/authorise',
+		// The gate, not the authorise endpoint: /remote/authorise requires a
+		// Vome session and bounces everyone else to a login page that says
+		// nothing about why they are there, while the gate can also offer the
+		// home's own door password — the only way in for a visitor who has no
+		// Vome account and never will (see portal/remote_access_keys.py).
+		forwardAuthoriseUrl: process.env.RELAY_FORWARD_AUTHORISE_URL || 'https://vome.io/remote/gate',
+		// Portal endpoint that stores the access events an owner reads back
+		// (portal/remote_access_log.py).  Same shared secret; unset disables
+		// reporting rather than failing requests.
+		accessEventsUrl: process.env.RELAY_ACCESS_EVENTS_URL || 'https://vome.io/api/internal/relay/access-events',
+		// Batching for those events.  The flush interval bounds how long a
+		// customer waits to see a failed login; the queue cap stops a scanner
+		// turning into unbounded memory here.
+		accessEventsFlushMs: parsePositiveInt(process.env.RELAY_ACCESS_EVENTS_FLUSH_MS, 15000),
+		accessEventsQueueMax: parsePositiveInt(process.env.RELAY_ACCESS_EVENTS_QUEUE_MAX, 500),
+		accessEventsBatchMax: parsePositiveInt(process.env.RELAY_ACCESS_EVENTS_BATCH_MAX, 200),
+		accessEventsTimeoutMs: parsePositiveInt(process.env.RELAY_ACCESS_EVENTS_TIMEOUT_MS, 8000),
+		// How long a hosted instance has to answer on the direct path.  Long,
+		// because it covers streaming responses (camera feeds, long-polling
+		// REST) that legitimately take their time.
+		forwardDirectTimeoutMs: parsePositiveInt(process.env.RELAY_FORWARD_DIRECT_TIMEOUT_MS, 120000),
 		// Portal endpoint resolving a friendly host to its forwarding policy
 		// (webhook pass-through / open companion-app access). Same shared
 		// secret as portalVerifyUrl; misses fail closed to cookie-only.
 		forwardPolicyUrl: process.env.RELAY_FORWARD_POLICY_URL || 'https://vome.io/api/internal/relay/forward-policy',
 		// Cookie carrying the access token (scoped to .vome.io by the portal).
 		forwardCookieName: process.env.RELAY_FORWARD_COOKIE || 'vome_fwd',
+		// Lifetime of the cookie written when a browser trades in a one-time
+		// pass (uiProxy.exchangePass).  Matches the portal's own cookie TTL:
+		// the pass carries the same claims, so a different lifetime here would
+		// just be a second, quieter expiry rule.
+		forwardPassCookieMaxAge: parsePositiveInt(process.env.RELAY_FORWARD_TTL_SECONDS, 43200),
 		// Largest request body the proxy will buffer before forwarding (25 MiB).
 		forwardMaxBodyBytes: parsePositiveInt(process.env.RELAY_FORWARD_MAX_BODY, 26214400),
 		// ── Rate limits for *unauthenticated* forwarded traffic ──────────────
