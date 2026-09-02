@@ -488,9 +488,26 @@ class RelayManager {
 		this.tunnels.delete(socketId);
 	}
 
-	/** Ask the component to open a local frontend WebSocket for this bridge. */
-	openWs(serverId, { socketId, path, headers } = {}) {
-		return this._tunnelSend(serverId, { type: 'ws_open', socketId, path, headers });
+	/**
+	 * Ask the component to open a local socket for this bridge.
+	 *
+	 * `target: 'esphome'` selects the ESPHome dashboard's command channel rather
+	 * than a path on Home Assistant; the component resolves the dashboard's
+	 * address itself and composes the spawn frame from `command`/`configuration`/
+	 * `port`, so no caller-supplied frame is ever sent to a dashboard that has no
+	 * authentication of its own.
+	 */
+	openWs(serverId, { socketId, path, headers, target, command, configuration, port } = {}) {
+		const payload = { type: 'ws_open', socketId, path, headers };
+		if (target) {
+			payload.target = target;
+			payload.command = command;
+			payload.configuration = configuration;
+			if (typeof port === 'string' && port) {
+				payload.port = port;
+			}
+		}
+		return this._tunnelSend(serverId, payload);
 	}
 
 	/** Forward one browser frame down to the component's local socket. */

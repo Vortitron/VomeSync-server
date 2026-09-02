@@ -11,8 +11,13 @@ const crypto = require('crypto');
 const logger = require('../utils/logger');
 const config = require('../config/config');
 const relayManager = require('../websocket/relayManager');
+const { EsphomeStreamJobs } = require('../websocket/esphomeStream');
 
 const router = express.Router();
+
+// Brokered ESPHome build/log streams. Long-running, so they are jobs the portal
+// polls rather than a request held open across every hop (see esphomeStream.js).
+const esphomeJobs = new EsphomeStreamJobs(relayManager);
 
 // Dispatch policy — mirrors the allowlist the component itself enforces
 // (custom_components/vomesync/relay_client.py).  Defence in depth: the relay
@@ -136,6 +141,54 @@ router.post('/relay/dispatch', async (req, res) => {
 	}
 });
 
+// ── Brokered ESPHome streams ────────────────────────────────────────────────
+
+router.post('/relay/esphome/stream', (req, res) => {
+	if (!authorised(req)) {
+		return res.status(401).json({ error: 'unauthorized' });
+	}
+	const { server_id: serverId, command, configuration, port } = req.body || {};
+	if (!serverId) {
+		return res.status(400).json({ error: 'server_id is required' });
+	}
+	const policyError = EsphomeStreamJobs.policyError({ command, configuration });
+	if (policyError) {
+		logger.warn(`ESPHome stream refused for ${serverId}: ${policyError}`);
+		return res.status(400).json({ error: policyError });
+	}
+	const started = esphomeJobs.start(serverId, { command, configuration, port });
+	if (started.offline) {
+		return res.status(404).json({ error: 'No relay connection for this server.' });
+	}
+	return res.json({ job_id: started.jobId });
+});
+
+router.post('/relay/esphome/stream/read', (req, res) => {
+	if (!authorised(req)) {
+		return res.status(401).json({ error: 'unauthorized' });
+	}
+	const { job_id: jobId, cursor } = req.body || {};
+	if (!jobId) {
+		return res.status(400).json({ error: 'job_id is required' });
+	}
+	const result = esphomeJobs.read(jobId, Number(cursor) || 0);
+	if (result === null) {
+		return res.status(404).json({ error: 'Unknown or expired ESPHome job.' });
+	}
+	return res.json(result);
+});
+
+router.post('/relay/esphome/stream/cancel', (req, res) => {
+	if (!authorised(req)) {
+		return res.status(401).json({ error: 'unauthorized' });
+	}
+	const jobId = (req.body || {}).job_id;
+	if (!jobId) {
+		return res.status(400).json({ error: 'job_id is required' });
+	}
+	return res.json({ cancelled: esphomeJobs.cancel(jobId) });
+});
+
 router.get('/relay/status', (req, res) => {
 	if (!authorised(req)) {
 		return res.status(401).json({ error: 'unauthorized' });
@@ -157,3 +210,4 @@ router.post('/relay/disconnect', (req, res) => {
 module.exports = router;
 // Exposed for unit tests (pure policy helper).
 module.exports._dispatchPolicyError = dispatchPolicyError;
+module.exports._esphomeJobs = esphomeJobs;
