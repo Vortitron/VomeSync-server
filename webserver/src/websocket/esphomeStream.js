@@ -25,7 +25,7 @@ const logger = require('../utils/logger');
 // Mirrors ESPHOME_STREAM_COMMANDS in the component's const.py. Checked here too
 // so the relay refuses what the component would refuse — a stale or modified
 // component is never the only guard.
-const ESPHOME_STREAM_COMMANDS = new Set(['validate', 'compile', 'upload', 'run', 'logs', 'clean']);
+const ESPHOME_STREAM_COMMANDS = new Set(['validate', 'compile', 'upload', 'logs', 'clean']);
 const CONFIG_RE = /^[A-Za-z0-9._-]{1,128}$/;
 
 // A full clean build of a large config is the worst case worth supporting.
@@ -38,6 +38,46 @@ const IDLE_TTL_MS = 5 * 60 * 1000;
 const MAX_LINES = 20000;
 const MAX_BYTES = 4 * 1024 * 1024;
 const SWEEP_INTERVAL_MS = 30 * 1000;
+
+// Signatures of a component too old to know the `esphome` ws_open target. It
+// refuses the sentinel path by name (relayManager.ESPHOME_SENTINEL_PATH) rather
+// than mis-routing the request, and these are the two ways it says so.
+const OLD_COMPONENT_SIGNATURES = [
+	/WebSocket path not permitted/i,
+	/Full-UI forwarding is disabled/i,
+];
+
+// ESPHome split its dashboard out into `esphome-device-builder`, which replaced
+// the per-command WebSockets with a single multiplexed /ws API. Components from
+// the brief window that still spoke the old protocol reach a path that now
+// serves the single-page app, so the upgrade comes back 200 instead of 101.
+const MISSING_ENDPOINT_SIGNATURE = /Local WebSocket error:\s*200/i;
+
+/**
+ * Turn a close reason into something the person reading it can act on.
+ *
+ * Version skew is the case worth naming: everything else about the request is
+ * correct, and "the dashboard closed the connection" sends people looking at
+ * their ESPHome add-on when the answer is to update Vome.
+ */
+function describeStreamClose(reason, command) {
+	if (MISSING_ENDPOINT_SIGNATURE.test(reason)) {
+		return (
+			`This home's Vome add-on talks to ESPHome the old way, and the dashboard no ` +
+			`longer answers there ('/${command}' now serves the web app rather than a ` +
+			'socket). Update the Vome add-on to 0.3.30 or later, then restart Home ' +
+			'Assistant (an add-on update alone does not reload the integration).'
+		);
+	}
+	if (OLD_COMPONENT_SIGNATURES.some((re) => re.test(reason))) {
+		return (
+			"This home's Vome add-on is too old to run ESPHome commands over the relay. " +
+			'Update the Vome add-on to 0.3.29 or later, then restart Home Assistant ' +
+			'(an add-on update alone does not reload the integration).'
+		);
+	}
+	return reason || 'The ESPHome dashboard closed the connection before the command finished.';
+}
 
 class EsphomeStreamJobs {
 	constructor(manager) {
@@ -155,10 +195,11 @@ class EsphomeStreamJobs {
 
 	_onClose(job, data) {
 		// A close before the exit frame means the command did not report a
-		// result — the dashboard refused it, or the add-on went away.
+		// result — the dashboard refused it, the add-on went away, or the home
+		// is running a component that predates ESPHome streaming.
 		if (!job.done && job.exitCode === null) {
 			const reason = data && data.reason ? String(data.reason) : '';
-			job.error = reason || 'The ESPHome dashboard closed the connection before the command finished.';
+			job.error = describeStreamClose(reason, job.command);
 		}
 		this._finish(job);
 	}
@@ -224,4 +265,4 @@ class EsphomeStreamJobs {
 	}
 }
 
-module.exports = { EsphomeStreamJobs, ESPHOME_STREAM_COMMANDS };
+module.exports = { EsphomeStreamJobs, ESPHOME_STREAM_COMMANDS, describeStreamClose };

@@ -57,6 +57,11 @@ function extractSecret(req) {
 	return '';
 }
 
+// Deliberately not a real route on any component: neither a LAN tunnel (/t/…)
+// nor the one forwardable frontend socket (/api/websocket). Old components
+// refuse it by name; new ones dispatch on `target` and never read it.
+const ESPHOME_SENTINEL_PATH = '/vome-esphome-stream';
+
 class RelayManager {
 	constructor() {
 		this.wss = null;
@@ -506,6 +511,15 @@ class RelayManager {
 			if (typeof port === 'string' && port) {
 				payload.port = port;
 			}
+			// Load-bearing, not decoration. A component too old to know `target`
+			// falls back to `path || '/api/websocket'` and — where full-UI
+			// forwarding is on — cheerfully bridges Home Assistant's *frontend*
+			// socket instead. We then send no auth, HA closes it, and the caller
+			// sees a baffling "the dashboard closed the connection". Naming a
+			// path no component will ever forward turns that silent mis-route
+			// into an explicit refusal we can recognise (see
+			// esphomeStream._onClose).
+			payload.path = ESPHOME_SENTINEL_PATH;
 		}
 		return this._tunnelSend(serverId, payload);
 	}
@@ -597,3 +611,4 @@ module.exports = new RelayManager();
 // Exposed for unit tests (use a fresh instance / the pure helper in isolation).
 module.exports.RelayManager = RelayManager;
 module.exports._extractSecret = extractSecret;
+module.exports.ESPHOME_SENTINEL_PATH = ESPHOME_SENTINEL_PATH;
