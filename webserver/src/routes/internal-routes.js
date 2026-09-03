@@ -169,11 +169,13 @@ router.post('/relay/esphome/stream/read', (req, res) => {
 	if (!authorised(req)) {
 		return res.status(401).json({ error: 'unauthorized' });
 	}
-	const { job_id: jobId, cursor } = req.body || {};
+	const { job_id: jobId, cursor, server_id: serverId } = req.body || {};
 	if (!jobId) {
 		return res.status(400).json({ error: 'job_id is required' });
 	}
-	const result = esphomeJobs.read(jobId, Number(cursor) || 0);
+	// server_id scopes the read: the portal vouches for the instance, not for
+	// the job id, so the two are matched here.
+	const result = esphomeJobs.read(jobId, Number(cursor) || 0, serverId || null);
 	if (result === null) {
 		return res.status(404).json({ error: 'Unknown or expired ESPHome job.' });
 	}
@@ -184,11 +186,11 @@ router.post('/relay/esphome/stream/cancel', (req, res) => {
 	if (!authorised(req)) {
 		return res.status(401).json({ error: 'unauthorized' });
 	}
-	const jobId = (req.body || {}).job_id;
+	const { job_id: jobId, server_id: serverId } = req.body || {};
 	if (!jobId) {
 		return res.status(400).json({ error: 'job_id is required' });
 	}
-	return res.json({ cancelled: esphomeJobs.cancel(jobId) });
+	return res.json({ cancelled: esphomeJobs.cancel(jobId, serverId || null) });
 });
 
 router.get('/relay/status', (req, res) => {
