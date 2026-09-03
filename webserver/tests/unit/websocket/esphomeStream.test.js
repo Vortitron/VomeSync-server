@@ -6,7 +6,7 @@
  * checks and the audit log in front of every build. A fake RelayManager stands
  * in for the component socket.
  */
-const { EsphomeStreamJobs } = require('../../../src/websocket/esphomeStream');
+const { EsphomeStreamJobs, describeStreamClose } = require('../../../src/websocket/esphomeStream');
 
 function fakeManager({ online = true } = {}) {
 	return {
@@ -193,5 +193,30 @@ describe('EsphomeStreamJobs', () => {
 		expect(jobs.cancel(jobId)).toBe(true);
 		expect(manager.closed[0].payload.socketId).toBe(jobId);
 		expect(jobs.cancel(jobId)).toBe(false);
+	});
+});
+
+describe('describeStreamClose', () => {
+	it('names version skew instead of blaming the ESPHome dashboard', () => {
+		// An old component refuses the sentinel path by name. Without this the
+		// caller sees "the dashboard closed the connection" and goes looking at
+		// ESPHome, when the fix is to update Vome.
+		for (const reason of ['WebSocket path not permitted.', 'Full-UI forwarding is disabled.']) {
+			expect(describeStreamClose(reason, 'compile')).toMatch(/Vome add-on is too old/);
+		}
+	});
+
+	it('points at the add-on update when a component speaks the retired protocol', () => {
+		// esphome-device-builder replaced the per-command sockets with /ws, so a
+		// component still using the old paths gets the web app (200) instead of a
+		// 101 upgrade. The fix is updating Vome, not touching ESPHome.
+		const reason = 'Local WebSocket error: 200, message=Invalid response status';
+		for (const command of ['validate', 'logs', 'compile']) {
+			expect(describeStreamClose(reason, command)).toMatch(/Update the Vome add-on to 0\.3\.30/);
+		}
+	});
+
+	it('falls back to a plain message when there is no reason', () => {
+		expect(describeStreamClose('', 'compile')).toMatch(/closed the connection/);
 	});
 });
