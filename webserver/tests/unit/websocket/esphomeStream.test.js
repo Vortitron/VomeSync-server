@@ -185,6 +185,29 @@ describe('EsphomeStreamJobs', () => {
 		expect(jobs.jobs.size).toBe(0);
 	});
 
+	it('refuses to read a job belonging to another server', () => {
+		// The portal proves the caller owns the *instance*; the job id is a
+		// separate namespace it cannot vouch for. Without matching the two,
+		// anyone holding a job id reads another home's build output.
+		const manager = fakeManager();
+		const jobs = new EsphomeStreamJobs(manager);
+		const { jobId } = jobs.start('rly-1', { command: 'compile', configuration: 'lr.yaml' });
+		manager.tunnels.get(jobId).onData(line('secret build output'));
+
+		expect(jobs.read(jobId, 0, 'rly-2')).toBeNull();
+		expect(jobs.read(jobId, 0, 'rly-1').lines).toEqual(['secret build output']);
+	});
+
+	it('refuses to cancel a job belonging to another server', () => {
+		const manager = fakeManager();
+		const jobs = new EsphomeStreamJobs(manager);
+		const { jobId } = jobs.start('rly-1', { command: 'compile', configuration: 'lr.yaml' });
+
+		expect(jobs.cancel(jobId, 'rly-2')).toBe(false);
+		expect(manager.closed).toEqual([]);
+		expect(jobs.cancel(jobId, 'rly-1')).toBe(true);
+	});
+
 	it('cancel closes the component side and forgets the job', () => {
 		const manager = fakeManager();
 		const jobs = new EsphomeStreamJobs(manager);

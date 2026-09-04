@@ -212,10 +212,19 @@ class EsphomeStreamJobs {
 		this.manager.unregisterTunnel(job.jobId);
 	}
 
-	/** Read output from `cursor` onward. Returns null when the job is unknown. */
-	read(jobId, cursor = 0) {
+	/**
+	 * Read output from `cursor` onward. Returns null when the job is unknown, or
+	 * when it belongs to a different server.
+	 *
+	 * The `serverId` check is the authorisation, not a sanity check: the portal
+	 * verifies the caller owns the *instance* in the URL, but the job id is a
+	 * separate namespace it cannot vouch for. Without matching the two, anyone
+	 * holding a job id could read another home's build output through their own
+	 * instance. Job ids are unguessable, which is obscurity, not access control.
+	 */
+	read(jobId, cursor = 0, serverId = null) {
 		const job = this.jobs.get(jobId);
-		if (!job) {
+		if (!job || (serverId !== null && job.serverId !== serverId)) {
 			return null;
 		}
 		job.lastReadAt = Date.now();
@@ -238,10 +247,10 @@ class EsphomeStreamJobs {
 		};
 	}
 
-	/** Stop a job and tell the component to close its side. */
-	cancel(jobId) {
+	/** Stop a job and tell the component to close its side. Scoped like `read`. */
+	cancel(jobId, serverId = null) {
 		const job = this.jobs.get(jobId);
-		if (!job) {
+		if (!job || (serverId !== null && job.serverId !== serverId)) {
 			return false;
 		}
 		this.manager.closeWs(job.serverId, { socketId: jobId, code: 1000, reason: 'cancelled' });

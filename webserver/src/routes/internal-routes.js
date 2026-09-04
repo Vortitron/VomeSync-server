@@ -27,6 +27,9 @@ const esphomeJobs = new EsphomeStreamJobs(relayManager);
 const RELAY_TARGET_CORE = 'core';
 const RELAY_TARGET_ESPHOME = 'esphome';
 const RELAY_TARGET_WEBSOCKET = 'websocket';
+// Raw files under Home Assistant's config directory. Vome's target, not HA's:
+// the component serves it, confined to that directory and gated on ha:files.
+const RELAY_TARGET_FILES = 'files';
 const CORE_ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE']);
 const ESPHOME_ALLOWED_METHODS = new Set(['GET', 'POST']);
 // Exact path portions (query string excluded) of the brokered ESPHome REST
@@ -34,6 +37,8 @@ const ESPHOME_ALLOWED_METHODS = new Set(['GET', 'POST']);
 // and ask which rename rules a config still needs. `/migrate` is Vome's, not
 // the dashboard's — the component answers it from the dashboard's /ws API.
 const ESPHOME_ALLOWED_PATHS = new Set(['/devices', '/version', '/edit', '/migrate']);
+const FILES_ALLOWED_METHODS = new Set(['GET', 'POST']);
+const FILES_ALLOWED_PATHS = new Set(['/list', '/read', '/write']);
 
 function decodedSegment(segment) {
 	try {
@@ -77,6 +82,15 @@ function dispatchPolicyError({ method, path, target } = {}) {
 		}
 		if (!ESPHOME_ALLOWED_PATHS.has(pathPortion)) {
 			return 'esphome path is not allowlisted';
+		}
+		return null;
+	}
+	if (kind === RELAY_TARGET_FILES) {
+		if (!FILES_ALLOWED_METHODS.has(upperMethod)) {
+			return `method ${upperMethod} is not allowed for the files target`;
+		}
+		if (!FILES_ALLOWED_PATHS.has(pathPortion)) {
+			return 'files path is not allowlisted';
 		}
 		return null;
 	}
@@ -169,11 +183,13 @@ router.post('/relay/esphome/stream/read', (req, res) => {
 	if (!authorised(req)) {
 		return res.status(401).json({ error: 'unauthorized' });
 	}
-	const { job_id: jobId, cursor } = req.body || {};
+	const { job_id: jobId, cursor, server_id: serverId } = req.body || {};
 	if (!jobId) {
 		return res.status(400).json({ error: 'job_id is required' });
 	}
-	const result = esphomeJobs.read(jobId, Number(cursor) || 0);
+	// server_id scopes the read: the portal vouches for the instance, not for
+	// the job id, so the two are matched here.
+	const result = esphomeJobs.read(jobId, Number(cursor) || 0, serverId || null);
 	if (result === null) {
 		return res.status(404).json({ error: 'Unknown or expired ESPHome job.' });
 	}
@@ -184,11 +200,11 @@ router.post('/relay/esphome/stream/cancel', (req, res) => {
 	if (!authorised(req)) {
 		return res.status(401).json({ error: 'unauthorized' });
 	}
-	const jobId = (req.body || {}).job_id;
+	const { job_id: jobId, server_id: serverId } = req.body || {};
 	if (!jobId) {
 		return res.status(400).json({ error: 'job_id is required' });
 	}
-	return res.json({ cancelled: esphomeJobs.cancel(jobId) });
+	return res.json({ cancelled: esphomeJobs.cancel(jobId, serverId || null) });
 });
 
 router.get('/relay/status', (req, res) => {
