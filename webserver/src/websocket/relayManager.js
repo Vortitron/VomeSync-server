@@ -163,7 +163,7 @@ class RelayManager {
 		}
 
 		if (data.type === 'ha_rpc_response') {
-			this._resolvePending(data.requestId, {
+			this._resolvePending(serverId, data.requestId, {
 				status: data.status || 0,
 				body: data.body,
 				error: data.error
@@ -176,9 +176,9 @@ class RelayManager {
 			// resolving so chunks that arrive in the same tick are not lost.
 			if (data.streaming) {
 				this.streams.set(data.requestId, {
-					queue: [], ended: false, error: null, onChunk: null, onEnd: null
+					queue: [], ended: false, error: null, onChunk: null, onEnd: null, serverId
 				});
-				this._resolvePending(data.requestId, {
+				this._resolvePending(serverId, data.requestId, {
 					streaming: true,
 					requestId: data.requestId,
 					status: data.status || 0,
@@ -186,7 +186,7 @@ class RelayManager {
 				});
 				return;
 			}
-			this._resolvePending(data.requestId, {
+			this._resolvePending(serverId, data.requestId, {
 				status: data.status || 0,
 				headers: data.headers,
 				bodyB64: data.bodyB64,
@@ -195,16 +195,16 @@ class RelayManager {
 			return;
 		}
 		if (data.type === 'http_proxy_chunk') {
-			this._pushStream(data.requestId, data.dataB64);
+			this._pushStream(serverId, data.requestId, data.dataB64);
 			return;
 		}
 		if (data.type === 'http_proxy_end') {
-			this._endStream(data.requestId, data.error || null);
+			this._endStream(serverId, data.requestId, data.error || null);
 			return;
 		}
 		// Full-UI WebSocket bridge: route component frames to the browser handler.
 		if (data.type === 'ws_open_ack' || data.type === 'ws_data' || data.type === 'ws_close') {
-			this._routeTunnel(data);
+			this._routeTunnel(serverId, data);
 			return;
 		}
 		// Component-initiated request for a LAN-TCP tunnel bearer token (see
@@ -275,9 +275,11 @@ class RelayManager {
 	}
 
 	/** Buffer or deliver one body chunk of a streaming forward. */
-	_pushStream(requestId, dataB64) {
+	_pushStream(serverId, requestId, dataB64) {
 		const entry = this.streams.get(requestId);
-		if (!entry || entry.ended) {
+		// Sender-checked like _resolvePending: a streamed body is the one place
+		// another component could feed bytes straight into a browser's page.
+		if (!entry || entry.ended || entry.serverId !== serverId) {
 			return;
 		}
 		let chunk;
@@ -294,9 +296,9 @@ class RelayManager {
 	}
 
 	/** Mark a streaming forward finished (or failed) and release it. */
-	_endStream(requestId, error) {
+	_endStream(serverId, requestId, error) {
 		const entry = this.streams.get(requestId);
-		if (!entry) {
+		if (!entry || entry.serverId !== serverId) {
 			return;
 		}
 		entry.ended = true;
@@ -356,19 +358,34 @@ class RelayManager {
 	}
 
 	/** Resolve and clear a pending RPC/forward waiter by requestId (no-op if gone). */
-	_resolvePending(requestId, value) {
+	/**
+	 * Resolve a request, but only for the component it was actually sent to.
+	 *
+	 * `handleMessage` knows which relay socket a frame arrived on, and every id
+	 * here belongs to exactly one of them. Without matching the two, a component
+	 * could answer *another* home's call — the reply is whatever it chooses to
+	 * send, so the portal would hand a customer fabricated data as though it
+	 * came from their own Home Assistant. Ids are unguessable, which is
+	 * obscurity rather than access control.
+	 */
+	_resolvePending(serverId, requestId, value) {
 		const waiter = this.pending.get(requestId);
-		if (waiter) {
+		if (waiter && waiter.serverId === serverId) {
 			clearTimeout(waiter.timer);
 			this.pending.delete(requestId);
 			waiter.resolve(value);
 		}
 	}
 
-	/** Deliver a ws_open_ack / ws_data / ws_close to its registered browser tunnel. */
-	_routeTunnel(data) {
+	/**
+	 * Deliver a ws_open_ack / ws_data / ws_close to its registered tunnel —
+	 * only if that tunnel belongs to the component the frame arrived from.
+	 * Otherwise one home could inject frames into another's browser session or
+	 * firmware build. See {@link _resolvePending}.
+	 */
+	_routeTunnel(serverId, data) {
 		const tunnel = this.tunnels.get(data.socketId);
-		if (!tunnel) {
+		if (!tunnel || tunnel.serverId !== serverId) {
 			return;
 		}
 		if (data.type === 'ws_open_ack') {
@@ -428,7 +445,7 @@ class RelayManager {
 				this.pending.delete(requestId);
 				resolve({ status: 0, error: 'Relay RPC timed out.' });
 			}, waitMs);
-			this.pending.set(requestId, { resolve, timer });
+			this.pending.set(requestId, { resolve, timer, serverId });
 			try {
 				conn.ws.send(JSON.stringify({
 					type: 'ha_rpc', requestId, method, path, body, expect, timeout, target
@@ -462,7 +479,7 @@ class RelayManager {
 				this.pending.delete(requestId);
 				resolve({ status: 0, error: 'Relay HTTP forward timed out.' });
 			}, FORWARD_HTTP_MS + RPC_BUFFER_MS);
-			this.pending.set(requestId, { resolve, timer });
+			this.pending.set(requestId, { resolve, timer, serverId });
 			try {
 				// `stream: true` says only that this side can take a response in
 				// pieces. A component that predates it ignores the key and

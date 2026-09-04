@@ -481,3 +481,84 @@ describe('RelayManager streaming forwards', () => {
 		expect(mgr.streams.size).toBe(0);
 	});
 });
+
+describe('cross-tenant frame injection', () => {
+	/**
+	 * Every id-keyed route takes its id from the frame, but the frame arrives on
+	 * a specific relay socket. Without matching the two, one customer's Home
+	 * Assistant could answer another's call — with content of its choosing —
+	 * or push frames into another's browser session. The ids are unguessable,
+	 * which is obscurity rather than access control.
+	 */
+	function twoHomes() {
+		const manager = new RelayManager();
+		const a = fakeSocket();
+		const b = fakeSocket();
+		manager.connections.set('rly-a', { ws: a, connectedAt: Date.now(), lastActivity: Date.now() });
+		manager.connections.set('rly-b', { ws: b, connectedAt: Date.now(), lastActivity: Date.now() });
+		return { manager, a, b };
+	}
+
+	it('ignores an ha_rpc_response from a home that was not asked', async () => {
+		const { manager, a } = twoHomes();
+		const inflight = manager.dispatch('rly-a', { method: 'GET', path: '/api/states' });
+		const sent = JSON.parse(a.sent[a.sent.length - 1]);
+
+		// The other home answers first, with whatever it likes.
+		manager.handleMessage('rly-b', JSON.stringify({
+			type: 'ha_rpc_response', requestId: sent.requestId, status: 200, body: '{"fabricated":true}'
+		}));
+		// The real one then answers properly.
+		manager.handleMessage('rly-a', JSON.stringify({
+			type: 'ha_rpc_response', requestId: sent.requestId, status: 200, body: '{"real":true}'
+		}));
+
+		const result = await inflight;
+		expect(result.body).toBe('{"real":true}');
+	});
+
+	it('ignores a ws_data frame aimed at another home\'s tunnel', () => {
+		const { manager } = twoHomes();
+		const onData = jest.fn();
+		manager.registerTunnel('sock-1', 'rly-a', { onAck() {}, onData, onClose() {} });
+
+		manager.handleMessage('rly-b', JSON.stringify({
+			type: 'ws_data', socketId: 'sock-1', text: 'injected'
+		}));
+		expect(onData).not.toHaveBeenCalled();
+
+		manager.handleMessage('rly-a', JSON.stringify({
+			type: 'ws_data', socketId: 'sock-1', text: 'legitimate'
+		}));
+		expect(onData).toHaveBeenCalledTimes(1);
+	});
+
+	it('ignores a ws_close aimed at another home\'s tunnel', () => {
+		const { manager } = twoHomes();
+		const onClose = jest.fn();
+		manager.registerTunnel('sock-2', 'rly-a', { onAck() {}, onData() {}, onClose });
+
+		manager.handleMessage('rly-b', JSON.stringify({
+			type: 'ws_close', socketId: 'sock-2', code: 1000, reason: 'injected'
+		}));
+		expect(onClose).not.toHaveBeenCalled();
+		expect(manager.tunnels.has('sock-2')).toBe(true);
+	});
+
+	it('ignores streamed body chunks from the wrong home', async () => {
+		const { manager, a } = twoHomes();
+		const inflight = manager.forwardHttp('rly-a', { method: 'GET', path: '/' });
+		const sent = JSON.parse(a.sent[a.sent.length - 1]);
+		manager.handleMessage('rly-a', JSON.stringify({
+			type: 'http_proxy_response', requestId: sent.requestId, streaming: true, status: 200
+		}));
+		await inflight;
+
+		manager.handleMessage('rly-b', JSON.stringify({
+			type: 'http_proxy_chunk', requestId: sent.requestId,
+			dataB64: Buffer.from('injected').toString('base64')
+		}));
+
+		expect(manager.streams.get(sent.requestId).queue).toEqual([]);
+	});
+});
