@@ -27,6 +27,9 @@ const esphomeJobs = new EsphomeStreamJobs(relayManager);
 const RELAY_TARGET_CORE = 'core';
 const RELAY_TARGET_ESPHOME = 'esphome';
 const RELAY_TARGET_WEBSOCKET = 'websocket';
+// Raw files under Home Assistant's config directory. Vome's target, not HA's:
+// the component serves it, confined to that directory and gated on ha:files.
+const RELAY_TARGET_FILES = 'files';
 const CORE_ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE']);
 const ESPHOME_ALLOWED_METHODS = new Set(['GET', 'POST']);
 // Exact path portions (query string excluded) of the brokered ESPHome REST
@@ -34,6 +37,8 @@ const ESPHOME_ALLOWED_METHODS = new Set(['GET', 'POST']);
 // and ask which rename rules a config still needs. `/migrate` is Vome's, not
 // the dashboard's — the component answers it from the dashboard's /ws API.
 const ESPHOME_ALLOWED_PATHS = new Set(['/devices', '/version', '/edit', '/migrate']);
+const FILES_ALLOWED_METHODS = new Set(['GET', 'POST']);
+const FILES_ALLOWED_PATHS = new Set(['/list', '/read', '/write']);
 
 function decodedSegment(segment) {
 	try {
@@ -77,6 +82,15 @@ function dispatchPolicyError({ method, path, target } = {}) {
 		}
 		if (!ESPHOME_ALLOWED_PATHS.has(pathPortion)) {
 			return 'esphome path is not allowlisted';
+		}
+		return null;
+	}
+	if (kind === RELAY_TARGET_FILES) {
+		if (!FILES_ALLOWED_METHODS.has(upperMethod)) {
+			return `method ${upperMethod} is not allowed for the files target`;
+		}
+		if (!FILES_ALLOWED_PATHS.has(pathPortion)) {
+			return 'files path is not allowlisted';
 		}
 		return null;
 	}
