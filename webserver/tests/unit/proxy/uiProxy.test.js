@@ -1084,3 +1084,77 @@ describe('uiProxy one-time pass exchange', () => {
 		expect(res.headers.Location).toContain('/remote/gate');
 	});
 });
+
+describe('uiProxy records what Home Assistant refuses', () => {
+	const host = { host: '127.0.0.1:8099', 'x-ha-original-host': 'gamlabio.home.vome.io' };
+
+	function proxyReturning(status) {
+		const recorded = [];
+		const proxy = createUiProxy({
+			relayManager: {
+				isConnected: () => true,
+				forwardHttp: async () => ({ status, headers: [], bodyB64: undefined })
+			},
+			verifyAccessToken: () => null,
+			fetchForwardPolicy: async () => ({
+				serverId: 'vm-1', open: true, upstream: { kind: 'relay' }
+			}),
+			checkRateLimit: async () => ({ allowed: true }),
+			accessEvents: { record: (e) => { recorded.push(e); return true; } }
+		});
+		return { proxy, recorded };
+	}
+
+	async function run(proxy, opts) {
+		const req = fakeReq(opts);
+		const res = fakeRes();
+		proxy.httpHandler(req, res);
+		await tick();
+		req.emit('end');
+		await res.done;
+		return res;
+	}
+
+	test('a curl to /api/ that HA refuses is recorded', async () => {
+		// The case that produces most of Core's "invalid authentication"
+		// notifications, and which the log used to miss entirely because it
+		// only recorded arrivals — a GET asking for HTML.
+		const { proxy, recorded } = proxyReturning(401);
+		await run(proxy, { url: '/api/', headers: { ...host, 'user-agent': 'curl/8.5.0' } });
+		const rejected = recorded.find((e) => e.event === 'auth_rejected');
+		expect(rejected).toBeTruthy();
+		expect(rejected.path).toBe('/api/');
+		expect(rejected.userAgent).toBe('curl/8.5.0');
+		expect(rejected.outcome).toBe('denied');
+	});
+
+	test('a 403 counts too', async () => {
+		const { proxy, recorded } = proxyReturning(403);
+		await run(proxy, { url: '/api/config', headers: host });
+		expect(recorded.some((e) => e.event === 'auth_rejected')).toBe(true);
+	});
+
+	test('an ordinary 200 is not a refusal', async () => {
+		const { proxy, recorded } = proxyReturning(200);
+		await run(proxy, { url: '/api/', headers: host });
+		expect(recorded.some((e) => e.event === 'auth_rejected')).toBe(false);
+	});
+
+	test("the owner's own expired session is not reported", async () => {
+		// Cookie-borne traffic getting a 401 is a session ending, which Core
+		// does not warn about either.
+		const recorded = [];
+		const proxy = createUiProxy({
+			relayManager: {
+				isConnected: () => true,
+				forwardHttp: async () => ({ status: 401, headers: [], bodyB64: undefined })
+			},
+			verifyAccessToken: () => ({ serverId: 'vm-1', userId: 'u1' }),
+			fetchForwardPolicy: async () => null,
+			checkRateLimit: async () => ({ allowed: true }),
+			accessEvents: { record: (e) => { recorded.push(e); return true; } }
+		});
+		await run(proxy, { url: '/api/', headers: host });
+		expect(recorded.some((e) => e.event === 'auth_rejected')).toBe(false);
+	});
+});

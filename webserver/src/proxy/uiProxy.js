@@ -607,6 +607,9 @@ function createUiProxy(deps = {}) {
 			if (result && isLoginFlow) {
 				await observeLogin(req, access, vouched, result.status, result.bodyB64);
 			}
+			if (result) {
+				reportRejection(req, access, vouched, result.status);
+			}
 			return;
 		}
 
@@ -635,6 +638,7 @@ function createUiProxy(deps = {}) {
 		if (isLoginFlow) {
 			await observeLogin(req, access, vouched, result.status, result.bodyB64);
 		}
+		reportRejection(req, access, vouched, result.status);
 		// A response arriving in pieces is written out as it comes: its
 		// length is not known up front and its end may be a long way off,
 		// so there is no Content-Length and nothing to buffer.
@@ -675,6 +679,31 @@ function createUiProxy(deps = {}) {
 		res.setHeader('Content-Length', body.length);
 		res.writeHead(result.status);
 		res.end(body);
+	}
+
+	/**
+	 * Report a request Home Assistant refused as unauthenticated.
+	 *
+	 * This is the other half of what Core's "Login attempt or request with
+	 * invalid authentication from …" warning covers, and it was missing from
+	 * the log entirely: only *arrivals* were recorded (a GET asking for HTML),
+	 * so `curl /api/` — the thing that actually produces that warning most of
+	 * the time — left no trace at all.  The owner saw the notification and
+	 * found an empty page, which is the exact situation this log exists to
+	 * prevent.
+	 *
+	 * Cookie-borne traffic is skipped: a 401 there is the owner's own session
+	 * expiring, which Core does not warn about either.
+	 */
+	function reportRejection(req, access, vouched, status) {
+		if (vouched || (status !== 401 && status !== 403)) {
+			return;
+		}
+		report(req, access.serverId, 'auth_rejected', {
+			outcome: 'denied',
+			keyId: access.keyId || null,
+			detail: `Home Assistant answered ${status}`
+		});
 	}
 
 	/**

@@ -168,3 +168,62 @@ describe('forwardHttp', () => {
 		expect(res.statusCode).toBe(502);
 	});
 });
+
+describe('forwardUpgrade early bytes', () => {
+	const { forwardUpgrade } = require('../../../src/proxy/directUpstream');
+	const net = require('net');
+
+	test("Home Assistant's greeting reaches the browser and is not echoed back", async () => {
+		// Home Assistant greets the moment it accepts the upgrade, and that
+		// greeting usually arrives in the same packet as the 101 — so it
+		// reaches us as the upgrade's `head` rather than as ordinary data.
+		const greeting = '{"type":"auth_required","ha_version":"2026.9.1"}';
+		const sockets = [];
+		const seenByHa = [];
+
+		const ha = net.createServer((sock) => {
+			sockets.push(sock);
+			sock.on('data', (chunk) => {
+				const text = chunk.toString();
+				if (text.startsWith('GET ')) {
+					sock.write('HTTP/1.1 101 Switching Protocols\r\n'
+						+ 'Upgrade: websocket\r\nConnection: Upgrade\r\n\r\n' + greeting);
+				} else {
+					seenByHa.push(text);
+				}
+			});
+		});
+		await new Promise((r) => ha.listen(0, '127.0.0.1', r));
+
+		const browserEnd = net.createServer();
+		await new Promise((r) => browserEnd.listen(0, '127.0.0.1', r));
+		const client = net.connect(browserEnd.address().port, '127.0.0.1');
+		sockets.push(client);
+		const proxySide = await new Promise((r) => browserEnd.once('connection', (s) => {
+			sockets.push(s); r(s);
+		}));
+
+		const fromProxy = [];
+		client.on('data', (c) => fromProxy.push(c.toString()));
+
+		forwardUpgrade(`127.0.0.1:${ha.address().port}`,
+			{ method: 'GET', url: '/api/websocket', headers: {} },
+			proxySide, Buffer.alloc(0), { headers: [] });
+
+		await new Promise((r) => setTimeout(r, 400));
+
+		const received = fromProxy.join('');
+		expect(received).toContain('101 Switching Protocols');
+		// The browser gets the greeting…
+		expect(received).toContain('auth_required');
+		// …and Home Assistant never sees it come back.  Unshifting instead of
+		// writing put each side's own bytes on its readable side, so the pipes
+		// sent them straight home: HA read its own greeting as an auth message
+		// and logged "not a valid value at 'type'. Got 'auth_required'".
+		expect(seenByHa.join('')).not.toContain('auth_required');
+
+		sockets.forEach((s) => s.destroy());
+		await new Promise((done) => ha.close(done));
+		await new Promise((done) => browserEnd.close(done));
+	}, 15000);
+});

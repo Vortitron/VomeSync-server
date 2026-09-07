@@ -208,11 +208,20 @@ function forwardUpgrade(target, req, socket, head, { headers } = {}) {
 			lines.push(`${name}: ${value}`);
 		}
 		socket.write(`${lines.join('\r\n')}\r\n\r\n`);
+		// These two are *written across*, not unshifted back.
+		//
+		// `upHead` is what Home Assistant already sent (its `auth_required`
+		// greeting usually arrives in the same packet as the 101); `head` is
+		// what the browser already sent.  Unshifting them put each side's own
+		// bytes onto its *readable* side, so the pipes below promptly sent
+		// them back where they came from -- Home Assistant received its own
+		// greeting as an auth message and logged "Auth message incorrectly
+		// formatted: not a valid value at 'type'. Got 'auth_required'".
 		if (upHead && upHead.length) {
-			socket.unshift(upHead);
+			socket.write(upHead);
 		}
 		if (head && head.length) {
-			upSocket.unshift(head);
+			upSocket.write(head);
 		}
 		upSocket.on('error', () => socket.destroy());
 		socket.on('error', () => upSocket.destroy());
