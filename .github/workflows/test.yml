@@ -99,6 +99,28 @@ jobs:
           cd webserver
           npm run test:integration
 
+  website-guards:
+    name: Website Guards
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install pytest
+        run: pip install pytest
+
+      # Static checks over website/ -- no services, no stack. These came
+      # from the HACS repository with the pages themselves; left behind
+      # there, they asserted against a path that no longer existed and
+      # failed every run for three weeks.
+      - name: Check website contact links
+        run: pytest tests/test_website_contact_links.py -v
+
   e2e-tests:
     name: End-to-End Tests
     runs-on: ubuntu-latest
