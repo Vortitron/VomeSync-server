@@ -431,6 +431,20 @@ describe('uiProxy.handleUpgrade', () => {
 		expect(socket.written).toContain('502');
 	});
 
+	test('admits a hassio_ingress WebSocket path past the path gate (auth still applies)', async () => {
+		const proxy = createUiProxy({
+			relayManager: { isConnected: () => false },
+			verifyAccessToken: () => ({ serverId: 'rly-1' }),
+			fetchForwardPolicy: async () => null
+		});
+		const socket = fakeSocket();
+		await proxy.handleUpgrade(
+			fakeReq({ url: '/api/hassio_ingress/GSGu9YdR_f9Nnr1Fl5VUjae319uBrmWy9Oq9qsLahlU/ws', headers: { host: 'h.vome.io' } }),
+			socket, Buffer.alloc(0));
+		// Path allowed; home offline → 502 (not 404).
+		expect(socket.written).toContain('502');
+	});
+
 	test('aborts with 502 when the home is offline', async () => {
 		// Awaited: resolving where a home lives (relay tunnel or a hosted
 		// instance's own port) is a lookup, so the handler is asynchronous

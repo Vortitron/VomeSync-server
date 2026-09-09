@@ -72,6 +72,14 @@ const POLICY_CACHE_TTL_MS = 30 * 1000;
 const WEBHOOK_PATH_RE = /^\/api\/webhook\/[A-Za-z0-9_~.-]+$/;
 const WEBHOOK_METHODS = new Set(['POST', 'PUT', 'GET', 'HEAD']);
 
+// Home Assistant's own ingress proxy mounts each add-on's WebSocket(s) under
+// a per-session token (/api/hassio_ingress/<token>/...) — e.g. the ESPHome
+// Device Builder dashboard. No fixed path can list these, so this only
+// constrains the shape; the token itself is HA-issued and validated on the
+// component side (relay_client.py's RELAY_FORWARD_WS_INGRESS_RE) before any
+// local socket is opened.
+const HASSIO_INGRESS_WS_RE = /^\/api\/hassio_ingress\/[A-Za-z0-9_-]+(?:\/.*)?$/;
+
 /** True when `path` (query excluded) is a single-id HA webhook endpoint. */
 function isWebhookPath(path) {
 	const portion = String(path || '').split('?', 1)[0];
@@ -738,10 +746,12 @@ function createUiProxy(deps = {}) {
 
 	async function handleUpgrade(req, socket, head) {
 		const pathname = (req.url || '').split('?')[0];
-		// HA frontend socket, or a LAN-tunnel WebSocket under /t/<slug>/…
+		// HA frontend socket, a LAN-tunnel WebSocket under /t/<slug>/…, or an
+		// add-on's ingress WebSocket under /api/hassio_ingress/<token>/…
 		const isHaFrontend = pathname === '/api/websocket';
 		const isLanTunnel = /^\/t\/[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?(?:\/|$)/.test(pathname);
-		if (!isHaFrontend && !isLanTunnel) {
+		const isIngress = HASSIO_INGRESS_WS_RE.test(pathname);
+		if (!isHaFrontend && !isLanTunnel && !isIngress) {
 			abortUpgrade(socket, 404, 'Not found');
 			return;
 		}

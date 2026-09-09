@@ -129,7 +129,10 @@ describe('POST /internal/relay/dispatch', () => {
 		});
 
 		test('400 for esphome prefix lookalikes and traversal', async () => {
-			for (const path of ['/devices-x', '/editanything', '/edit/../delete?configuration=x']) {
+			for (const path of [
+				'/devices-x', '/editanything', '/edit/../delete?configuration=x',
+				'/vome-remote-build-x',
+			]) {
 				const res = await send({ method: 'GET', path, target: 'esphome' });
 				expect(res.status).toBe(400);
 			}
@@ -140,6 +143,14 @@ describe('POST /internal/relay/dispatch', () => {
 			const res = await send({ method: 'DELETE', path: '/devices', target: 'esphome' });
 			expect(res.status).toBe(400);
 			expect(dispatched).toBe(false);
+		});
+
+		test('200 for the allowlisted esphome remote-build pair path', async () => {
+			const res = await send({
+				method: 'POST', path: '/vome-remote-build', target: 'esphome'
+			});
+			expect(res.status).toBe(200);
+			expect(dispatched).toBe(true);
 		});
 
 		test('200 for the allowlisted esphome edit path with a query string', async () => {
