@@ -34,9 +34,12 @@ const CORE_ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE']);
 const ESPHOME_ALLOWED_METHODS = new Set(['GET', 'POST']);
 // Exact path portions (query string excluded) of the brokered ESPHome REST
 // subset: list devices, dashboard version, read/write one configuration YAML,
-// and ask which rename rules a config still needs. `/migrate` is Vome's, not
-// the dashboard's — the component answers it from the dashboard's /ws API.
-const ESPHOME_ALLOWED_PATHS = new Set(['/devices', '/version', '/edit', '/migrate']);
+// ask which rename rules a config still needs, and pair a Vome compile box.
+// `/migrate` and `/vome-remote-build` are Vome's, not the dashboard's — the
+// component answers them from the dashboard's /ws API.
+const ESPHOME_ALLOWED_PATHS = new Set([
+	'/devices', '/version', '/edit', '/migrate', '/vome-remote-build',
+]);
 const FILES_ALLOWED_METHODS = new Set(['GET', 'POST']);
 const FILES_ALLOWED_PATHS = new Set(['/list', '/read', '/write']);
 
