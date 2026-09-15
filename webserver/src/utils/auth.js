@@ -1,8 +1,22 @@
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const config = require('../config/config');
 const redisClient = require('./redis');
 const logger = require('./logger');
+
+// timingSafeEqual throws on mismatched lengths rather than just returning
+// false, and a presented secret of a different length than the real one is
+// exactly the case this needs to handle without leaking timing either way.
+function _constantTimeEqual(a, b) {
+	const bufA = Buffer.from(String(a), 'utf8');
+	const bufB = Buffer.from(String(b), 'utf8');
+	if (bufA.length !== bufB.length) {
+		return false;
+	}
+	return crypto.timingSafeEqual(bufA, bufB);
+}
+
 class AuthManager {
 	generatePersonalKey() {
 		return uuidv4();
@@ -83,8 +97,16 @@ class AuthManager {
 		}
 	}
 
-	async verifyCaptcha(token) {
-		const { secret, bypassToken } = config.hcaptcha;
+	async verifyCaptcha(token, trustedCaller) {
+		const { secret, bypassToken, trustedCallerSecret } = config.hcaptcha;
+
+		// The VomeHome portal calling on behalf of a GitHub-authenticated,
+		// logged-in account: that account is already accountable in a way an
+		// anonymous browser solving a widget is not, so this skips hCaptcha
+		// entirely rather than needing a token at all.
+		if (trustedCallerSecret && trustedCaller && _constantTimeEqual(trustedCaller, trustedCallerSecret)) {
+			return { success: true, reason: 'trusted_caller' };
+		}
 
 		// Disabled when secret is not set
 		if (!secret) {

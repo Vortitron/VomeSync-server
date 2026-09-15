@@ -58,7 +58,7 @@ router.post('/v2/switch',
 
 			// Enforce CAPTCHA for public listings if configured
 			if (data.publicize) {
-				const captcha = await authManager.verifyCaptcha(captchaToken);
+				const captcha = await authManager.verifyCaptcha(captchaToken, req.headers['x-vome-trusted-caller']);
 				if (!captcha.success) {
 					return res.status(400).json({
 						success: false,
@@ -342,7 +342,7 @@ router.post('/v2/switch/:uid',
 
 			// Enforce CAPTCHA when turning on public listing
 			if (updates.publicize === true) {
-				const captcha = await authManager.verifyCaptcha(captchaToken);
+				const captcha = await authManager.verifyCaptcha(captchaToken, req.headers['x-vome-trusted-caller']);
 				if (!captcha.success) {
 					return res.status(400).json({
 						success: false,

@@ -62,6 +62,12 @@ services:
       - SSL_KEY_PATH=${SSL_KEY_PATH:-}
       - ENABLE_ANALYTICS=${ENABLE_ANALYTICS:-true}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      # Lets the VomeHome portal publicize a v2 switch on behalf of an
+      # account it already authenticated (GitHub login), skipping hCaptcha
+      # for that call. Must match the portal's VOMESYNC_TRUSTED_CALLER_SECRET.
+      # Empty fails closed (portal-created public switches then need a real
+      # CAPTCHA token, which it doesn't have, so they're refused).
+      - VOMESYNC_TRUSTED_CALLER_SECRET=${VOMESYNC_TRUSTED_CALLER_SECRET:-}
       # Relay (outbound-tunnel HA): shared secret authenticating portal<->backend,
       # the portal endpoint that resolves a component's relay secret, and the
       # per-RPC reply timeout. Empty secret fails closed (relay disabled).
@@ -164,6 +170,7 @@ services:
       - LOG_LEVEL=debug
       - HCAPTCHA_SECRET=
       - HCAPTCHA_BYPASS_TOKEN=test-bypass-token
+      - VOMESYNC_TRUSTED_CALLER_SECRET=${VOMESYNC_TRUSTED_CALLER_SECRET:-}
       - RELAY_INTERNAL_SECRET=${RELAY_INTERNAL_SECRET:-}
       - RELAY_PORTAL_VERIFY_URL=${RELAY_PORTAL_VERIFY_URL_DEV:-https://staging.vome.io/api/internal/relay/verify}
       - RELAY_RPC_TIMEOUT_MS=${RELAY_RPC_TIMEOUT_MS:-20000}

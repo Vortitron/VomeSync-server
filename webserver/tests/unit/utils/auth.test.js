@@ -4,6 +4,7 @@
 
 const AuthManager = require('../../../src/utils/auth');
 const redisClient = require('../../../src/utils/redis');
+const config = require('../../../src/config/config');
 
 describe('AuthManager', () => {
 	beforeEach(async () => {
@@ -156,6 +157,114 @@ describe('AuthManager', () => {
 
 			expect(authResult.success).toBe(false);
 			expect(authResult.error).toContain('Switch not found');
+		});
+	});
+
+	describe('verifyCaptcha', () => {
+		// config.hcaptcha is a plain object mutated in place (same convention
+		// internal-routes.test.js uses for config.relay.internalSecret) --
+		// snapshot and restore it so these tests can't leak into others.
+		let originalHcaptcha;
+
+		beforeEach(() => {
+			originalHcaptcha = { ...config.hcaptcha };
+		});
+
+		afterEach(() => {
+			config.hcaptcha = originalHcaptcha;
+		});
+
+		test('succeeds with no token when CAPTCHA is disabled (no secret configured)', async () => {
+			config.hcaptcha = { secret: '', bypassToken: '', trustedCallerSecret: '' };
+
+			const result = await AuthManager.verifyCaptcha('');
+
+			expect(result.success).toBe(true);
+			expect(result.reason).toBe('captcha_disabled');
+		});
+
+		test('requires a token once a secret is configured', async () => {
+			config.hcaptcha = { secret: 'real-hcaptcha-secret', bypassToken: '', trustedCallerSecret: '' };
+
+			const result = await AuthManager.verifyCaptcha('');
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe('Captcha required');
+		});
+
+		// ── Trusted caller (VomeHome portal publicizing on behalf of a
+		// GitHub-authenticated account) ──────────────────────────────────
+		test('bypasses CAPTCHA entirely when the trusted-caller header matches, even with no token', async () => {
+			config.hcaptcha = {
+				secret: 'real-hcaptcha-secret',
+				bypassToken: '',
+				trustedCallerSecret: 'portal-shared-secret',
+			};
+
+			const result = await AuthManager.verifyCaptcha('', 'portal-shared-secret');
+
+			expect(result.success).toBe(true);
+			expect(result.reason).toBe('trusted_caller');
+		});
+
+		test('falls through to requiring a real token when the trusted-caller header is wrong', async () => {
+			config.hcaptcha = {
+				secret: 'real-hcaptcha-secret',
+				bypassToken: '',
+				trustedCallerSecret: 'portal-shared-secret',
+			};
+
+			const result = await AuthManager.verifyCaptcha('', 'not-the-right-secret');
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe('Captcha required');
+		});
+
+		test('falls through when no trusted-caller header is presented at all', async () => {
+			config.hcaptcha = {
+				secret: 'real-hcaptcha-secret',
+				bypassToken: '',
+				trustedCallerSecret: 'portal-shared-secret',
+			};
+
+			const result = await AuthManager.verifyCaptcha('');
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe('Captcha required');
+		});
+
+		test('does not bypass when trustedCallerSecret is not configured, even if a header is sent', async () => {
+			config.hcaptcha = { secret: 'real-hcaptcha-secret', bypassToken: '', trustedCallerSecret: '' };
+
+			const result = await AuthManager.verifyCaptcha('', 'anything-at-all');
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe('Captcha required');
+		});
+
+		test('rejects a same-prefix, different-length trusted-caller header (no crash, no bypass)', async () => {
+			config.hcaptcha = {
+				secret: 'real-hcaptcha-secret',
+				bypassToken: '',
+				trustedCallerSecret: 'portal-shared-secret',
+			};
+
+			const result = await AuthManager.verifyCaptcha('', 'portal-shared-secret-but-longer');
+
+			expect(result.success).toBe(false);
+		});
+
+		test('the generic test/staging bypassToken still works on its own, independent of trustedCallerSecret', async () => {
+			config.hcaptcha = {
+				secret: 'real-hcaptcha-secret',
+				bypassToken: 'staging-bypass-token',
+				trustedCallerSecret: '',
+			};
+
+			const result = await AuthManager.verifyCaptcha('staging-bypass-token');
+
+			expect(result.success).toBe(true);
+			expect(result.reason).toBe('bypass_token');
 		});
 	});
 
