@@ -282,7 +282,9 @@ describe('Validation Utilities', () => {
 				link: '',
 				iconUrl: '',
 				bannerUrl: '',
-				ownerProfileUrl: ''
+				ownerProfileUrl: '',
+				promoted: false,
+				promotedUntil: 0
 			});
 
 			expect(sanitized.personalKey).toBeUndefined();
@@ -306,6 +308,19 @@ describe('Validation Utilities', () => {
 			expect(sanitized.location).toBe('');
 			expect(sanitized.category).toBe('Other');
 			expect(sanitized.lastToggled).toBe(0);
+			expect(sanitized.promoted).toBe(false);
+			expect(sanitized.promotedUntil).toBe(0);
+		});
+
+		test('derives promoted from a live promotedUntil stamp', () => {
+			const until = Date.now() + 60_000;
+			const sanitized = sanitizePublicSwitchData({
+				uid: 'vs_live',
+				state: true,
+				promotedUntil: until
+			});
+			expect(sanitized.promoted).toBe(true);
+			expect(sanitized.promotedUntil).toBe(until);
 		});
 	});
 

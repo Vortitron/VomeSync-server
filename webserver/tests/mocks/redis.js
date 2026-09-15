@@ -163,6 +163,11 @@ class MockRedisClient {
 		return Promise.resolve(slice);
 	}
 
+	async zRange(key, start, stop) {
+		const slice = await this.zRangeWithScores(key, start, stop);
+		return slice.map((entry) => entry.value);
+	}
+
 	async scan(cursor, options = {}) {
 		const keys = Array.from(this.data.keys());
 		const match = options.MATCH || '*';

@@ -14,3 +14,6 @@ webserver/coverage/
 backups/*
 *.log
 .DS_Store
+catalogue/.seed
+catalogue/.local-state.json
+catalogue/.env

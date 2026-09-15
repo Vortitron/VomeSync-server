@@ -1,4 +1,5 @@
 const Joi = require('joi');
+const { listingPromotion } = require('./promote');
 
 const MAX_DESCRIPTION_LENGTH = 500;
 const MAX_SWITCH_NAME_LENGTH = 80;
@@ -239,6 +240,13 @@ const schemas = {
 		ts: Joi.number().integer().min(0).required(),
 		nonce: Joi.string().min(8).max(128).required(),
 		sigOwner: Joi.string().max(200).required()
+	}),
+
+	v2PremiumCheckout: Joi.object({
+		ownerPubKey: Joi.string().max(200).required(),
+		ts: Joi.number().integer().min(0).required(),
+		nonce: Joi.string().min(8).max(128).required(),
+		sigOwner: Joi.string().max(200).required()
 	})
 };
 
@@ -283,6 +291,7 @@ const validateUID = (req, res, next) => {
 const sanitizePublicSwitchData = (switchData) => {
 	if (!switchData) return null;
 
+	const promotion = listingPromotion(switchData);
 	return {
 		uid: switchData.uid,
 		name: switchData.name || '',
@@ -296,7 +305,9 @@ const sanitizePublicSwitchData = (switchData) => {
 		link: switchData.link || '',
 		iconUrl: switchData.iconUrl || '',
 		bannerUrl: switchData.bannerUrl || '',
-		ownerProfileUrl: switchData.ownerProfileUrl || ''
+		ownerProfileUrl: switchData.ownerProfileUrl || '',
+		promoted: promotion.promoted,
+		promotedUntil: promotion.promotedUntil
 	};
 };
 

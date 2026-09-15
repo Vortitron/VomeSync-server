@@ -50,6 +50,7 @@ sequenceDiagram
 ## 2.1) Update Strategy
 
 - Initial directory load uses a single API call for public switches.
+- Promoted listings are sorted first by the API and shown with a Promoted badge.
 - Incremental updates are applied in place to avoid flicker.
 - WebSocket messages update visible switches in real time.
 

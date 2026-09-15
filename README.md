@@ -47,6 +47,9 @@ Cookie-less friendly-domain traffic (`open` / companion-app mode) is rate-limite
 - `docs/ARCHITECTURE_WEBSITE.md`
 - `docs/SETUP.md`
 - `docs/OPERATIONS.md`
+- HA repo `docs/MONETISATION.md` — paid promotion and paid premium are built on this API (off until Stripe keys are set); DIY / Connect are still planned
+- `catalogue/README.md` — publish illustrated public switches to sync.vome.io (`observe` + systemd timer)
+- `catalogue/STYLE.md` — copy and image rules for those listings
 
 ## Jenkins (this host)
 

@@ -133,11 +133,18 @@ const requireAdmin = async (req, res, next) => {
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 const sendTierLimitError = (res, limit, max, tier = 'free') => {
+	const limits = config?.limits || {};
 	return res.status(403).json({
 		success: false,
 		error: `${tier === 'free' ? 'Free tier' : 'Account'} limit reached (${max} ${limit})`,
 		code: 'tier_limit',
-		details: { limit, max, tier }
+		details: {
+			limit,
+			max,
+			tier,
+			maxPrivate: Number(limits.freeTierMaxPrivateSwitches) || 5,
+			maxPublic: Number(limits.freeTierMaxPublicSwitches) || 10
+		}
 	});
 };
 
@@ -147,8 +154,17 @@ const sendFreeTierLimitError = sendTierLimitError;
 /**
  * Check whether the owner/user has hit their tier limits.
  * Returns null if within limits, or { limit, max, tier } if exceeded.
+ *
+ * Free tier is 5 private + 10 public. Pass isCreate on new switches.
+ * On updates, pass wantsPublicize as null when publicize is not changing.
  */
-const checkFreeTierLimits = async ({ ownerId, personalKeyId, wantsPublicize, currentPublicize }) => {
+const checkFreeTierLimits = async ({
+	ownerId,
+	personalKeyId,
+	wantsPublicize,
+	currentPublicize,
+	isCreate = false
+}) => {
 	const limits = config?.limits || {};
 	const freeTierEnabled = limits.freeTierEnabled !== false;
 
@@ -156,7 +172,6 @@ const checkFreeTierLimits = async ({ ownerId, personalKeyId, wantsPublicize, cur
 		return null;
 	}
 
-	// Determine the owner's tier
 	let tier = { tier: 'free' };
 	if (ownerId) {
 		tier = await redisClient.getOwnerTier(ownerId);
@@ -165,10 +180,13 @@ const checkFreeTierLimits = async ({ ownerId, personalKeyId, wantsPublicize, cur
 
 	const maxSwitches = isPremium
 		? (Number.isFinite(Number(limits.premiumMaxSwitches)) ? Number(limits.premiumMaxSwitches) : 50)
-		: (Number.isFinite(Number(limits.freeTierMaxSwitches)) ? Number(limits.freeTierMaxSwitches) : 8);
+		: (Number.isFinite(Number(limits.freeTierMaxSwitches)) ? Number(limits.freeTierMaxSwitches) : 15);
 	const maxPublicSwitches = isPremium
 		? (Number.isFinite(Number(limits.premiumMaxPublicSwitches)) ? Number(limits.premiumMaxPublicSwitches) : 25)
-		: (Number.isFinite(Number(limits.freeTierMaxPublicSwitches)) ? Number(limits.freeTierMaxPublicSwitches) : 4);
+		: (Number.isFinite(Number(limits.freeTierMaxPublicSwitches)) ? Number(limits.freeTierMaxPublicSwitches) : 10);
+	const maxPrivateSwitches = isPremium
+		? maxSwitches
+		: (Number.isFinite(Number(limits.freeTierMaxPrivateSwitches)) ? Number(limits.freeTierMaxPrivateSwitches) : 5);
 
 	let counts = null;
 	if (ownerId) {
@@ -179,16 +197,43 @@ const checkFreeTierLimits = async ({ ownerId, personalKeyId, wantsPublicize, cur
 	if (!counts) {
 		return null;
 	}
-	if (maxSwitches >= 0 && counts.total >= maxSwitches) {
-		return { limit: 'switches', max: maxSwitches, tier: tier.tier };
+	const publicCount = counts.public || 0;
+	const privateCount = Number.isFinite(counts.private)
+		? counts.private
+		: Math.max(0, (counts.total || 0) - publicCount);
+
+	if (isCreate) {
+		if (maxSwitches >= 0 && counts.total >= maxSwitches) {
+			return { limit: 'switches', max: maxSwitches, tier: tier.tier };
+		}
+		if (wantsPublicize) {
+			if (maxPublicSwitches >= 0 && publicCount >= maxPublicSwitches) {
+				return { limit: 'public switches', max: maxPublicSwitches, tier: tier.tier };
+			}
+		} else if (maxPrivateSwitches >= 0 && privateCount >= maxPrivateSwitches) {
+			return { limit: 'private switches', max: maxPrivateSwitches, tier: tier.tier };
+		}
+		return null;
+	}
+
+	if (wantsPublicize === null || wantsPublicize === undefined) {
+		return null;
 	}
 	if (
-		wantsPublicize &&
-		!currentPublicize &&
-		maxPublicSwitches >= 0 &&
-		counts.public >= maxPublicSwitches
+		wantsPublicize
+		&& !currentPublicize
+		&& maxPublicSwitches >= 0
+		&& publicCount >= maxPublicSwitches
 	) {
 		return { limit: 'public switches', max: maxPublicSwitches, tier: tier.tier };
+	}
+	if (
+		!wantsPublicize
+		&& currentPublicize
+		&& maxPrivateSwitches >= 0
+		&& privateCount >= maxPrivateSwitches
+	) {
+		return { limit: 'private switches', max: maxPrivateSwitches, tier: tier.tier };
 	}
 	return null;
 };
@@ -361,6 +406,14 @@ const v2CanonicalGetOwnerTier = (data) => stableJsonStringify({
 	nonce: data.nonce
 });
 
+const v2CanonicalPremiumCheckout = (data) => stableJsonStringify({
+	v: 2,
+	action: 'premium_checkout',
+	ownerPubKey: data.ownerPubKey,
+	ts: data.ts,
+	nonce: data.nonce
+});
+
 module.exports = {
 	// Constants
 	V2_ACCESS_KEY_MAX_TTL_SECONDS,
@@ -396,6 +449,7 @@ module.exports = {
 	v2CanonicalPauseAccessKey,
 	v2CanonicalUpdateAccessKeyPermissions,
 	v2CanonicalRedeemPromo,
-	v2CanonicalGetOwnerTier
+	v2CanonicalGetOwnerTier,
+	v2CanonicalPremiumCheckout
 };
 

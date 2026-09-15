@@ -174,10 +174,23 @@ const config = {
 	},
 	limits: {
 		freeTierEnabled: process.env.FREE_TIER_LIMITS_ENABLED !== 'false',
-		freeTierMaxSwitches: parsePositiveInt(process.env.FREE_TIER_MAX_SWITCHES, 8),
-		freeTierMaxPublicSwitches: parsePositiveInt(process.env.FREE_TIER_MAX_PUBLIC_SWITCHES, 4),
+		freeTierMaxSwitches: parsePositiveInt(process.env.FREE_TIER_MAX_SWITCHES, 15),
+		freeTierMaxPublicSwitches: parsePositiveInt(process.env.FREE_TIER_MAX_PUBLIC_SWITCHES, 10),
+		freeTierMaxPrivateSwitches: parsePositiveInt(process.env.FREE_TIER_MAX_PRIVATE_SWITCHES, 5),
 		premiumMaxSwitches: parsePositiveInt(process.env.PREMIUM_MAX_SWITCHES, 50),
 		premiumMaxPublicSwitches: parsePositiveInt(process.env.PREMIUM_MAX_PUBLIC_SWITCHES, 25)
+	},
+	stripe: {
+		secretKey: process.env.STRIPE_SECRET_KEY || '',
+		webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
+		pricePromote: process.env.STRIPE_PRICE_PROMOTE || '',
+		promoteAmount: parsePositiveInt(process.env.STRIPE_PROMOTE_AMOUNT, 500),
+		promoteCurrency: String(process.env.STRIPE_PROMOTE_CURRENCY || 'eur').toLowerCase(),
+		promoteDurationDays: parsePositiveInt(process.env.STRIPE_PROMOTE_DURATION_DAYS, 7) || 7,
+		pricePremium: process.env.STRIPE_PRICE_PREMIUM || '',
+		premiumAmount: parsePositiveInt(process.env.STRIPE_PREMIUM_AMOUNT, 900),
+		premiumCurrency: String(process.env.STRIPE_PREMIUM_CURRENCY || 'eur').toLowerCase(),
+		publicBaseUrl: process.env.VOMESYNC_PUBLIC_BASE_URL || 'https://sync.vome.io'
 	}
 };
 

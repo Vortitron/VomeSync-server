@@ -28,7 +28,18 @@ This document is a practical checklist/runbook for operating VomeSync safely, es
 	- Admin tools can delist/delete public switches, block owners/keys, set redirects for migrated switches, and override listing fields for public pages.
 - **Free tier limits**:
 	- Set `FREE_TIER_LIMITS_ENABLED` to enable/disable enforcement.
-	- Configure `FREE_TIER_MAX_SWITCHES` and `FREE_TIER_MAX_PUBLIC_SWITCHES` for server-side caps.
+	- Configure `FREE_TIER_MAX_SWITCHES` (15), `FREE_TIER_MAX_PUBLIC_SWITCHES` (10) and `FREE_TIER_MAX_PRIVATE_SWITCHES` (5) for server-side caps.
+- **Paid promotion and premium (Stripe)**:
+	- Set `STRIPE_SECRET_KEY` (prefer `rk_`) and `STRIPE_WEBHOOK_SECRET`. Optional `STRIPE_PRICE_PROMOTE` / `STRIPE_PRICE_PREMIUM`; otherwise €5 / 7 days and €9 / month from the amount env vars.
+	- Dashboard webhook URL: `https://sync.vome.io/api/stripe/webhook` (`checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.deleted`, `customer.subscription.updated`).
+	- `VOMESYNC_PUBLIC_BASE_URL` must be the public website origin used in Checkout success/cancel URLs.
+	- Leave keys empty to keep Promote / Upgrade hidden. Do not put live keys in git.
+- **Public directory catalogue** (staff-owned illustrated switches):
+	- Source: `catalogue/switches.json`. CLI: `node catalogue/cli.js apply` then `observe`.
+	- Keep `catalogue/.seed` off git. Losing it mints new UIDs and abandons subscribers.
+	- `apply` grants that owner premium via the admin API so the ten-public-switch cap does not apply.
+	- `vomesync-catalogue-observe.timer` runs `node catalogue/cli.js observe` every five minutes. Live sources (bridges, sittings, Wikidata offices, NOAA, val.se) update themselves; a failed fetch keeps the last good state. Calendar holidays are computed in the same pass.
+	- `node catalogue/cli.js purge-debris` deletes leftover CI/e2e switches. It will not touch catalogue UIDs or a listing named GamlaBio.
 
 ### Network exposure
 - **Expose only what you need**:

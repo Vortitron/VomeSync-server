@@ -342,6 +342,44 @@ describe('Redis Client', () => {
 				expect(detail.name).toBe('Listing Name');
 				expect(detail.description).toBe('Listing Desc');
 				expect(detail.category).toBe('Community');
+				expect(detail.promoted).toBe(false);
+				expect(detail.promotedUntil).toBe(0);
+			});
+
+			test('sorts promoted listings first', async () => {
+				const owner = global.testUtils.createEd25519Keypair();
+				const ownerPubKeyB64 = Buffer.from(owner.rawPublicKey).toString('base64url');
+				const ownerId = deriveOwnerIdFromOwnerPubKeyB64Url(ownerPubKeyB64);
+
+				async function makePublic(index, name) {
+					const sw = global.testUtils.createEd25519Keypair();
+					const switchPubKeyB64 = Buffer.from(sw.rawPublicKey).toString('base64url');
+					const uid = deriveSwitchUidFromSwitchPubKeyB64Url(switchPubKeyB64);
+					await redisClient.createSwitchV2(uid, ownerId, ownerPubKeyB64, switchPubKeyB64, index, {
+						name,
+						description: `${name} desc`,
+						location: 'Test City',
+						category: 'Community',
+						publicize: true,
+						link: ''
+					});
+					return uid;
+				}
+
+				const organicUid = await makePublic(0, 'Organic');
+				const featuredUid = await makePublic(1, 'Featured');
+				await redisClient.updateSwitch(featuredUid, {
+					promotedUntil: Date.now() + 60_000
+				});
+
+				const publicSwitches = await redisClient.getPublicSwitches();
+				expect(publicSwitches.map((item) => item.uid)).toEqual([featuredUid, organicUid]);
+				expect(publicSwitches[0].promoted).toBe(true);
+				expect(publicSwitches[1].promoted).toBe(false);
+
+				const detail = await redisClient.getPublicSwitchDetail(featuredUid);
+				expect(detail.promoted).toBe(true);
+				expect(detail.promotedUntil).toBeGreaterThan(Date.now());
 			});
 		});
 

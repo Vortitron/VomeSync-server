@@ -141,6 +141,152 @@ describe('API V2 Integration Tests', () => {
 		const stored = await redisClient.getSwitchState(uid);
 		expect(stored.params).toEqual(params);
 	});
+
+	test('POST /v2/switch/:uid/promote returns 503 when Stripe is unset', async () => {
+		const owner = global.testUtils.createEd25519Keypair();
+		const sw = global.testUtils.createEd25519Keypair();
+		const ownerPubKeyB64 = Buffer.from(owner.rawPublicKey).toString('base64url');
+		const switchPubKeyB64 = Buffer.from(sw.rawPublicKey).toString('base64url');
+		const uid = deriveSwitchUidFromSwitchPubKeyB64Url(switchPubKeyB64);
+		const ts = Date.now();
+		const nonce = `n-${ts}-create-promote`;
+		const meta = {
+			name: 'Promo Switch',
+			description: 'Public listing',
+			location: 'Test City',
+			category: 'Community',
+			publicize: true,
+			link: ''
+		};
+		const canonical = stableJsonStringify({
+			v: 2,
+			action: 'create_switch',
+			ownerPubKey: ownerPubKeyB64,
+			switchPubKey: switchPubKeyB64,
+			uid,
+			index: 0,
+			ts,
+			nonce,
+			payload: meta
+		});
+		await request(app)
+			.post('/api/v2/switch')
+			.send({
+				ownerPubKey: ownerPubKeyB64,
+				switchPubKey: switchPubKeyB64,
+				index: 0,
+				ts,
+				nonce,
+				sigOwner: global.testUtils.ed25519SignBase64Url(owner.privateKey, canonical),
+				sigSwitch: global.testUtils.ed25519SignBase64Url(sw.privateKey, canonical),
+				...meta,
+				captchaToken: process.env.HCAPTCHA_BYPASS_TOKEN || 'bypass-me'
+			})
+			.expect(200);
+
+		const keyTs = Date.now();
+		const keyNonce = `n-${keyTs}-ak-promote`;
+		const keyCanonical = stableJsonStringify({
+			v: 2,
+			action: 'create_access_key',
+			uid,
+			ownerPubKey: ownerPubKeyB64,
+			ts: keyTs,
+			nonce: keyNonce,
+			payload: { name: 'site', permissions: ['metadata'] }
+		});
+		const keyResp = await request(app)
+			.post(`/api/v2/switch/${uid}/access-keys`)
+			.send({
+				ownerPubKey: ownerPubKeyB64,
+				ts: keyTs,
+				nonce: keyNonce,
+				sigOwner: global.testUtils.ed25519SignBase64Url(owner.privateKey, keyCanonical),
+				name: 'site',
+				permissions: ['metadata']
+			})
+			.expect(200);
+
+		const promoteResp = await request(app)
+			.post(`/api/v2/switch/${uid}/promote`)
+			.set('X-Api-Key', keyResp.body.data.apiKey)
+			.expect(503);
+		expect(promoteResp.body.success).toBe(false);
+		expect(promoteResp.body.error).toMatch(/not configured/i);
+	});
+
+	test('POST /v2/switch/:uid/premium returns 503 when Stripe is unset', async () => {
+		const owner = global.testUtils.createEd25519Keypair();
+		const sw = global.testUtils.createEd25519Keypair();
+		const ownerPubKeyB64 = Buffer.from(owner.rawPublicKey).toString('base64url');
+		const switchPubKeyB64 = Buffer.from(sw.rawPublicKey).toString('base64url');
+		const uid = deriveSwitchUidFromSwitchPubKeyB64Url(switchPubKeyB64);
+		const ts = Date.now();
+		const nonce = `n-${ts}-create-premium`;
+		const meta = {
+			name: 'Premium Switch',
+			description: 'Public listing',
+			location: 'Test City',
+			category: 'Community',
+			publicize: true,
+			link: ''
+		};
+		const canonical = stableJsonStringify({
+			v: 2,
+			action: 'create_switch',
+			ownerPubKey: ownerPubKeyB64,
+			switchPubKey: switchPubKeyB64,
+			uid,
+			index: 0,
+			ts,
+			nonce,
+			payload: meta
+		});
+		await request(app)
+			.post('/api/v2/switch')
+			.send({
+				ownerPubKey: ownerPubKeyB64,
+				switchPubKey: switchPubKeyB64,
+				index: 0,
+				ts,
+				nonce,
+				sigOwner: global.testUtils.ed25519SignBase64Url(owner.privateKey, canonical),
+				sigSwitch: global.testUtils.ed25519SignBase64Url(sw.privateKey, canonical),
+				...meta,
+				captchaToken: process.env.HCAPTCHA_BYPASS_TOKEN || 'bypass-me'
+			})
+			.expect(200);
+
+		const keyTs = Date.now();
+		const keyNonce = `n-${keyTs}-ak-premium`;
+		const keyCanonical = stableJsonStringify({
+			v: 2,
+			action: 'create_access_key',
+			uid,
+			ownerPubKey: ownerPubKeyB64,
+			ts: keyTs,
+			nonce: keyNonce,
+			payload: { name: 'site', permissions: ['metadata'] }
+		});
+		const keyResp = await request(app)
+			.post(`/api/v2/switch/${uid}/access-keys`)
+			.send({
+				ownerPubKey: ownerPubKeyB64,
+				ts: keyTs,
+				nonce: keyNonce,
+				sigOwner: global.testUtils.ed25519SignBase64Url(owner.privateKey, keyCanonical),
+				name: 'site',
+				permissions: ['metadata']
+			})
+			.expect(200);
+
+		const premiumResp = await request(app)
+			.post(`/api/v2/switch/${uid}/premium`)
+			.set('X-Api-Key', keyResp.body.data.apiKey)
+			.expect(503);
+		expect(premiumResp.body.success).toBe(false);
+		expect(premiumResp.body.error).toMatch(/not configured/i);
+	});
 });
 
 

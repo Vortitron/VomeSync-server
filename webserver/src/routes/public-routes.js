@@ -13,6 +13,8 @@ const {
 	sanitizePublicSwitchData
 } = require('../utils/validation');
 const webSocketManager = require('../websocket/manager');
+const config = require('../config/config');
+const { isPromoteConfigured, isPremiumConfigured } = require('../utils/stripe');
 
 const router = express.Router();
 
@@ -125,6 +127,29 @@ router.get('/categories',
 			logger.error('Error getting categories:', error);
 			return res.status(500).json({ success: false, error: 'Failed to get categories' });
 		}
+	}
+);
+
+// ── Billing flags (no secrets) ─────────────────────────────────────────────────
+
+router.get('/billing',
+	authManager.rateLimit('public_billing', 60, 900000),
+	(_req, res) => {
+		const limits = config.limits || {};
+		const stripe = config.stripe || {};
+		return res.json({
+			success: true,
+			data: {
+				promoteEnabled: isPromoteConfigured(),
+				promoteDurationDays: stripe.promoteDurationDays,
+				premiumEnabled: isPremiumConfigured(),
+				premiumAmount: stripe.premiumAmount,
+				premiumCurrency: stripe.premiumCurrency,
+				maxPrivate: Number(limits.freeTierMaxPrivateSwitches) || 5,
+				maxPublic: Number(limits.freeTierMaxPublicSwitches) || 10,
+				maxSwitches: Number(limits.freeTierMaxSwitches) || 15
+			}
+		});
 	}
 );
 
