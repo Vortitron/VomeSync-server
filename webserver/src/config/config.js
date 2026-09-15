@@ -159,7 +159,14 @@ const config = {
 	hcaptcha: {
 		secret: process.env.HCAPTCHA_SECRET || '',
 		siteKey: process.env.HCAPTCHA_SITEKEY || '',
-		bypassToken: process.env.HCAPTCHA_BYPASS_TOKEN || ''
+		bypassToken: process.env.HCAPTCHA_BYPASS_TOKEN || '',
+		// Lets the VomeHome portal publicize a switch on behalf of an account
+		// it already authenticated (GitHub login) without a browser CAPTCHA
+		// widget to solve -- distinct from bypassToken above, which is for
+		// test/staging tooling, not a production trust boundary. Shared with
+		// the portal's VOMESYNC_TRUSTED_CALLER_SECRET; empty disables it
+		// (fails closed, same as bypassToken unset).
+		trustedCallerSecret: process.env.VOMESYNC_TRUSTED_CALLER_SECRET || ''
 	},
 	logging: {
 		level: process.env.LOG_LEVEL || 'info',
