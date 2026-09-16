@@ -61,10 +61,10 @@ function ownerLimitSnapshot(tierName) {
 	const limits = config.limits || {};
 	const isPremium = tierName === 'premium';
 	const maxSwitches = isPremium
-		? (Number(limits.premiumMaxSwitches) || 50)
+		? (Number(limits.premiumMaxSwitches) || 150)
 		: (Number(limits.freeTierMaxSwitches) || 15);
 	const maxPublic = isPremium
-		? (Number(limits.premiumMaxPublicSwitches) || 25)
+		? (Number(limits.premiumMaxPublicSwitches) || 120)
 		: (Number(limits.freeTierMaxPublicSwitches) || 10);
 	const maxPrivate = isPremium
 		? maxSwitches
@@ -93,7 +93,7 @@ async function startPremiumCheckoutResponse(res, ownerId, uid) {
 // ── V2: Create switch (deterministic UID derived from switch pubkey, signed by owner + switch) ──
 
 router.post('/v2/switch',
-	authManager.rateLimit('v2_create_switch', 30, 3600000),
+	authManager.rateLimit('v2_create_switch', 120, 3600000),
 	validateRequest(schemas.v2CreateSwitch),
 	async (req, res) => {
 		try {

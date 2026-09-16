@@ -198,7 +198,8 @@ async function commandApply(args, seed, entries) {
 		captchaToken: resolveCaptchaToken(),
 		state: loadJsonFile(STATE_PATH, { switches: {} }),
 		sharp: args.skipImages || args.dryRun ? null : resolveSharp(),
-		log
+		log,
+		onState: args.dryRun ? undefined : (state) => saveJsonFile(STATE_PATH, state)
 	});
 	if (!args.dryRun) {
 		saveJsonFile(STATE_PATH, result.state);

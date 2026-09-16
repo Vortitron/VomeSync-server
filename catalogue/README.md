@@ -49,9 +49,14 @@ node catalogue/cli.js purge-debris
 |---|---|
 | `switches.json` | Source of truth. `id` and `index` are permanent. |
 | `lib/artwork.js` | SVG icons (256²) and banners (1600×900). |
-| `lib/refresh.js` | Calendar / last observed state → desired ON/OFF. |
-| `lib/sources.js` | Live observers (bridges, sittings, offices, storms, elections). |
-| `lib/observe.js` | Fetch each source; on failure keep the last good state. |
+| `lib/refresh.js` | Calendar / last observed state → desired ON/OFF. Stale live sources are OFF. |
+| `lib/sources.js` | Live observers (bridges, sittings, offices, storms, elections, USGS, TfL, Launch Library, GDACS). |
+| `lib/offices.js` | Wikidata P1308 office-holders. |
+| `lib/dutch-bridges.js` | Extra isdetunnelopen.nl movable spans. |
+| `lib/live-listings.js` | Extra offices, bridges and event specs (not calendars). |
+| `append-live-listings.js` | Idempotent merge of those extras into `switches.json`. |
+| `lib/observe.js` | Fetch each source; short outages keep last state, then force OFF. |
+| `lib/stale.js` | `staleAfterHours` clock from last successful `observedAt`. |
 | `lib/crypto.js` | Same seed derivation as the Home Assistant integration. |
 | `systemd/` | Five-minute `observe` timer. |
 | `.seed` | Catalogue owner master seed. **Do not commit.** |
@@ -64,14 +69,14 @@ Environment:
 - `ADMIN_API_KEY` — or `docker/.env`; used to grant premium and purge tests
 - `HCAPTCHA_BYPASS_TOKEN` — only if live captcha is on
 
-Apply grants this owner premium for ten years so the free-tier cap of ten public switches does not bite.
+Apply grants this owner premium for ten years so the free-tier cap of ten public switches does not bite. The directory is one owner, so `PREMIUM_MAX_PUBLIC_SWITCHES` (default 120) has to be high enough for every catalogue listing. That cap also applies to paying customers. Watching a public UID is free and does not count toward it.
 
 ## Keeping state honest
 
 Nothing in this catalogue is flipped by a person. Two mechanisms:
 
 1. **Calendar** (`annual`, `windows`, `month`, `nth_weekday`, `full_moon`) — computed from UTC dates in JSON.
-2. **Observe** (`kind: "observe"`, `source: "…"`) — `lib/sources.js` fetches a public page or API. A failed fetch leaves the last good ON/OFF.
+2. **Observe** (`kind: "observe"`, `source: "…"`) — `lib/sources.js` fetches a public page or API. A failed fetch leaves the last good ON/OFF until `staleAfterHours` (default 24) after the last success, then the listing is forced OFF.
 
 `node catalogue/cli.js observe` does both: it updates observed JSON, then `refresh` pushes every listing. Install the timer so it does not depend on a laptop:
 
@@ -84,7 +89,7 @@ sudo systemctl enable --now vomesync-catalogue-observe.timer
 
 The timer fires every five minutes (Tower Bridge lifts are treated as a 15-minute window). On this host the service runs `catalogue/observe.sh`, which uses nvm’s Node 22 — Ubuntu’s `/usr/bin/node` is v12 and has no `fetch`.
 
-Swedish election 2026 is **one** switch on purpose: ON after polls close while the preliminary count zip is still the latest file, or until Wikidata shows a prime minister appointed after election night. Splitting count vs formation would need a higher public cap (premium is 25).
+Swedish election 2026 is **one** switch on purpose: ON after polls close while the preliminary count zip is still the latest file, or until Wikidata shows a prime minister appointed after election night. Splitting count vs formation would need a higher public cap (premium is 120).
 
 Øresund and the Great Belt: ON means open to road traffic — the opposite of Tower Bridge / Erasmusbrug, where ON means open to ships.
 

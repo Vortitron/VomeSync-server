@@ -14,9 +14,11 @@ const {
 	nextIndex
 } = require('../../../catalogue/lib/validate');
 const { desiredState, lastWeekdayOfMonth } = require('../../../catalogue/lib/refresh');
+const { observationIsStale } = require('../../../catalogue/lib/stale');
 const { artIds, renderIconSvg, renderBannerSvg } = require('../../../catalogue/lib/artwork');
 const { parseArgs, loadDotEnv } = require('../../../catalogue/cli');
 const { metadataDiffers, publicMeta } = require('../../../catalogue/lib/apply');
+const { extraLiveListings } = require('../../../catalogue/lib/live-listings');
 
 const CATALOGUE_PATH = path.resolve(__dirname, '../../../catalogue/switches.json');
 
@@ -28,13 +30,34 @@ function loadEntries() {
 describe('public switch catalogue', () => {
 	test('switches.json validates and has unique ids and indexes', () => {
 		const entries = validateCatalogue(loadEntries(), artIds());
-		expect(entries.length).toBeGreaterThanOrEqual(20);
+		expect(entries.length).toBe(100);
 		expect(entries.every((entry) => entry.name && entry.description && entry.art)).toBe(true);
 		expect(entries.some((entry) => entry.id === 'yom-kippur')).toBe(true);
 		expect(entries.some((entry) => entry.id === 'tower-bridge')).toBe(true);
 		expect(entries.some((entry) => entry.id === 'sweden-election-2026')).toBe(true);
 		expect(entries.some((entry) => entry.id === 'oresund-bridge')).toBe(true);
 		expect(entries.some((entry) => entry.id === 'great-belt-bridge')).toBe(true);
+		expect(entries.some((entry) => entry.id === 'halloween')).toBe(true);
+		expect(entries.some((entry) => entry.id === 'london-underground')).toBe(true);
+		expect(entries.some((entry) => entry.id === 'significant-earthquake')).toBe(true);
+		expect(entries.some((entry) => entry.id === 'orbital-launch')).toBe(true);
+		expect(entries.some((entry) => entry.id === 'french-president')).toBe(true);
+		expect(entries.some((entry) => entry.id === 'brienenoordbrug')).toBe(true);
+		expect(entries.some((entry) => entry.id === 'gdacs-red')).toBe(true);
+		const cats = new Set(entries.map((entry) => entry.category));
+		for (const name of ['Transport', 'Government', 'Holiday', 'Weather', 'Event', 'Community']) {
+			expect(cats.has(name)).toBe(true);
+		}
+	});
+
+	test('extra listings are live civic feeds, not calendars', () => {
+		const extra = extraLiveListings();
+		expect(extra).toHaveLength(56);
+		expect(extra.every((entry) => entry.schedule.kind === 'observe')).toBe(true);
+		const have = new Set(loadEntries().map((entry) => entry.id));
+		for (const entry of extra) {
+			expect(have.has(entry.id)).toBe(true);
+		}
 	});
 
 	test('every art key used in the catalogue has a glyph', () => {
@@ -156,7 +179,8 @@ describe('catalogue schedule', () => {
 			'tower-bridge', 'erasmusbrug', 'uk-commons', 'us-congress',
 			'uk-government', 'us-government', 'pope', 'papal-conclave',
 			'uk-election', 'geomagnetic-storm', 'sweden-election-2026',
-			'oresund-bridge', 'great-belt-bridge'
+			'oresund-bridge', 'great-belt-bridge',
+			'significant-earthquake', 'london-underground'
 		];
 		for (const id of live) {
 			expect(byId[id].schedule.kind).toBe('observe');
@@ -172,6 +196,32 @@ describe('catalogue schedule', () => {
 		expect(desiredState(byId['oresund-bridge'], now)).toBe(true);
 		expect(desiredState(byId['great-belt-bridge'], now)).toBe(true);
 		expect(desiredState(byId['tower-bridge'], now)).toBe(false);
+	});
+
+	test('Thanksgiving is the fourth Thursday of November UTC', () => {
+		expect(desiredState(byId.thanksgiving, new Date('2026-11-26T12:00:00Z'))).toBe(true);
+		expect(desiredState(byId.thanksgiving, new Date('2026-11-19T12:00:00Z'))).toBe(false);
+		expect(desiredState(byId.nowruz, new Date('2026-03-21T12:00:00Z'))).toBe(true);
+		expect(desiredState(byId.halloween, new Date('2026-10-31T12:00:00Z'))).toBe(true);
+		expect(desiredState(byId.midsummer, new Date('2026-06-19T12:00:00Z'))).toBe(true);
+		expect(desiredState(byId.holi, new Date('2026-03-03T12:00:00Z'))).toBe(true);
+	});
+
+	test('stale live sources are off until the feed works again', () => {
+		const entry = {
+			id: 'tower-bridge',
+			schedule: {
+				kind: 'observe',
+				source: 'tower-bridge',
+				state: true,
+				observedAt: '2026-09-15T00:00:00Z',
+				staleAfterHours: 2
+			}
+		};
+		expect(observationIsStale(entry.schedule, new Date('2026-09-15T01:59:00Z'))).toBe(false);
+		expect(desiredState(entry, new Date('2026-09-15T01:59:00Z'))).toBe(true);
+		expect(observationIsStale(entry.schedule, new Date('2026-09-15T02:01:00Z'))).toBe(true);
+		expect(desiredState(entry, new Date('2026-09-15T02:01:00Z'))).toBe(false);
 	});
 });
 
@@ -218,6 +268,12 @@ const {
 	parseCommonsDayType,
 	parseHouseSchedule,
 	geomagneticFromScales,
+	significantQuakes,
+	disruptedTubeLines,
+	dutchSpanOpenToShips,
+	launchLive,
+	elevatedVolcanoes,
+	gdacsRedEvents,
 	pickOfficeClaim,
 	isWikidataItemId,
 	englishEntityLabel,
@@ -255,6 +311,17 @@ describe('catalogue observers', () => {
 		expect(sitting).toBe(true);
 		expect(geomagneticFromScales({ 0: { G: { Scale: '4' } } })).toBe(4);
 		expect(geomagneticFromScales({ 0: { G: { Scale: '0' } } })).toBe(0);
+		expect(significantQuakes({ features: [] })).toEqual({ count: 0, mag: 0, place: '' });
+		expect(significantQuakes({
+			features: [
+				{ properties: { mag: 5.1, place: 'Crete' } },
+				{ properties: { mag: 6.2, place: 'Papua New Guinea' } }
+			]
+		})).toEqual({ count: 2, mag: 6.2, place: 'Papua New Guinea' });
+		expect(disruptedTubeLines([
+			{ name: 'Central', lineStatuses: [{ statusSeverity: 10 }] },
+			{ name: 'Northern', lineStatuses: [{ statusSeverity: 6 }] }
+		])).toEqual(['Northern']);
 	});
 
 	test('Wikidata preferred office claim wins', () => {
@@ -355,7 +422,7 @@ describe('catalogue observers', () => {
 				art: 'tower-bridge',
 				onMeans: 'up',
 				offMeans: 'down',
-				schedule: { kind: 'observe', source: 'tower-bridge', state: false }
+				schedule: { kind: 'observe', source: 'tower-bridge', state: false, params: { stale: true, lastError: 'down' } }
 			},
 			{
 				id: 'erasmusbrug',
@@ -379,16 +446,96 @@ describe('catalogue observers', () => {
 		expect(results[0].ok).toBe(true);
 		expect(results[0].on).toBe(true);
 		expect(next[0].schedule.state).toBe(true);
+		expect(next[0].schedule.params.stale).toBeUndefined();
+		expect(next[0].schedule.params.lastError).toBeUndefined();
 		expect(results[1].ok).toBe(false);
 		expect(next[1].schedule.state).toBe(true);
+	});
+
+	test('observeCatalogue forces OFF when the last success is older than staleAfterHours', async () => {
+		const fetchImpl = async () => ({ ok: false, status: 503, text: async () => 'down' });
+		const entries = [{
+			id: 'erasmusbrug',
+			index: 1,
+			name: 'Erasmusbrug open',
+			description: 'ON while up.',
+			location: 'Rotterdam',
+			category: 'Transport',
+			link: 'https://www.portofrotterdam.com/',
+			art: 'erasmusbrug',
+			onMeans: 'up',
+			offMeans: 'down',
+			schedule: {
+				kind: 'observe',
+				source: 'erasmusbrug',
+				state: true,
+				staleAfterHours: 2,
+				observedAt: '2026-09-15T08:00:00Z',
+				params: { source: 'isdetunnelopen.nl' }
+			}
+		}];
+		const { results, entries: next } = await observeCatalogue({
+			entries,
+			fetchImpl,
+			now: new Date('2026-09-15T11:05:00Z')
+		});
+		expect(results[0].ok).toBe(false);
+		expect(results[0].staleOff).toBe(true);
+		expect(results[0].on).toBe(false);
+		expect(next[0].schedule.state).toBe(false);
+		expect(next[0].schedule.params.stale).toBe(true);
+		expect(next[0].schedule.observedAt).toBe('2026-09-15T08:00:00Z');
 	});
 
 	test('every observer id is wired', () => {
 		expect(SOURCE_IDS).toEqual(expect.arrayContaining([
 			'tower-bridge', 'erasmusbrug', 'oresund', 'storebaelt',
 			'uk-commons', 'us-congress', 'uk-pm', 'us-president',
-			'pope', 'conclave', 'uk-election', 'geomagnetic', 'sweden-election'
+			'pope', 'conclave', 'uk-election', 'geomagnetic', 'sweden-election',
+			'earthquake', 'london-underground',
+			'french-president', 'brienenoordbrug', 'launch', 'volcano', 'gdacs-red'
 		]));
+	});
+
+	test('Dutch span, launch, volcano and GDACS parsers', () => {
+		expect(dutchSpanOpenToShips({ isOpen: true, hasBridgeEvent: false })).toBe(false);
+		expect(dutchSpanOpenToShips({ isOpen: false, hasBridgeEvent: false })).toBe(true);
+		expect(dutchSpanOpenToShips({ isOpen: true, hasBridgeEvent: true })).toBe(true);
+		expect(() => dutchSpanOpenToShips({})).toThrow(/Dutch span/);
+		const inFlight = launchLive({
+			results: [{ name: 'Falcon 9', status: { abbrev: 'In Flight' }, net: '2026-09-16T12:00:00Z' }]
+		}, new Date('2026-09-16T10:00:00Z'));
+		expect(inFlight.on).toBe(true);
+		const goNow = launchLive({
+			results: [{
+				name: 'Ariane 6',
+				status: { abbrev: 'Go' },
+				window_start: '2026-09-16T12:00:00Z',
+				window_end: '2026-09-16T12:30:00Z',
+				net: '2026-09-16T12:10:00Z'
+			}]
+		}, new Date('2026-09-16T12:05:00Z'));
+		expect(goNow.on).toBe(true);
+		const goLater = launchLive({
+			results: [{
+				name: 'Ariane 6',
+				status: { abbrev: 'Go' },
+				window_start: '2026-09-16T12:00:00Z',
+				window_end: '2026-09-16T12:30:00Z',
+				net: '2026-09-16T12:10:00Z'
+			}]
+		}, new Date('2026-09-16T10:00:00Z'));
+		expect(goLater.on).toBe(false);
+		expect(elevatedVolcanoes([
+			{ volcano_name: 'Kilauea', color_code: 'ORANGE' },
+			{ volcano_name: 'Quiet', color_code: 'YELLOW', alert_level: 'ADVISORY' }
+		]).map((row) => row.volcano_name)).toEqual(['Kilauea']);
+		expect(gdacsRedEvents({
+			features: [
+				{ properties: { alertlevel: 'Red', name: 'Cyclone' } },
+				{ properties: { alertlevel: 'Orange', name: 'Flood' } }
+			]
+		}).length).toBe(1);
 	});
 });
 

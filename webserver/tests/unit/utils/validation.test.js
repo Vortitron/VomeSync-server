@@ -51,6 +51,14 @@ describe('Validation Utilities', () => {
 				expect(error.details[0].message).toContain('must be one of');
 			});
 
+			test('should accept Transport, Government, Holiday and Weather', () => {
+				for (const category of ['Transport', 'Government', 'Holiday', 'Weather']) {
+					const { error, value } = schemas.createSwitch.validate({ category });
+					expect(error).toBeUndefined();
+					expect(value.category).toBe(category);
+				}
+			});
+
 			test('should reject description that is too long', () => {
 				const invalidData = {
 					description: 'a'.repeat(501) // Exceeds 500 character limit

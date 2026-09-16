@@ -1,10 +1,21 @@
-const CATEGORIES = Object.freeze(['Community', 'Personal', 'Event', 'Test', 'Other']);
+const CATEGORIES = Object.freeze([
+	'Community',
+	'Personal',
+	'Event',
+	'Transport',
+	'Government',
+	'Holiday',
+	'Weather',
+	'Test',
+	'Other'
+]);
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_NAME_LENGTH = 80;
 const MAX_DESCRIPTION_LENGTH = 500;
 const MAX_LOCATION_LENGTH = 100;
 const MAX_URL_LENGTH = 500;
 const { SOURCE_IDS } = require('./sources');
+const { MIN_STALE_AFTER_HOURS, MAX_STALE_AFTER_HOURS } = require('./stale');
 
 const SCHEDULE_KINDS = Object.freeze([
 	'manual',
@@ -57,6 +68,12 @@ function validateSchedule(schedule, id) {
 	if (schedule.kind === 'observe') {
 		if (typeof schedule.source !== 'string' || !SOURCE_IDS.includes(schedule.source)) {
 			throw new Error(`${id}: observe schedule needs a known source`);
+		}
+		if (Object.prototype.hasOwnProperty.call(schedule, 'staleAfterHours')) {
+			const hours = Number(schedule.staleAfterHours);
+			if (!Number.isFinite(hours) || hours < MIN_STALE_AFTER_HOURS || hours > MAX_STALE_AFTER_HOURS) {
+				throw new Error(`${id}: staleAfterHours must be ${MIN_STALE_AFTER_HOURS}-${MAX_STALE_AFTER_HOURS}`);
+			}
 		}
 	}
 	if (schedule.kind === 'windows') {

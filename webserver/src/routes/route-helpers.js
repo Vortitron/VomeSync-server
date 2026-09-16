@@ -179,10 +179,10 @@ const checkFreeTierLimits = async ({
 	const isPremium = tier.tier === 'premium';
 
 	const maxSwitches = isPremium
-		? (Number.isFinite(Number(limits.premiumMaxSwitches)) ? Number(limits.premiumMaxSwitches) : 50)
+		? (Number.isFinite(Number(limits.premiumMaxSwitches)) ? Number(limits.premiumMaxSwitches) : 150)
 		: (Number.isFinite(Number(limits.freeTierMaxSwitches)) ? Number(limits.freeTierMaxSwitches) : 15);
 	const maxPublicSwitches = isPremium
-		? (Number.isFinite(Number(limits.premiumMaxPublicSwitches)) ? Number(limits.premiumMaxPublicSwitches) : 25)
+		? (Number.isFinite(Number(limits.premiumMaxPublicSwitches)) ? Number(limits.premiumMaxPublicSwitches) : 120)
 		: (Number.isFinite(Number(limits.freeTierMaxPublicSwitches)) ? Number(limits.freeTierMaxPublicSwitches) : 10);
 	const maxPrivateSwitches = isPremium
 		? maxSwitches

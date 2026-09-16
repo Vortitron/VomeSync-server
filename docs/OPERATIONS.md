@@ -39,8 +39,8 @@ This document is a practical checklist/runbook for operating VomeSync safely, es
 - **Public directory catalogue** (staff-owned illustrated switches):
 	- Source: `catalogue/switches.json`. CLI: `node catalogue/cli.js apply` then `observe`.
 	- Keep `catalogue/.seed` off git. Losing it mints new UIDs and abandons subscribers.
-	- `apply` grants that owner premium via the admin API so the ten-public-switch cap does not apply.
-	- `vomesync-catalogue-observe.timer` runs `node catalogue/cli.js observe` every five minutes. Live sources (bridges, sittings, Wikidata offices, NOAA, val.se) update themselves; a failed fetch keeps the last good state. Calendar holidays are computed in the same pass.
+	- `apply` grants that owner premium via the admin API so the ten-public-switch cap does not apply. Create is limited to 120 public switches an hour so a catalogue fill can finish.
+	- `vomesync-catalogue-observe.timer` runs `node catalogue/cli.js observe` every five minutes. Live sources (bridges, sittings, Wikidata offices, NOAA, USGS, TfL, Launch Library, GDACS, val.se) update themselves; a short fetch failure keeps the last good state, then `staleAfterHours` (default 24, shorter on bridges, Tube and launches) forces OFF. Calendar holidays are computed in the same pass.
 	- `node catalogue/cli.js purge-debris` deletes leftover CI/e2e switches. It will not touch catalogue UIDs or a listing named GamlaBio.
 
 ### Network exposure
