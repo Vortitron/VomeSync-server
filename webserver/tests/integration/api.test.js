@@ -623,6 +623,42 @@ describe('API Integration Tests', () => {
 			expect(response.body.data.switches[0].uid).toBe(createdPublic.uid);
 			expect(response.body.data.switches[0].description).toBe('Public Switch');
 			expect(response.body.data.count).toBe(1);
+			expect(response.body.data.switches[0].promoted).toBe(false);
+		});
+
+		test('lists promoted switches first', async () => {
+			const organic = await createV2PublicSwitch(app, { description: 'Organic listing' }, 0);
+			const featured = await createV2PublicSwitch(app, { description: 'Featured listing' }, 1);
+			await redisClient.updateSwitch(featured.uid, {
+				promotedUntil: Date.now() + (7 * 24 * 60 * 60 * 1000)
+			});
+
+			const response = await request(app)
+				.get('/api/public-switches')
+				.expect(200);
+
+			expect(response.body.data.switches).toHaveLength(2);
+			expect(response.body.data.switches[0].uid).toBe(featured.uid);
+			expect(response.body.data.switches[0].promoted).toBe(true);
+			expect(response.body.data.switches[0].promotedUntil).toBeGreaterThan(Date.now());
+			expect(response.body.data.switches[1].uid).toBe(organic.uid);
+			expect(response.body.data.switches[1].promoted).toBe(false);
+		});
+	});
+
+	describe('GET /api/billing', () => {
+		test('reports promotion disabled when Stripe is unset', async () => {
+			const response = await request(app)
+				.get('/api/billing')
+				.expect(200);
+
+			expect(response.body.success).toBe(true);
+			expect(response.body.data.promoteEnabled).toBe(false);
+			expect(response.body.data.premiumEnabled).toBe(false);
+			expect(response.body.data.promoteDurationDays).toBe(7);
+			expect(response.body.data.taxEnabled).toBe(true);
+			expect(response.body.data.maxPublic).toBe(10);
+			expect(response.body.data.maxPrivate).toBe(5);
 		});
 	});
 
@@ -881,6 +917,35 @@ describe('API Integration Tests', () => {
 				}, 403);
 				expect(updateResponse.body.success).toBe(false);
 				expect(updateResponse.body.error).toMatch(/public/i);
+			} finally {
+				Object.assign(config.limits, originalLimits);
+			}
+		});
+
+		test('should enforce free tier private listing limits', async () => {
+			const originalLimits = { ...config.limits };
+			Object.assign(config.limits, {
+				freeTierEnabled: true,
+				freeTierMaxSwitches: 10,
+				freeTierMaxPublicSwitches: 10,
+				freeTierMaxPrivateSwitches: 1
+			});
+
+			try {
+				const owner = global.testUtils.createEd25519Keypair();
+				const ownerPubKeyB64 = Buffer.from(owner.rawPublicKey).toString('base64url');
+				const first = await createV2SwitchForOwner(app, owner, { publicize: false }, 0, 200);
+				expect(first.response.body.success).toBe(true);
+
+				const second = await createV2SwitchForOwner(app, owner, { publicize: false }, 1, 403);
+				expect(second.response.body.success).toBe(false);
+				expect(second.response.body.code).toBe('tier_limit');
+				expect(second.response.body.error).toMatch(/private/i);
+
+				const nameOnly = await updateV2Switch(app, first.uid, owner, ownerPubKeyB64, {
+					description: 'still private'
+				}, 200);
+				expect(nameOnly.body.success).toBe(true);
 			} finally {
 				Object.assign(config.limits, originalLimits);
 			}
@@ -1314,6 +1379,20 @@ describe('Security and validation', () => {
 				.expect(200);
 			const uids = listAfter.body.data.switches.map((sw) => sw.uid);
 			expect(uids).not.toContain(created.uid);
+		});
+
+		test('should list every switch for admin cleanup', async () => {
+			const created = await createV2PublicSwitch(app, { description: 'Inventory test' }, 4);
+			const listed = await request(app)
+				.get('/api/admin/switches')
+				.set('X-Admin-Key', adminKey)
+				.expect(200);
+			expect(listed.body.success).toBe(true);
+			const uids = listed.body.data.switches.map((item) => item.uid);
+			expect(uids).toContain(created.uid);
+			const row = listed.body.data.switches.find((item) => item.uid === created.uid);
+			expect(row.ownerId).toBeTruthy();
+			expect(row.publicize).toBe(true);
 		});
 
 		test('should create and clear a redirect', async () => {

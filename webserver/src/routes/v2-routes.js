@@ -10,6 +10,15 @@ const redisClient = require('../utils/redis');
 const authManager = require('../utils/auth');
 const logger = require('../utils/logger');
 const media = require('../utils/media');
+const config = require('../config/config');
+const {
+	isPromoteConfigured,
+	isPremiumConfigured,
+	createPromoteCheckoutSession,
+	createPremiumCheckoutSession,
+	createBillingPortalSession
+} = require('../utils/stripe');
+const { promotionBlockReason, isPromoted } = require('../utils/promote');
 const {
 	validateRequest,
 	validateUID,
@@ -41,10 +50,45 @@ const {
 	v2CanonicalPauseAccessKey,
 	v2CanonicalUpdateAccessKeyPermissions,
 	v2CanonicalRedeemPromo,
-	v2CanonicalGetOwnerTier
+	v2CanonicalGetOwnerTier,
+	v2CanonicalPremiumCheckout,
+	v2CanonicalBillingPortal
 } = require('./route-helpers');
 
 const router = express.Router();
+
+function ownerLimitSnapshot(tierName) {
+	const limits = config.limits || {};
+	const isPremium = tierName === 'premium';
+	const maxSwitches = isPremium
+		? (Number(limits.premiumMaxSwitches) || 50)
+		: (Number(limits.freeTierMaxSwitches) || 15);
+	const maxPublic = isPremium
+		? (Number(limits.premiumMaxPublicSwitches) || 25)
+		: (Number(limits.freeTierMaxPublicSwitches) || 10);
+	const maxPrivate = isPremium
+		? maxSwitches
+		: (Number(limits.freeTierMaxPrivateSwitches) || 5);
+	return { maxSwitches, maxPublic, maxPrivate };
+}
+
+async function startPremiumCheckoutResponse(res, ownerId, uid) {
+	if (!isPremiumConfigured()) {
+		return res.status(503).json({ success: false, error: 'Premium is not configured' });
+	}
+	if (!ownerId) {
+		return res.status(400).json({ success: false, error: 'Switch has no owner' });
+	}
+	const tier = await redisClient.getOwnerTier(ownerId);
+	if (tier.tier === 'premium' && tier.stripeSubscriptionId) {
+		return res.status(409).json({ success: false, error: 'Already on premium' });
+	}
+	const session = await createPremiumCheckoutSession({ ownerId, uid: uid || '' });
+	return res.json({
+		success: true,
+		data: { url: session.url, id: session.id }
+	});
+}
 
 // ── V2: Create switch (deterministic UID derived from switch pubkey, signed by owner + switch) ──
 
@@ -116,7 +160,8 @@ router.post('/v2/switch',
 			const limitCheck = await checkFreeTierLimits({
 				ownerId,
 				wantsPublicize: Boolean(data.publicize),
-				currentPublicize: false
+				currentPublicize: false,
+				isCreate: true
 			});
 			if (limitCheck) {
 				return sendFreeTierLimitError(res, limitCheck.limit, limitCheck.max, limitCheck.tier);
@@ -328,8 +373,11 @@ router.post('/v2/switch/:uid',
 
 			const limitCheck = await checkFreeTierLimits({
 				ownerId,
-				wantsPublicize: updates.publicize === true,
-				currentPublicize: Boolean(switchData.publicize)
+				wantsPublicize: Object.prototype.hasOwnProperty.call(updates, 'publicize')
+					? Boolean(updates.publicize)
+					: null,
+				currentPublicize: Boolean(switchData.publicize),
+				isCreate: false
 			});
 			if (limitCheck) {
 				return sendFreeTierLimitError(res, limitCheck.limit, limitCheck.max, limitCheck.tier);
@@ -912,16 +960,177 @@ router.post('/v2/owner/tier',
 			}
 
 			const tierInfo = await redisClient.getOwnerTier(ownerId);
+			const limits = ownerLimitSnapshot(tierInfo.tier);
 			return res.json({
 				success: true,
 				data: {
 					tier: tierInfo.tier,
-					expiresAt: tierInfo.expiresAt || null
+					expiresAt: tierInfo.expiresAt || null,
+					...limits,
+					premiumEnabled: isPremiumConfigured(),
+					hasStripeCustomer: Boolean(tierInfo.stripeCustomerId)
 				}
 			});
 		} catch (error) {
 			logger.error('Error getting owner tier:', error);
 			return res.status(500).json({ success: false, error: 'Failed to get owner tier' });
+		}
+	}
+);
+
+// ── V2: Start paid promotion (Stripe Checkout) ─────────────────────────────────
+
+router.post('/v2/switch/:uid/promote',
+	validateUID,
+	authManager.rateLimit('v2_promote', 30, 900000, { perKey: true, keyLimit: 10 }),
+	authManager.requireV2AccessKey('metadata'),
+	async (req, res) => {
+		try {
+			if (!isPromoteConfigured()) {
+				return res.status(503).json({ success: false, error: 'Promotion is not configured' });
+			}
+			const { uid } = req.params;
+			const switchData = req.switchData;
+			const blocked = promotionBlockReason(switchData);
+			if (blocked) {
+				return res.status(400).json({ success: false, error: blocked });
+			}
+			const durationDays = config.stripe.promoteDurationDays;
+			const session = await createPromoteCheckoutSession({
+				uid,
+				ownerId: switchData.ownerId || '',
+				durationDays
+			});
+			return res.json({
+				success: true,
+				data: {
+					url: session.url,
+					id: session.id,
+					durationDays,
+					alreadyPromoted: isPromoted(switchData)
+				}
+			});
+		} catch (error) {
+			logger.error(`Error creating promote checkout for ${req.params.uid}:`, error);
+			return res.status(500).json({ success: false, error: 'Failed to start promotion checkout' });
+		}
+	}
+);
+
+// ── V2: Start premium Checkout from a managed switch (access key) ──────────────
+
+router.post('/v2/switch/:uid/premium',
+	validateUID,
+	authManager.rateLimit('v2_premium', 20, 900000, { perKey: true, keyLimit: 6 }),
+	authManager.requireV2AccessKey('metadata'),
+	async (req, res) => {
+		try {
+			return await startPremiumCheckoutResponse(
+				res,
+				req.switchData && req.switchData.ownerId,
+				req.params.uid
+			);
+		} catch (error) {
+			logger.error(`Error creating premium checkout for ${req.params.uid}:`, error);
+			return res.status(500).json({ success: false, error: 'Failed to start premium checkout' });
+		}
+	}
+);
+
+// ── V2: Start premium Checkout (owner-signed, Home Assistant) ──────────────────
+
+router.post('/v2/owner/premium',
+	authManager.rateLimit('v2_owner_premium', 20, 900000),
+	validateRequest(schemas.v2PremiumCheckout),
+	async (req, res) => {
+		try {
+			const data = req.validatedData;
+			if (!assertFreshTimestamp(data.ts)) {
+				return res.status(400).json(clockSkewError());
+			}
+			const ownerId = deriveOwnerIdFromOwnerPubKeyB64Url(data.ownerPubKey);
+			const canonical = v2CanonicalPremiumCheckout(data);
+			const ok = verifyEd25519SignatureB64Url(data.ownerPubKey, canonical, data.sigOwner);
+			if (!ok) {
+				return res.status(401).json({ success: false, error: 'Invalid owner signature' });
+			}
+			const claimed = await redisClient.claimV2Nonce(ownerId, data.nonce, 10 * 60 * 1000);
+			if (!claimed) {
+				return res.status(409).json({ success: false, error: 'Nonce already used' });
+			}
+			return await startPremiumCheckoutResponse(res, ownerId, '');
+		} catch (error) {
+			logger.error('Error creating owner premium checkout:', error);
+			return res.status(500).json({ success: false, error: 'Failed to start premium checkout' });
+		}
+	}
+);
+
+async function startBillingPortalResponse(res, ownerId, uid) {
+	if (!isPremiumConfigured()) {
+		return res.status(503).json({ success: false, error: 'Premium is not configured' });
+	}
+	if (!ownerId) {
+		return res.status(400).json({ success: false, error: 'Switch has no owner' });
+	}
+	const tier = await redisClient.getOwnerTier(ownerId);
+	if (!tier.stripeCustomerId) {
+		return res.status(404).json({
+			success: false,
+			error: 'No Stripe customer for this owner. Pay for premium first — promo grants have nothing to manage here.'
+		});
+	}
+	const session = await createBillingPortalSession({
+		customerId: tier.stripeCustomerId,
+		uid: uid || ''
+	});
+	return res.json({
+		success: true,
+		data: { url: session.url, id: session.id }
+	});
+}
+
+router.post('/v2/switch/:uid/billing-portal',
+	validateUID,
+	authManager.rateLimit('v2_billing_portal', 20, 900000, { perKey: true, keyLimit: 6 }),
+	authManager.requireV2AccessKey('metadata'),
+	async (req, res) => {
+		try {
+			return await startBillingPortalResponse(
+				res,
+				req.switchData && req.switchData.ownerId,
+				req.params.uid
+			);
+		} catch (error) {
+			logger.error(`Error creating billing portal for ${req.params.uid}:`, error);
+			return res.status(500).json({ success: false, error: 'Failed to open billing portal' });
+		}
+	}
+);
+
+router.post('/v2/owner/billing-portal',
+	authManager.rateLimit('v2_owner_billing_portal', 20, 900000),
+	validateRequest(schemas.v2BillingPortal),
+	async (req, res) => {
+		try {
+			const data = req.validatedData;
+			if (!assertFreshTimestamp(data.ts)) {
+				return res.status(400).json(clockSkewError());
+			}
+			const ownerId = deriveOwnerIdFromOwnerPubKeyB64Url(data.ownerPubKey);
+			const canonical = v2CanonicalBillingPortal(data);
+			const ok = verifyEd25519SignatureB64Url(data.ownerPubKey, canonical, data.sigOwner);
+			if (!ok) {
+				return res.status(401).json({ success: false, error: 'Invalid owner signature' });
+			}
+			const claimed = await redisClient.claimV2Nonce(ownerId, data.nonce, 10 * 60 * 1000);
+			if (!claimed) {
+				return res.status(409).json({ success: false, error: 'Nonce already used' });
+			}
+			return await startBillingPortalResponse(res, ownerId, '');
+		} catch (error) {
+			logger.error('Error creating owner billing portal:', error);
+			return res.status(500).json({ success: false, error: 'Failed to open billing portal' });
 		}
 	}
 );

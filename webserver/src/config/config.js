@@ -9,6 +9,20 @@ const parsePositiveInt = (value, fallback) => {
 	return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
+const parseEnvFlag = (value, fallback) => {
+	if (value === undefined || value === null || value === '') {
+		return fallback;
+	}
+	const normalised = String(value).trim().toLowerCase();
+	if (['1', 'true', 'yes', 'on'].includes(normalised)) {
+		return true;
+	}
+	if (['0', 'false', 'no', 'off'].includes(normalised)) {
+		return false;
+	}
+	return fallback;
+};
+
 const config = {
 	server: {
 		port: parseInt(process.env.PORT, 10) || 3000,
@@ -174,10 +188,28 @@ const config = {
 	},
 	limits: {
 		freeTierEnabled: process.env.FREE_TIER_LIMITS_ENABLED !== 'false',
-		freeTierMaxSwitches: parsePositiveInt(process.env.FREE_TIER_MAX_SWITCHES, 8),
-		freeTierMaxPublicSwitches: parsePositiveInt(process.env.FREE_TIER_MAX_PUBLIC_SWITCHES, 4),
+		freeTierMaxSwitches: parsePositiveInt(process.env.FREE_TIER_MAX_SWITCHES, 15),
+		freeTierMaxPublicSwitches: parsePositiveInt(process.env.FREE_TIER_MAX_PUBLIC_SWITCHES, 10),
+		freeTierMaxPrivateSwitches: parsePositiveInt(process.env.FREE_TIER_MAX_PRIVATE_SWITCHES, 5),
 		premiumMaxSwitches: parsePositiveInt(process.env.PREMIUM_MAX_SWITCHES, 50),
 		premiumMaxPublicSwitches: parsePositiveInt(process.env.PREMIUM_MAX_PUBLIC_SWITCHES, 25)
+	},
+	stripe: {
+		secretKey: process.env.STRIPE_SECRET_KEY || '',
+		webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
+		pricePromote: process.env.STRIPE_PRICE_PROMOTE || '',
+		promoteAmount: parsePositiveInt(process.env.STRIPE_PROMOTE_AMOUNT, 500),
+		promoteCurrency: String(process.env.STRIPE_PROMOTE_CURRENCY || 'eur').toLowerCase(),
+		promoteDurationDays: parsePositiveInt(process.env.STRIPE_PROMOTE_DURATION_DAYS, 7) || 7,
+		pricePremium: process.env.STRIPE_PRICE_PREMIUM || '',
+		premiumAmount: parsePositiveInt(process.env.STRIPE_PREMIUM_AMOUNT, 900),
+		premiumCurrency: String(process.env.STRIPE_PREMIUM_CURRENCY || 'eur').toLowerCase(),
+		publicBaseUrl: process.env.VOMESYNC_PUBLIC_BASE_URL || 'https://sync.vome.io',
+		// Same account as vome.io: Sweden small-seller VAT, advertised prices include tax.
+		taxEnabled: parseEnvFlag(process.env.STRIPE_TAX_ENABLED, true),
+		taxCode: process.env.STRIPE_TAX_CODE || 'txcd_10103000',
+		taxBehavior: String(process.env.STRIPE_TAX_BEHAVIOR || 'inclusive').toLowerCase(),
+		adaptivePricing: parseEnvFlag(process.env.STRIPE_ADAPTIVE_PRICING, true)
 	}
 };
 

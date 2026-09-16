@@ -1,0 +1,18 @@
+[Unit]
+Description=VomeSync catalogue observe (pull live sources, push ON/OFF)
+Documentation=file:///var/www/VomeSync-server/catalogue/README.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=vortitron
+Group=vortitron
+WorkingDirectory=/var/www/VomeSync-server
+Environment=NODE_ENV=production
+EnvironmentFile=-/var/www/VomeSync-server/docker/.env
+ExecStart=/var/www/VomeSync-server/catalogue/observe.sh
+Environment=NVM_DIR=/home/vortitron/.nvm
+Environment=PATH=/home/vortitron/.nvm/versions/node/v22.23.0/bin:/usr/local/bin:/usr/bin:/bin
+Nice=10
+TimeoutStartSec=120

@@ -1,0 +1,13 @@
+[Unit]
+Description=Run VomeSync catalogue observe every five minutes
+Documentation=file:///var/www/VomeSync-server/catalogue/README.md
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=true
+Unit=vomesync-catalogue-observe.service
+
+[Install]
+WantedBy=timers.target

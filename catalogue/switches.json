@@ -1,0 +1,584 @@
+{
+	"version": 1,
+	"ownerProfileUrl": "https://vome.io",
+	"switches": [
+		{
+			"id": "tower-bridge",
+			"index": 0,
+			"name": "Tower Bridge open",
+			"description": "ON while the bascules are up for river traffic. Flash a lamp or pause the garden when a ship is passing. Lift times: towerbridge.org.uk.",
+			"location": "London",
+			"category": "Event",
+			"link": "https://www.towerbridge.org.uk/lift-times",
+			"art": "tower-bridge",
+			"onMeans": "The roadway is open to shipping.",
+			"offMeans": "The bridge is down for road traffic.",
+			"schedule": {
+				"kind": "observe",
+				"source": "tower-bridge",
+				"state": false,
+				"params": {
+					"source": "towerbridge.org.uk/flat/lift-times"
+				},
+				"observedAt": "2026-09-16T06:51:38.305Z"
+			}
+		},
+		{
+			"id": "erasmusbrug",
+			"index": 1,
+			"name": "Erasmusbrug open",
+			"description": "ON while Rotterdam's swan bridge is open to shipping. Pair it with a harbour scene or a porch light. Opening times come from the Port of Rotterdam.",
+			"location": "Rotterdam",
+			"category": "Event",
+			"link": "https://www.portofrotterdam.com/",
+			"art": "erasmusbrug",
+			"onMeans": "The span is open to ships.",
+			"offMeans": "The span is closed for road traffic.",
+			"schedule": {
+				"kind": "observe",
+				"source": "erasmusbrug",
+				"state": false,
+				"params": {
+					"source": "isdetunnelopen.nl",
+					"hasBridgeEvent": false
+				},
+				"observedAt": "2026-09-16T06:51:38.305Z"
+			}
+		},
+		{
+			"id": "uk-commons",
+			"index": 2,
+			"name": "UK Commons sitting",
+			"description": "ON while the House of Commons is sitting. Useful for a quiet-house scene or a Westminster lamp. The calendar is on parliament.uk.",
+			"location": "Westminster",
+			"category": "Community",
+			"link": "https://www.parliament.uk/business/commons/",
+			"art": "commons",
+			"onMeans": "The Commons is in session.",
+			"offMeans": "The House is adjourned or in recess.",
+			"schedule": {
+				"kind": "observe",
+				"source": "uk-commons",
+				"state": false,
+				"params": {
+					"dayType": "Adjournment day (Conference recess)"
+				},
+				"observedAt": "2026-09-16T06:51:38.305Z"
+			}
+		},
+		{
+			"id": "us-congress",
+			"index": 3,
+			"name": "US Congress in session",
+			"description": "ON while the United States Congress is in session. A simple remote for Capitol-watching automations. Schedule: congress.gov.",
+			"location": "Washington, D.C.",
+			"category": "Community",
+			"link": "https://www.congress.gov/days-in-session",
+			"art": "capitol",
+			"onMeans": "Congress is in session.",
+			"offMeans": "Congress is adjourned.",
+			"schedule": {
+				"kind": "observe",
+				"source": "us-congress",
+				"state": false,
+				"params": {
+					"sittingDay": true
+				},
+				"observedAt": "2026-09-16T06:51:38.305Z"
+			}
+		},
+		{
+			"id": "uk-government",
+			"index": 4,
+			"name": "UK Prime Minister: Andy Burnham",
+			"description": "ON while Andy Burnham is Prime Minister. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata / GOV.UK.",
+			"location": "United Kingdom",
+			"category": "Community",
+			"link": "https://www.gov.uk/government/ministers/prime-minister",
+			"art": "uk-pm",
+			"onMeans": "Andy Burnham currently holds the office.",
+			"offMeans": "Someone else is Prime Minister, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "uk-pm",
+				"state": true,
+				"params": {
+					"office": "prime-minister",
+					"holder": "Andy Burnham",
+					"party": "Labour"
+				},
+				"observedAt": "2026-09-16T06:51:38.305Z"
+			}
+		},
+		{
+			"id": "us-government",
+			"index": 5,
+			"name": "US President: Donald Trump",
+			"description": "ON while Donald Trump is President of the United States. It turns off on a change of office-holder, then the listing is renamed. Source: Wikidata.",
+			"location": "United States",
+			"category": "Community",
+			"link": "https://www.whitehouse.gov/",
+			"art": "us-president",
+			"onMeans": "Donald Trump currently holds the office.",
+			"offMeans": "Someone else is President, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "us-president",
+				"state": true,
+				"params": {
+					"office": "president",
+					"holder": "Donald Trump"
+				},
+				"observedAt": "2026-09-16T06:51:38.305Z"
+			}
+		},
+		{
+			"id": "pope",
+			"index": 6,
+			"name": "Pope: Leo XIV",
+			"description": "ON while Leo XIV is Pope. It turns off during a sede vacante or a new pontificate. Pair with the conclave switch for the gap in between.",
+			"location": "Vatican City",
+			"category": "Community",
+			"link": "https://www.vatican.va/",
+			"art": "pope",
+			"onMeans": "Leo XIV is the reigning Pope.",
+			"offMeans": "The Holy See is vacant, or another Pope has been elected.",
+			"schedule": {
+				"kind": "observe",
+				"source": "pope",
+				"state": true,
+				"params": {
+					"office": "pope",
+					"holder": "Leo XIV"
+				},
+				"observedAt": "2026-09-16T06:51:38.305Z"
+			}
+		},
+		{
+			"id": "papal-conclave",
+			"index": 7,
+			"name": "Papal conclave",
+			"description": "ON while a papal conclave is sitting to elect a Pope. A rare, large event. Subscribe now; it will almost always be off.",
+			"location": "Vatican City",
+			"category": "Event",
+			"link": "https://www.vatican.va/",
+			"art": "conclave",
+			"onMeans": "Cardinals are in conclave.",
+			"offMeans": "No conclave is in progress.",
+			"schedule": {
+				"kind": "observe",
+				"source": "conclave",
+				"state": false,
+				"params": {
+					"vacant": false,
+					"holder": "Leo XIV"
+				},
+				"observedAt": "2026-09-16T06:51:38.305Z"
+			}
+		},
+		{
+			"id": "uk-election",
+			"index": 8,
+			"name": "UK general election called",
+			"description": "ON from the moment a UK general election is called until polls close. Unpredictable on purpose. Use it for a campaign scene or a reminder lamp.",
+			"location": "United Kingdom",
+			"category": "Event",
+			"link": "https://www.gov.uk/",
+			"art": "ballot",
+			"onMeans": "A general election has been called and voting has not finished.",
+			"offMeans": "No UK general election is under way.",
+			"schedule": {
+				"kind": "observe",
+				"source": "uk-election",
+				"state": false,
+				"params": {
+					"dayType": "Adjournment day (Conference recess)"
+				},
+				"observedAt": "2026-09-16T06:51:38.305Z"
+			}
+		},
+		{
+			"id": "geomagnetic-storm",
+			"index": 9,
+			"name": "Geomagnetic storm G4+",
+			"description": "ON during a severe or extreme geomagnetic storm (G4 or G5). Aurora watchers can light a room; radio users can pause. Based on NOAA space-weather alerts.",
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://www.swpc.noaa.gov/",
+			"art": "aurora",
+			"onMeans": "A G4 or G5 geomagnetic storm is in progress.",
+			"offMeans": "No severe storm is current.",
+			"schedule": {
+				"kind": "observe",
+				"source": "geomagnetic",
+				"state": false,
+				"params": {
+					"gScale": 0
+				},
+				"observedAt": "2026-09-16T06:51:38.305Z"
+			}
+		},
+		{
+			"id": "christmas",
+			"index": 10,
+			"name": "Christmas Day",
+			"description": "ON on 25 December UTC. A community switch for Christmas lights that should agree with everyone else's. Local midnight will differ; this is the UTC civil day.",
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://en.wikipedia.org/wiki/Christmas",
+			"art": "christmas",
+			"onMeans": "It is 25 December, UTC.",
+			"offMeans": "It is any other UTC day.",
+			"schedule": {
+				"kind": "annual",
+				"month": 12,
+				"day": 25
+			}
+		},
+		{
+			"id": "easter",
+			"index": 11,
+			"name": "Easter Sunday (Western)",
+			"description": "ON on Western Easter Sunday, UTC. 2026 is 5 April; 2027 is 28 March. Use it for a dawn scene or to rest an automation for the day.",
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://en.wikipedia.org/wiki/Easter",
+			"art": "easter",
+			"onMeans": "It is Western Easter Sunday, UTC.",
+			"offMeans": "It is not Western Easter Sunday.",
+			"schedule": {
+				"kind": "windows",
+				"windows": [
+					{
+						"start": "2026-04-05T00:00:00Z",
+						"end": "2026-04-06T00:00:00Z"
+					},
+					{
+						"start": "2027-03-28T00:00:00Z",
+						"end": "2027-03-29T00:00:00Z"
+					},
+					{
+						"start": "2028-04-16T00:00:00Z",
+						"end": "2028-04-17T00:00:00Z"
+					}
+				]
+			}
+		},
+		{
+			"id": "ramadan",
+			"index": 12,
+			"name": "Ramadan",
+			"description": "ON for the month of Ramadan, using calculated UTC dates (local moon-sighting can differ by a day). 2026: 18 February to 19 March. A community switch for iftar lamps.",
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://en.wikipedia.org/wiki/Ramadan",
+			"art": "ramadan",
+			"onMeans": "The calculated month of Ramadan is under way.",
+			"offMeans": "It is not Ramadan on the calculated calendar.",
+			"schedule": {
+				"kind": "windows",
+				"windows": [
+					{
+						"start": "2026-02-18T00:00:00Z",
+						"end": "2026-03-20T00:00:00Z"
+					},
+					{
+						"start": "2027-02-08T00:00:00Z",
+						"end": "2027-03-10T00:00:00Z"
+					}
+				]
+			}
+		},
+		{
+			"id": "eid-al-fitr",
+			"index": 13,
+			"name": "Eid al-Fitr",
+			"description": "ON on Eid al-Fitr, using calculated UTC dates. 2026 is 20–21 March. Local moon-sighting can move it by a day. A feast-day switch for lights and greetings.",
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://en.wikipedia.org/wiki/Eid_al-Fitr",
+			"art": "eid",
+			"onMeans": "It is Eid al-Fitr on the calculated calendar.",
+			"offMeans": "It is not Eid al-Fitr.",
+			"schedule": {
+				"kind": "windows",
+				"windows": [
+					{
+						"start": "2026-03-20T00:00:00Z",
+						"end": "2026-03-22T00:00:00Z"
+					},
+					{
+						"start": "2027-03-09T00:00:00Z",
+						"end": "2027-03-11T00:00:00Z"
+					}
+				]
+			}
+		},
+		{
+			"id": "diwali",
+			"index": 14,
+			"name": "Diwali",
+			"description": "ON on Diwali (Lakshmi Puja), UTC. 2026 is 8 November; 2027 is 29 October. The natural switch for a house of lamps.",
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://en.wikipedia.org/wiki/Diwali",
+			"art": "diwali",
+			"onMeans": "It is Diwali, UTC.",
+			"offMeans": "It is not Diwali.",
+			"schedule": {
+				"kind": "windows",
+				"windows": [
+					{
+						"start": "2026-11-08T00:00:00Z",
+						"end": "2026-11-09T00:00:00Z"
+					},
+					{
+						"start": "2027-10-29T00:00:00Z",
+						"end": "2027-10-30T00:00:00Z"
+					}
+				]
+			}
+		},
+		{
+			"id": "hanukkah",
+			"index": 15,
+			"name": "Hanukkah",
+			"description": "ON for the eight days of Hanukkah. 2026 begins at sundown on 4 December. A menorah automation that stays in step with the calendar.",
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://www.hebcal.com/holidays/chanukah",
+			"art": "hanukkah",
+			"onMeans": "Hanukkah is being observed.",
+			"offMeans": "It is not Hanukkah.",
+			"schedule": {
+				"kind": "windows",
+				"windows": [
+					{
+						"start": "2026-12-04T16:00:00Z",
+						"end": "2026-12-13T00:00:00Z"
+					},
+					{
+						"start": "2027-12-24T16:00:00Z",
+						"end": "2028-01-02T00:00:00Z"
+					}
+				]
+			}
+		},
+		{
+			"id": "yom-kippur",
+			"index": 16,
+			"name": "Yom Kippur",
+			"description": "ON for Yom Kippur, from sundown on the eve through the following day. 2026 is 20–21 September. A pause switch: rest noisy automations for the fast.",
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://www.hebcal.com/holidays/yom-kippur-2026",
+			"art": "yom-kippur",
+			"onMeans": "Yom Kippur is being observed.",
+			"offMeans": "It is not Yom Kippur.",
+			"schedule": {
+				"kind": "windows",
+				"windows": [
+					{
+						"start": "2026-09-20T16:00:00Z",
+						"end": "2026-09-21T20:00:00Z"
+					},
+					{
+						"start": "2027-10-10T16:00:00Z",
+						"end": "2027-10-11T20:00:00Z"
+					}
+				]
+			}
+		},
+		{
+			"id": "lunar-new-year",
+			"index": 17,
+			"name": "Lunar New Year",
+			"description": "ON on Lunar New Year's Day, UTC. 2026 is 17 February (Year of the Horse); 2027 is 6 February. Red lanterns, optional firecrackers, optional restraint.",
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://en.wikipedia.org/wiki/Lunar_New_Year",
+			"art": "lunar-new-year",
+			"onMeans": "It is Lunar New Year's Day, UTC.",
+			"offMeans": "It is not Lunar New Year's Day.",
+			"schedule": {
+				"kind": "windows",
+				"windows": [
+					{
+						"start": "2026-02-17T00:00:00Z",
+						"end": "2026-02-18T00:00:00Z"
+					},
+					{
+						"start": "2027-02-06T00:00:00Z",
+						"end": "2027-02-07T00:00:00Z"
+					}
+				]
+			}
+		},
+		{
+			"id": "earth-hour",
+			"index": 18,
+			"name": "Earth Hour",
+			"description": "ON on Earth Hour Saturday (last Saturday of March, UTC civil day). Officially 20:30–21:30 local; this listing covers the UTC day so every timezone can join.",
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://www.earthhour.org/",
+			"art": "earth-hour",
+			"onMeans": "It is Earth Hour Saturday, UTC.",
+			"offMeans": "It is not Earth Hour Saturday.",
+			"schedule": {
+				"kind": "nth_weekday",
+				"month": 3,
+				"weekday": 6,
+				"nth": "last"
+			}
+		},
+		{
+			"id": "new-year",
+			"index": 19,
+			"name": "New Year (UTC)",
+			"description": "ON from 21:00 UTC on 31 December until 06:00 UTC on 1 January. A worldwide midnight switch. Local new year will not match; that is the point of the UTC version.",
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://en.wikipedia.org/wiki/New_Year",
+			"art": "new-year",
+			"onMeans": "UTC new year is in the window.",
+			"offMeans": "It is not around UTC midnight on 1 January.",
+			"schedule": {
+				"kind": "windows",
+				"windows": [
+					{
+						"start": "2026-12-31T21:00:00Z",
+						"end": "2027-01-01T06:00:00Z"
+					},
+					{
+						"start": "2027-12-31T21:00:00Z",
+						"end": "2028-01-01T06:00:00Z"
+					}
+				]
+			}
+		},
+		{
+			"id": "pride-month",
+			"index": 20,
+			"name": "Pride Month",
+			"description": "ON throughout June, UTC. A community switch for rainbow lighting. Pride events happen in other months too; this listing follows the widely used June observance.",
+			"location": "Worldwide",
+			"category": "Community",
+			"link": "https://en.wikipedia.org/wiki/Gay_pride",
+			"art": "pride",
+			"onMeans": "It is June, UTC.",
+			"offMeans": "It is any other month.",
+			"schedule": {
+				"kind": "month",
+				"month": 6
+			}
+		},
+		{
+			"id": "full-moon",
+			"index": 21,
+			"name": "Full moon",
+			"description": "ON on the UTC calendar day of a full moon. Next in 2026: 26 September. A night-light or garden switch that follows the sky rather than a wall clock.",
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://www.timeanddate.com/moon/phases/",
+			"art": "full-moon",
+			"onMeans": "A full moon falls on this UTC date.",
+			"offMeans": "It is not a full-moon UTC date.",
+			"schedule": {
+				"kind": "full_moon",
+				"instants": [
+					"2026-01-03T10:02:00Z",
+					"2026-02-01T22:09:00Z",
+					"2026-03-03T11:37:00Z",
+					"2026-04-02T02:11:00Z",
+					"2026-05-01T17:23:00Z",
+					"2026-05-31T08:45:00Z",
+					"2026-06-29T23:56:00Z",
+					"2026-07-29T14:35:00Z",
+					"2026-08-28T04:18:00Z",
+					"2026-09-26T16:48:00Z",
+					"2026-10-26T04:11:00Z",
+					"2026-11-24T14:53:00Z",
+					"2026-12-24T01:28:00Z",
+					"2027-01-22T12:17:00Z",
+					"2027-02-20T23:23:00Z",
+					"2027-03-22T10:43:00Z",
+					"2027-04-20T22:27:00Z",
+					"2027-05-20T10:58:00Z",
+					"2027-06-19T00:44:00Z",
+					"2027-07-18T15:44:00Z",
+					"2027-08-17T07:28:00Z",
+					"2027-09-15T23:03:00Z",
+					"2027-10-15T13:46:00Z",
+					"2027-11-14T03:25:00Z",
+					"2027-12-13T16:08:00Z"
+				]
+			}
+		},
+		{
+			"id": "sweden-election-2026",
+			"index": 22,
+			"name": "Swedish election 2026",
+			"description": "ON while the 2026 riksdag election is unfinished: the count is still open, or parties have not yet formed a government. A reminder lamp through the overseas ballots and the talks that follow. Results: val.se.",
+			"location": "Sweden",
+			"category": "Event",
+			"link": "https://val.se/",
+			"art": "sweden-election",
+			"onMeans": "The count is still preliminary, or no new government has taken office.",
+			"offMeans": "A new government has taken office after the 2026 election.",
+			"schedule": {
+				"kind": "observe",
+				"source": "sweden-election",
+				"state": true,
+				"params": {
+					"election": "sweden-2026",
+					"phase": "formation",
+					"pm": "Ulf Kristersson"
+				},
+				"observedAt": "2026-09-16T06:51:38.305Z"
+			}
+		},
+		{
+			"id": "oresund-bridge",
+			"index": 23,
+			"name": "Øresund Bridge open",
+			"description": "ON while Øresundsbron is open to road traffic between Malmö and Copenhagen. A crossing lamp for weather, incidents or maintenance. Traffic: oresundsbron.com.",
+			"location": "Malmö / Copenhagen",
+			"category": "Event",
+			"link": "https://www.oresundsbron.com/",
+			"art": "oresund",
+			"onMeans": "The bridge is open to road traffic.",
+			"offMeans": "The crossing is closed or severely restricted.",
+			"schedule": {
+				"kind": "observe",
+				"source": "oresund",
+				"state": true,
+				"params": {
+					"source": "oresundsbron.com/traffic-information"
+				},
+				"observedAt": "2026-09-16T06:51:38.305Z"
+			}
+		},
+		{
+			"id": "great-belt-bridge",
+			"index": 24,
+			"name": "Great Belt Bridge open",
+			"description": "ON while Storebæltsbroen is open to road traffic across Denmark's Great Belt. Pair it with Øresund for the two main Danish straits. Traffic: sundogbaelt.dk.",
+			"location": "Denmark",
+			"category": "Event",
+			"link": "https://sundogbaelt.dk/en/storebaelt/",
+			"art": "storebaelt",
+			"onMeans": "The Great Belt Bridge is open to road traffic.",
+			"offMeans": "The crossing is closed or severely restricted.",
+			"schedule": {
+				"kind": "observe",
+				"source": "storebaelt",
+				"state": true,
+				"params": {
+					"source": "storebaelt.dk/trafik-vejr"
+				},
+				"observedAt": "2026-09-16T06:51:38.305Z"
+			}
+		}
+	]
+}

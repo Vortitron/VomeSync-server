@@ -118,6 +118,12 @@ sequenceDiagram
 | POST | `/api/v2/switch/{uid}/toggle` | X‑Api‑Key | Toggle via access key |
 | POST | `/api/v2/switch/{uid}/metadata` | X‑Api‑Key | Update limited metadata |
 | POST | `/api/v2/switch/{uid}/comment` | X‑Api‑Key | Add comment |
+| POST | `/api/v2/switch/{uid}/promote` | X‑Api‑Key (`metadata`) | Start Stripe Checkout for a promoted listing |
+| POST | `/api/v2/switch/{uid}/premium` | X‑Api‑Key (`metadata`) | Start Stripe Checkout for owner premium |
+| POST | `/api/v2/switch/{uid}/billing-portal` | X‑Api‑Key (`metadata`) | Open Stripe Customer Portal |
+| POST | `/api/v2/owner/premium` | Signed (v2) | Start Stripe Checkout for owner premium |
+| POST | `/api/v2/owner/billing-portal` | Signed (v2) | Open Stripe Customer Portal |
+| POST | `/api/v2/owner/tier` | Signed (v2) | Current owner tier and limits |
 | POST | `/api/generate-key` | Public | Create personal key |
 | POST | `/api/create-switch` | Personal key | Create legacy switch |
 | POST | `/api/toggle/{uid}` | Personal key | Toggle legacy switch |
@@ -125,6 +131,7 @@ sequenceDiagram
 | GET | `/api/public-switches` | Public | Public directory (v2 only) |
 | GET | `/api/switch/{uid}` | Public | Public switch detail |
 | GET | `/api/categories` | Public | Category counts |
+| GET | `/api/billing` | Public | Whether paid promotion / premium Checkout is configured (no secrets) |
 | GET | `/api/my-switches` | Personal key | List owned legacy switches |
 | DELETE | `/api/switch/{uid}` | Personal key | Delete legacy switch |
 | POST | `/api/switch/{uid}/comment` | Personal / API key | Add comment |
@@ -138,6 +145,7 @@ sequenceDiagram
 | POST | `/api/release-switch-name` | Personal key (legacy) | Release switch name |
 | GET | `/api/health` | Public | Health status |
 | GET | `/api/stats` | Public | Server stats |
+| POST | `/api/stripe/webhook` | Stripe-Signature | Checkout and subscription events (raw body) |
 
 ## V2 Endpoints (keypair identity)
 
@@ -310,6 +318,88 @@ Body (example):
 Notes:
 - Supports **multipart/form-data** with `iconFile` and/or `bannerFile`.
 - All images are rehosted and converted to WebP by the server.
+
+#### Promote a listing (v2)
+
+Start Stripe Checkout for paid placement. The owner pays Vome; this is advertising, not a marketplace. Requires a `metadata` access key. Test-category and unnamed listings are refused. Returns `503` until `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are set.
+
+**POST** `/api/v2/switch/{uid}/promote`
+
+Header:
+```
+X-Api-Key: uuid-v4-string
+```
+
+**Response (example):**
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://checkout.stripe.com/c/pay/cs_...",
+    "id": "cs_...",
+    "durationDays": 7,
+    "alreadyPromoted": false
+  }
+}
+```
+
+Send the visitor to `url`. After payment, Stripe calls `POST /api/stripe/webhook`; the listing then sorts to the top of `GET /api/public-switches` until `promotedUntil` and shows a Promoted badge.
+
+#### Upgrade to premium (v2)
+
+Start a monthly Stripe Checkout subscription that lifts the free create/publicize caps. Requires a `metadata` access key on one of the owner's switches (website) or an owner-signed body (Home Assistant). Returns `503` until Stripe keys are set, `409` if that owner already has a live Stripe subscription.
+
+**POST** `/api/v2/switch/{uid}/premium`
+
+Header:
+```
+X-Api-Key: uuid-v4-string
+```
+
+**POST** `/api/v2/owner/premium`
+
+Same signed envelope as `get_owner_tier` (`action: premium_checkout`).
+
+**Response (example):**
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://checkout.stripe.com/c/pay/cs_...",
+    "id": "cs_..."
+  }
+}
+```
+
+Webhook `checkout.session.completed` with `metadata.kind=vomesync_premium` writes `owner_tier:<ownerId>`. `customer.subscription.deleted` / `updated` (canceled, unpaid, incomplete_expired) clears it unless a time-limited promo remains. `past_due` keeps premium during Smart Retries.
+
+Checkout Sessions send `automatic_tax` and `tax_id_collection`. Advertised amounts include VAT (`tax_behavior=inclusive`, product tax code `txcd_10103000`).
+
+#### Manage billing (Customer Portal)
+
+Opens Stripe Customer Portal so the owner can change payment method or cancel. Needs a `stripeCustomerId` stored from a paid Checkout. Promo grants return `404`.
+
+**POST** `/api/v2/switch/{uid}/billing-portal`
+
+Header:
+```
+X-Api-Key: uuid-v4-string
+```
+
+**POST** `/api/v2/owner/billing-portal`
+
+Same signed envelope as `get_owner_tier` (`action: billing_portal`).
+
+**Response (example):**
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://billing.stripe.com/p/session/...",
+    "id": "bps_..."
+  }
+}
+```
 
 ### Get My Switches (v2)
 
@@ -489,7 +579,9 @@ List all public switches (**v2 only**). Legacy v1 UUID switches are not listed.
         "state": true,
         "lastToggled": 1640995200000,
         "iconUrl": "",
-        "bannerUrl": ""
+        "bannerUrl": "",
+        "promoted": false,
+        "promotedUntil": 0
       }
     ],
     "count": 1,
@@ -516,7 +608,9 @@ Fetch a single public switch record with extended metadata.
     "state": false,
     "toggleCount": 12,
     "iconUrl": "",
-    "bannerUrl": ""
+    "bannerUrl": "",
+    "promoted": false,
+    "promotedUntil": 0
   }
 }
 ```
@@ -540,6 +634,36 @@ List category counts for the public directory.
   }
 }
 ```
+
+### Billing flags
+
+Whether paid promotion and premium are live. No secrets. The website uses this to show or hide the Promote and Upgrade buttons.
+
+**GET** `/api/billing`
+
+**Response (example):**
+```json
+{
+  "success": true,
+  "data": {
+    "promoteEnabled": false,
+    "promoteDurationDays": 7,
+    "premiumEnabled": false,
+    "premiumAmount": 900,
+    "premiumCurrency": "eur",
+    "maxPrivate": 5,
+    "maxPublic": 10,
+    "maxSwitches": 15,
+    "taxEnabled": true
+  }
+}
+```
+
+### Stripe webhook
+
+Raw JSON body. Must be mounted before `express.json`. Configure the endpoint in the Stripe Dashboard as `https://sync.vome.io/api/stripe/webhook` with `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.deleted`, and `customer.subscription.updated`.
+
+**POST** `/api/stripe/webhook`
 
 ### Get My Switches
 
@@ -638,6 +762,9 @@ Admin endpoints require `ADMIN_API_KEY` and are intended for moderation only.
 
 **Authentication:** `X-Admin-Key: <key>` or `Authorization: Bearer <key>`
 
+**GET** `/api/admin/switches`  
+Inventory every switch in Redis (`uid`, name, description, publicize, ownerId). Used by `catalogue/cli.js purge-debris`.
+
 **POST** `/api/admin/switch/{uid}/delist`  
 Delist a public switch (removes it from the directory).
 
@@ -691,7 +818,7 @@ Clear listing overrides for a switch.
 
 ### Free Tier Limits
 
-Create/update endpoints may return `403` with `code: "free_tier_limit"` when limits are exceeded.
+Create/update endpoints may return `403` with `code: "tier_limit"` when limits are exceeded. Free accounts: 5 private and 10 public switches. Premium: 50 / 25.
 
 ### Switch Name Allocation
 

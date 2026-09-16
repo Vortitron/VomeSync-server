@@ -128,6 +128,26 @@ const manageIconUrlInput = document.getElementById('manageIconUrl');
 const manageBannerFileInput = document.getElementById('manageBannerFile');
 const manageBannerUrlInput = document.getElementById('manageBannerUrl');
 const manageStatus = document.getElementById('manageStatus');
+const promotePanel = document.getElementById('promotePanel');
+const promoteBtn = document.getElementById('promoteBtn');
+const promoteStatus = document.getElementById('promoteStatus');
+const promoteCopy = document.getElementById('promoteCopy');
+const premiumPanel = document.getElementById('premiumPanel');
+const premiumBtn = document.getElementById('premiumBtn');
+const billingPortalBtn = document.getElementById('billingPortalBtn');
+const premiumStatus = document.getElementById('premiumStatus');
+const premiumCopy = document.getElementById('premiumCopy');
+const detailPromoted = document.getElementById('detailPromoted');
+let billing = {
+	promoteEnabled: false,
+	promoteDurationDays: 7,
+	premiumEnabled: false,
+	premiumAmount: 900,
+	premiumCurrency: 'eur',
+	maxPrivate: 5,
+	maxPublic: 10,
+	taxEnabled: true
+};
 
 // Manage media pickers (previews + replace UX)
 const manageIconPreview = document.getElementById('manageIconPreview');
@@ -912,6 +932,24 @@ function setupEventListeners() {
 		});
 	}
 
+	if (promoteBtn) {
+		promoteBtn.addEventListener('click', async () => {
+			await startPromoteCheckout();
+		});
+	}
+
+	if (premiumBtn) {
+		premiumBtn.addEventListener('click', async () => {
+			await startPremiumCheckout();
+		});
+	}
+
+	if (billingPortalBtn) {
+		billingPortalBtn.addEventListener('click', async () => {
+			await startBillingPortal();
+		});
+	}
+
 	if (adminKeySaveBtn) {
 		adminKeySaveBtn.addEventListener('click', () => {
 			const key = adminKeyInput ? String(adminKeyInput.value || '').trim() : '';
@@ -1345,7 +1383,7 @@ function setupEventListeners() {
 async function loadAllData() {
 	showLoading();
 	try {
-		await Promise.all([refreshSwitches({ silent: false }), loadCategories()]);
+		await Promise.all([refreshSwitches({ silent: false }), loadCategories(), loadBilling()]);
 		hideMessages();
 		if (allSwitches.length === 0) {
 			showEmptyMessage();
@@ -1353,6 +1391,30 @@ async function loadAllData() {
 	} catch (error) {
 		console.error('Error loading data:', error);
 		showError();
+	}
+}
+
+async function loadBilling() {
+	try {
+		const response = await fetch(`${API_BASE_URL}/billing`);
+		if (!response.ok) {
+			return;
+		}
+		const data = await response.json();
+		if (data && data.success && data.data) {
+			billing = {
+				promoteEnabled: Boolean(data.data.promoteEnabled),
+				promoteDurationDays: Number(data.data.promoteDurationDays) || 7,
+				premiumEnabled: Boolean(data.data.premiumEnabled),
+				premiumAmount: Number(data.data.premiumAmount) || 900,
+				premiumCurrency: String(data.data.premiumCurrency || 'eur').toLowerCase(),
+				maxPrivate: Number(data.data.maxPrivate) || 5,
+				maxPublic: Number(data.data.maxPublic) || 10,
+				taxEnabled: data.data.taxEnabled !== false
+			};
+		}
+	} catch {
+		// Directory still works without billing flags.
 	}
 }
 
@@ -1455,9 +1517,26 @@ function updateSwitchCardElement(card, switchData) {
 		}
 	}
 
+	const cardBanner = card.querySelector('[data-field="cardBanner"]');
+	if (cardBanner) {
+		const bannerUrl = String(switchData.bannerUrl || '').trim();
+		if (bannerUrl) {
+			cardBanner.style.backgroundImage = `url('${bannerUrl}')`;
+			cardBanner.classList.remove('hidden');
+		} else {
+			cardBanner.style.backgroundImage = '';
+			cardBanner.classList.add('hidden');
+		}
+	}
+
 	const nameEl = card.querySelector('[data-field="name"]');
 	if (nameEl) {
 		nameEl.textContent = getSwitchDisplayName(switchData);
+	}
+
+	const promotedEl = card.querySelector('[data-field="promotedBadge"]');
+	if (promotedEl) {
+		promotedEl.classList.toggle('hidden', !isListingPromoted(switchData));
 	}
 
 	const descEl = card.querySelector('[data-field="description"]');
@@ -1780,6 +1859,7 @@ function updateDetailActivity(detail) {
 
 	// If the icon/banner/name/description changes, update visible pieces too
 	if (detailTitle) detailTitle.textContent = getSwitchDisplayName(detail);
+	setDetailPromotedBadge(detail);
 	if (detailDescription) {
 		const description = getSwitchDescription(detail);
 		detailDescription.textContent = description;
@@ -2640,17 +2720,24 @@ function createSwitchCard(switchData) {
 	const togglesLabel = typeof toggleCount === 'number' ? `${toggleCount} toggles` : '0 toggles';
 	const webLink = link ? `<a class="inline-link" href="${escapeAttr(link)}" target="_blank" rel="noopener">🌐 Link</a>` : '';
 	const iconSrc = String(iconUrl || '').trim();
+	const bannerSrc = String(bannerUrl || '').trim();
 	const iconHtml = `<img class="switch-icon ${iconSrc ? '' : 'hidden'}" data-field="icon" ${iconSrc ? `src="${escapeAttr(iconSrc)}"` : ''} alt="" loading="lazy" referrerpolicy="no-referrer">`;
+	const bannerHtml = `<div class="switch-card-banner ${bannerSrc ? '' : 'hidden'}" data-field="cardBanner" ${bannerSrc ? `style="background-image:url('${escapeAttr(bannerSrc)}')"` : ''}></div>`;
 	const displayName = getSwitchDisplayName({ name });
 	const displayDescription = getSwitchDescription({ name, description });
 
 	return `
 		<div class="switch-card ${stateClass}" data-uid="${escapeAttr(uid)}" data-banner-url="${escapeAttr(bannerUrl || '')}">
+			${bannerHtml}
+			<div class="switch-card-body">
 			<div class="switch-header">
 				<div class="switch-title">
 					${iconHtml}
 					<div class="switch-title-text">
-						<div class="switch-name" data-field="name">${escapeHtml(displayName)}</div>
+						<div class="switch-name-row">
+							<div class="switch-name" data-field="name">${escapeHtml(displayName)}</div>
+							<span class="promoted-badge ${isListingPromoted(switchData) ? '' : 'hidden'}" data-field="promotedBadge">Promoted</span>
+						</div>
 						<div class="switch-description ${displayDescription ? '' : 'hidden'}" data-field="description">${escapeHtml(displayDescription)}</div>
 					</div>
 				</div>
@@ -2704,6 +2791,7 @@ function createSwitchCard(switchData) {
 				<button class="view-details-btn" onclick="openSwitchDetails('${uid}')">
 					👁️ Details
 				</button>
+			</div>
 			</div>
 		</div>
 	`;
@@ -2824,6 +2912,7 @@ function renderSwitchDetail(detail) {
 		hideRedirectNotice();
 	}
 	detailTitle.textContent = getSwitchDisplayName(detail);
+	setDetailPromotedBadge(detail);
 	if (detailDescription) {
 		const description = getSwitchDescription(detail);
 		detailDescription.textContent = description;
@@ -2990,6 +3079,8 @@ function updateManagePanel(detail) {
 	if (!detail || !detail.uid) return;
 	const hasManagement = Boolean(getActiveManagementKey(detail.uid));
 	managePanel.classList.toggle('hidden', !hasManagement);
+	updatePromotePanel(detail);
+	updatePremiumPanel(detail);
 	if (!hasManagement) {
 		return;
 	}
@@ -3365,9 +3456,16 @@ function restoreSwitchFromQuery() {
 	const querySwitchId = params.get('switch');
 	const switchId = pathSwitchId || (querySwitchId && isValidSwitchUid(querySwitchId) ? querySwitchId : null);
 	if (switchId) {
-		openSwitchDetails(switchId, true);
+		Promise.resolve(openSwitchDetails(switchId, true)).finally(() => {
+			consumePromotedQuery();
+			consumePremiumQuery();
+			consumeBillingQuery();
+		});
 	} else {
 		closeDetail();
+		consumePromotedQuery();
+		consumePremiumQuery();
+		consumeBillingQuery();
 	}
 }
 
@@ -3461,6 +3559,240 @@ function getDisplaySwitchName(rawName) {
 	return text;
 }
 
+function isListingPromoted(switchData) {
+	if (!switchData) return false;
+	if (switchData.promoted === true) return true;
+	const until = Number(switchData.promotedUntil) || 0;
+	return until > Date.now();
+}
+
+function setDetailPromotedBadge(detail) {
+	if (!detailPromoted) return;
+	detailPromoted.classList.toggle('hidden', !isListingPromoted(detail));
+}
+
+function setPromoteStatus(message, isError = false) {
+	if (!promoteStatus) return;
+	if (!message) {
+		promoteStatus.textContent = '';
+		promoteStatus.className = 'comment-status';
+		return;
+	}
+	promoteStatus.textContent = message;
+	promoteStatus.className = isError ? 'comment-status error' : 'comment-status success';
+}
+
+function updatePromotePanel(detail) {
+	if (!promotePanel) return;
+	const hasManagement = Boolean(detail && detail.uid && getActiveManagementKey(detail.uid));
+	const show = Boolean(billing.promoteEnabled && hasManagement);
+	promotePanel.classList.toggle('hidden', !show);
+	if (!show) {
+		return;
+	}
+	const days = Number(billing.promoteDurationDays) || 7;
+	if (promoteCopy) {
+		promoteCopy.textContent = `Paid placement pins this card to the top of the directory for ${days} day${days === 1 ? '' : 's'} with a Promoted badge. You pay Vome; everyone can still watch the switch for free.${billing.taxEnabled !== false ? ' The listed price includes VAT.' : ''}`;
+	}
+	if (promoteBtn) {
+		promoteBtn.disabled = false;
+		promoteBtn.textContent = isListingPromoted(detail) ? 'Extend promotion' : 'Promote this listing';
+	}
+}
+
+function consumePromotedQuery() {
+	const params = new URLSearchParams(window.location.search);
+	const result = params.get('promoted');
+	if (!result) return;
+	params.delete('promoted');
+	const suffix = params.toString();
+	const next = `${window.location.pathname}${suffix ? `?${suffix}` : ''}${window.location.hash || ''}`;
+	try {
+		window.history.replaceState({}, '', next);
+	} catch {
+		// ignore
+	}
+	if (result === 'success') {
+		setPromoteStatus('Payment received. The listing moves to the top once Stripe confirms — usually within a minute.', false);
+	} else if (result === 'cancel') {
+		setPromoteStatus('Checkout cancelled. Nothing was charged.', true);
+	}
+}
+
+function formatPremiumPrice() {
+	const amount = Number(billing.premiumAmount) || 900;
+	const currency = String(billing.premiumCurrency || 'eur').toUpperCase();
+	const value = (amount / 100).toFixed(amount % 100 === 0 ? 0 : 2);
+	if (currency === 'EUR') {
+		return `€${value}`;
+	}
+	return `${value} ${currency}`;
+}
+
+function setPremiumStatus(message, isError = false) {
+	if (!premiumStatus) return;
+	if (!message) {
+		premiumStatus.textContent = '';
+		premiumStatus.className = 'comment-status';
+		return;
+	}
+	premiumStatus.textContent = message;
+	premiumStatus.className = isError ? 'comment-status error' : 'comment-status success';
+}
+
+function updatePremiumPanel(detail) {
+	if (!premiumPanel) return;
+	const hasManagement = Boolean(detail && detail.uid && getActiveManagementKey(detail.uid));
+	const show = Boolean(billing.premiumEnabled && hasManagement);
+	premiumPanel.classList.toggle('hidden', !show);
+	if (!show) {
+		return;
+	}
+	const maxPublic = Number(billing.maxPublic) || 10;
+	const maxPrivate = Number(billing.maxPrivate) || 5;
+	if (premiumCopy) {
+		premiumCopy.textContent = `Free accounts can create ${maxPublic} public and ${maxPrivate} private switches. Premium is ${formatPremiumPrice()} a month${billing.taxEnabled !== false ? ' including VAT' : ''} and lifts the cap to 50 switches (25 public). Catalogue watches stay free.`;
+	}
+	if (premiumBtn) {
+		premiumBtn.disabled = false;
+		premiumBtn.textContent = 'Upgrade to premium';
+	}
+}
+
+function consumePremiumQuery() {
+	const params = new URLSearchParams(window.location.search);
+	const result = params.get('premium');
+	if (!result) return;
+	params.delete('premium');
+	const suffix = params.toString();
+	const next = `${window.location.pathname}${suffix ? `?${suffix}` : ''}${window.location.hash || ''}`;
+	try {
+		window.history.replaceState({}, '', next);
+	} catch {
+		// ignore
+	}
+	if (result === 'success') {
+		setPremiumStatus('Payment received. Premium is applied once Stripe confirms — usually within a minute.', false);
+	} else if (result === 'cancel') {
+		setPremiumStatus('Checkout cancelled. Nothing was charged.', true);
+	}
+}
+
+async function startPremiumCheckout() {
+	if (!currentSwitchId) return;
+	const apiKey = getActiveManagementKey(currentSwitchId) || getStoredManagementKey(currentSwitchId);
+	if (!apiKey) {
+		setPremiumStatus('Access key required.', true);
+		return;
+	}
+	if (premiumBtn) premiumBtn.disabled = true;
+	setPremiumStatus('Opening Stripe Checkout…', false);
+	try {
+		const response = await fetch(`${API_BASE_URL}/v2/switch/${encodeURIComponent(currentSwitchId)}/premium`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-Api-Key': apiKey
+			}
+		});
+		const data = await response.json();
+		if (response.status === 409) {
+			setPremiumStatus((data && data.error) || 'Already on premium.', false);
+			if (premiumBtn) premiumBtn.disabled = false;
+			return;
+		}
+		if (!response.ok || !data.success || !data.data || !data.data.url) {
+			setPremiumStatus((data && data.error) || 'Could not start checkout.', true);
+			if (premiumBtn) premiumBtn.disabled = false;
+			return;
+		}
+		window.location.assign(data.data.url);
+	} catch (error) {
+		console.error('Premium checkout failed:', error);
+		setPremiumStatus('Could not start checkout.', true);
+		if (premiumBtn) premiumBtn.disabled = false;
+	}
+}
+
+function consumeBillingQuery() {
+	const params = new URLSearchParams(window.location.search);
+	const result = params.get('billing');
+	if (!result) return;
+	params.delete('billing');
+	const suffix = params.toString();
+	const next = `${window.location.pathname}${suffix ? `?${suffix}` : ''}${window.location.hash || ''}`;
+	try {
+		window.history.replaceState({}, '', next);
+	} catch {
+		// ignore
+	}
+	if (result === 'return') {
+		setPremiumStatus('Back from Stripe billing. Changes can take a minute to apply.', false);
+	}
+}
+
+async function startBillingPortal() {
+	if (!currentSwitchId) return;
+	const apiKey = getActiveManagementKey(currentSwitchId) || getStoredManagementKey(currentSwitchId);
+	if (!apiKey) {
+		setPremiumStatus('Access key required.', true);
+		return;
+	}
+	if (billingPortalBtn) billingPortalBtn.disabled = true;
+	setPremiumStatus('Opening Stripe billing…', false);
+	try {
+		const response = await fetch(`${API_BASE_URL}/v2/switch/${encodeURIComponent(currentSwitchId)}/billing-portal`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-Api-Key': apiKey
+			}
+		});
+		const data = await response.json();
+		if (!response.ok || !data.success || !data.data || !data.data.url) {
+			setPremiumStatus((data && data.error) || 'Could not open billing.', true);
+			if (billingPortalBtn) billingPortalBtn.disabled = false;
+			return;
+		}
+		window.location.assign(data.data.url);
+	} catch (error) {
+		console.error('Billing portal failed:', error);
+		setPremiumStatus('Could not open billing.', true);
+		if (billingPortalBtn) billingPortalBtn.disabled = false;
+	}
+}
+
+async function startPromoteCheckout() {
+	if (!currentSwitchId) return;
+	const apiKey = getActiveManagementKey(currentSwitchId) || getStoredManagementKey(currentSwitchId);
+	if (!apiKey) {
+		setPromoteStatus('Access key required.', true);
+		return;
+	}
+	if (promoteBtn) promoteBtn.disabled = true;
+	setPromoteStatus('Opening Stripe Checkout…', false);
+	try {
+		const response = await fetch(`${API_BASE_URL}/v2/switch/${encodeURIComponent(currentSwitchId)}/promote`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-Api-Key': apiKey
+			}
+		});
+		const data = await response.json();
+		if (!response.ok || !data.success || !data.data || !data.data.url) {
+			setPromoteStatus((data && data.error) || 'Could not start checkout.', true);
+			if (promoteBtn) promoteBtn.disabled = false;
+			return;
+		}
+		window.location.assign(data.data.url);
+	} catch (error) {
+		console.error('Promote checkout failed:', error);
+		setPromoteStatus('Could not start checkout.', true);
+		if (promoteBtn) promoteBtn.disabled = false;
+	}
+}
+
 function escapeHtml(text) {
 	const div = document.createElement('div');
 	div.textContent = text;
@@ -3477,3 +3809,6 @@ function escapeAttr(text) {
 window.openSwitchDetails = openSwitchDetails;
 window.filterByCategory = filterByCategory;
 window.copyUID = copyUID;
+window.startPromoteCheckout = startPromoteCheckout;
+window.startPremiumCheckout = startPremiumCheckout;
+window.startBillingPortal = startBillingPortal;

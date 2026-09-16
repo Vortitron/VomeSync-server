@@ -2,6 +2,7 @@ const redis = require('redis');
 const crypto = require('crypto');
 const config = require('../config/config');
 const logger = require('./logger');
+const { listingPromotion, sortPublicSwitches } = require('./promote');
 let testRedisServer = null;
 
 const DEFAULT_REDIS_CONNECT_MAX_ATTEMPTS = 30;
@@ -615,11 +616,11 @@ class RedisClient {
 
 	async _countSwitchesInSet(setKey) {
 		if (!setKey) {
-			return { total: 0, public: 0 };
+			return { total: 0, public: 0, private: 0 };
 		}
 		const switchUIDs = await this.client.sMembers(setKey);
 		if (!switchUIDs || switchUIDs.length === 0) {
-			return { total: 0, public: 0 };
+			return { total: 0, public: 0, private: 0 };
 		}
 		const pipeline = this.client.multi();
 		for (const uid of switchUIDs) {
@@ -633,20 +634,20 @@ class RedisClient {
 				publicCount += 1;
 			}
 		}
-		return { total: switchUIDs.length, public: publicCount };
+		return { total: switchUIDs.length, public: publicCount, private: switchUIDs.length - publicCount };
 	}
 
 	async getUserSwitchCounts(personalKeyOrId) {
 		const ownerKeyId = this._getPersonalKeyId(personalKeyOrId);
 		if (!ownerKeyId) {
-			return { total: 0, public: 0 };
+			return { total: 0, public: 0, private: 0 };
 		}
 		return this._countSwitchesInSet(`user:${ownerKeyId}:switches`);
 	}
 
 	async getOwnerSwitchCounts(ownerId) {
 		if (!ownerId) {
-			return { total: 0, public: 0 };
+			return { total: 0, public: 0, private: 0 };
 		}
 		return this._countSwitchesInSet(`owner:${ownerId}`);
 	}
@@ -722,6 +723,7 @@ class RedisClient {
 			const listingData = this._applyListingOverride(switchData, override);
 			const userCount = await this.getUserCount(uid);
 			const ownerProfileUrl = '';
+			const promotion = listingPromotion(listingData);
 			switches.push({
 				uid: listingData.uid,
 				name: listingData.name || '',
@@ -735,11 +737,13 @@ class RedisClient {
 				link: listingData.link || '',
 				iconUrl: listingData.iconUrl || '',
 				bannerUrl: listingData.bannerUrl || '',
-				ownerProfileUrl
+				ownerProfileUrl,
+				promoted: promotion.promoted,
+				promotedUntil: promotion.promotedUntil
 			});
 		}
 
-		return switches;
+		return sortPublicSwitches(switches);
 	}
 
 	// Analytics operations
@@ -1560,6 +1564,7 @@ class RedisClient {
 		const userCount = await this.getUserCount(uid);
 		const events = await this.getEvents(uid, 50);
 		const ownerProfileUrl = '';
+		const promotion = listingPromotion(listingData);
 
 		return {
 			uid: listingData.uid,
@@ -1575,7 +1580,9 @@ class RedisClient {
 			iconUrl: listingData.iconUrl || '',
 			bannerUrl: listingData.bannerUrl || '',
 			ownerProfileUrl,
-			events
+			events,
+			promoted: promotion.promoted,
+			promotedUntil: promotion.promotedUntil
 		};
 	}
 
@@ -1762,22 +1769,32 @@ class RedisClient {
 	/**
 	 * Set the tier for an owner.
 	 */
-	async setOwnerTier(ownerId, tier, expiresAt = 0, promoCode = '') {
+	async setOwnerTier(ownerId, tier, expiresAt = 0, promoCode = '', extra = {}) {
 		if (!ownerId || !tier) return false;
+		const existing = await this.getOwnerTier(ownerId);
 		const data = {
+			...existing,
 			tier,
 			expiresAt: expiresAt || 0,
-			promoCode: promoCode || '',
-			redeemedAt: Date.now()
+			promoCode: promoCode || existing.promoCode || '',
+			redeemedAt: Date.now(),
+			...extra
 		};
 		await this.client.hSet(this._ownerTierKey(ownerId), this._serializeHash(data));
-		// Set Redis expiry to auto-clean if there is a time limit
-		if (expiresAt > 0) {
-			const ttlMs = expiresAt - Date.now();
+		if (data.expiresAt > 0) {
+			const ttlMs = data.expiresAt - Date.now();
 			if (ttlMs > 0) {
 				await this.client.expire(this._ownerTierKey(ownerId), Math.ceil(ttlMs / 1000));
 			}
+		} else if (typeof this.client.persist === 'function') {
+			await this.client.persist(this._ownerTierKey(ownerId));
 		}
+		return true;
+	}
+
+	async clearOwnerTier(ownerId) {
+		if (!ownerId) return false;
+		await this.client.del(this._ownerTierKey(ownerId));
 		return true;
 	}
 
@@ -1924,6 +1941,32 @@ class RedisClient {
 	 */
 	async getTotalSwitchCount() {
 		return await this.client.zCard(ALL_SWITCHES_SORTED_SET);
+	}
+
+	/**
+	 * Admin inventory of every switch in the global index.
+	 * Used to purge leftover CI rows without touching real listings.
+	 */
+	async listAllSwitchesAdmin() {
+		const uids = await this.client.zRange(ALL_SWITCHES_SORTED_SET, 0, -1);
+		const out = [];
+		for (const uid of uids) {
+			const data = await this.getSwitchState(uid);
+			if (!data) {
+				continue;
+			}
+			out.push({
+				uid: data.uid,
+				name: data.name || '',
+				description: data.description || '',
+				location: data.location || '',
+				category: data.category || 'Other',
+				publicize: Boolean(data.publicize),
+				ownerId: data.ownerId || '',
+				createdAt: data.createdAt || 0
+			});
+		}
+		return out;
 	}
 
 	/**

@@ -91,6 +91,27 @@ router.post('/admin/switch/:uid/delete',
 	}
 );
 
+// ── Inventory every switch (admin cleanup) ─────────────────────────────────────
+
+router.get('/admin/switches',
+	requireAdmin,
+	async (_req, res) => {
+		try {
+			const switches = await redisClient.listAllSwitchesAdmin();
+			return res.json({
+				success: true,
+				data: {
+					switches,
+					count: switches.length
+				}
+			});
+		} catch (error) {
+			logger.error('Admin switch inventory failed:', error);
+			return res.status(500).json({ success: false, error: 'Failed to list switches' });
+		}
+	}
+);
+
 // ── Block / unblock keys or owners ─────────────────────────────────────────────
 
 router.post('/admin/blocks',

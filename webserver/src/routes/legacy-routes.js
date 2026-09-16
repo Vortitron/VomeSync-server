@@ -104,7 +104,8 @@ router.post('/create-switch',
 			const limitCheck = await checkFreeTierLimits({
 				personalKeyId,
 				wantsPublicize: Boolean(switchConfig.publicize),
-				currentPublicize: false
+				currentPublicize: false,
+				isCreate: true
 			});
 			if (limitCheck) {
 				return sendFreeTierLimitError(res, limitCheck.limit, limitCheck.max, limitCheck.tier);
@@ -225,8 +226,11 @@ router.patch('/switch/:uid',
 
 			const limitCheck = await checkFreeTierLimits({
 				personalKeyId: req.personalKeyId,
-				wantsPublicize: updates.publicize === true,
-				currentPublicize: Boolean(req.switchData && req.switchData.publicize)
+				wantsPublicize: Object.prototype.hasOwnProperty.call(updates, 'publicize')
+					? Boolean(updates.publicize)
+					: null,
+				currentPublicize: Boolean(req.switchData && req.switchData.publicize),
+				isCreate: false
 			});
 			if (limitCheck) {
 				return sendFreeTierLimitError(res, limitCheck.limit, limitCheck.max, limitCheck.tier);

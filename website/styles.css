@@ -835,14 +835,45 @@ select {
 	flex: 0 0 auto;
 }
 
+.switch-name-row {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	min-width: 0;
+}
+
 .switch-name {
 	font-size: 1.125rem;
 	font-weight: 600;
-	margin-bottom: 0.25rem;
+	margin-bottom: 0;
 	color: var(--text-primary);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.promoted-badge {
+	flex: 0 0 auto;
+	display: inline-block;
+	padding: 0.15rem 0.45rem;
+	border-radius: 999px;
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: #1f1300;
+	background: #fbbf24;
+	border: 1px solid rgba(180, 83, 9, 0.35);
+}
+
+.promote-panel {
+	margin-top: 1.25rem;
+	padding-top: 1.25rem;
+	border-top: 1px solid var(--border);
+}
+
+.promote-panel h4 {
+	margin: 0 0 0.35rem;
 }
 
 .switch-description {

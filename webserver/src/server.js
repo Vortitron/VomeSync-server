@@ -106,8 +106,11 @@ class VomeSyncServer {
 			origin: config.server.corsOrigins,
 			credentials: true,
 			methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-			allowedHeaders: ['Content-Type', 'Authorization', 'X-Personal-Key', 'X-Api-Key']
+			allowedHeaders: ['Content-Type', 'Authorization', 'X-Personal-Key', 'X-Api-Key', 'Stripe-Signature']
 		}));
+
+		const { mountStripeWebhook } = require('./routes/stripe-routes');
+		mountStripeWebhook(this.app);
 
 		// Body parsing
 		this.app.use(express.json({ limit: '10mb' }));

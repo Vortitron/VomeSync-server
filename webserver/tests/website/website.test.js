@@ -130,6 +130,9 @@ describe('Website SPA (v2 directory)', () => {
 			if (u.endsWith(`/switch/${uid}`)) {
 				return createMockResponse(publicSwitchDetail);
 			}
+			if (u.endsWith('/billing')) {
+				return createMockResponse({ success: true, data: { promoteEnabled: false, promoteDurationDays: 7 } });
+			}
 			if (u.endsWith('/categories')) {
 				return createMockResponse({ success: true, data: {} });
 			}
@@ -151,6 +154,7 @@ describe('Website SPA (v2 directory)', () => {
 
 		const grid = document.getElementById('switchesGrid');
 		expect(grid.innerHTML).toContain('switch-icon');
+		expect(grid.innerHTML).toContain('switch-card-banner');
 		expect(grid.innerHTML).toContain(uid);
 
 		// Quick view: clicking the card (not the "Details" button) should open a modal without navigating
@@ -295,6 +299,9 @@ describe('Website SPA (v2 directory)', () => {
 			if (u.endsWith(`/switch/${uid}`)) {
 				return createMockResponse(publicSwitchDetail);
 			}
+			if (u.endsWith('/billing')) {
+				return createMockResponse({ success: true, data: { promoteEnabled: false, promoteDurationDays: 7 } });
+			}
 			if (u.endsWith('/categories')) {
 				return createMockResponse({ success: true, data: {} });
 			}
@@ -396,6 +403,9 @@ describe('Website SPA (v2 directory)', () => {
 			}
 			if (u.endsWith(`/switch/${uid}`)) {
 				return createMockResponse(publicSwitchDetail);
+			}
+			if (u.endsWith('/billing')) {
+				return createMockResponse({ success: true, data: { promoteEnabled: false, promoteDurationDays: 7 } });
 			}
 			if (u.endsWith('/categories')) {
 				return createMockResponse({ success: true, data: {} });
@@ -502,6 +512,9 @@ describe('Website SPA (v2 directory)', () => {
 			if (u.endsWith(`/switch/${uid}`)) {
 				return createMockResponse(publicSwitchDetail);
 			}
+			if (u.endsWith('/billing')) {
+				return createMockResponse({ success: true, data: { promoteEnabled: false, promoteDurationDays: 7 } });
+			}
 			if (u.endsWith('/categories')) {
 				return createMockResponse({ success: true, data: {} });
 			}
@@ -589,6 +602,9 @@ describe('Website SPA (v2 directory)', () => {
 			if (u.endsWith(`/switch/${newUid}`)) {
 				return createMockResponse(newDetail);
 			}
+			if (u.endsWith('/billing')) {
+				return createMockResponse({ success: true, data: { promoteEnabled: false, promoteDurationDays: 7 } });
+			}
 			if (u.endsWith('/categories')) {
 				return createMockResponse({ success: true, data: {} });
 			}
@@ -614,6 +630,371 @@ describe('Website SPA (v2 directory)', () => {
 		const redirectText = document.getElementById('redirectNoticeText');
 		expect(redirectText.textContent).toContain(newUid);
 		expect(redirectText.textContent).toContain('Compromised key');
+	});
+
+	test('shows a Promoted badge on featured cards', async () => {
+		const websiteRoot = path.resolve(__dirname, '../../../website');
+		const html = fs.readFileSync(path.join(websiteRoot, 'index.html'), 'utf8');
+		document.documentElement.innerHTML = html;
+		window.setInterval = jest.fn();
+
+		const uid = 'vs_promoted_card';
+		global.fetch = jest.fn(async (url) => {
+			const u = String(url);
+			if (u.endsWith('/public-switches')) {
+				return createMockResponse({
+					success: true,
+					data: {
+						switches: [{
+							uid,
+							name: 'Featured Lamp',
+							description: 'Paid placement',
+							location: 'Test City',
+							category: 'Community',
+							state: true,
+							lastToggled: 0,
+							toggleCount: 0,
+							userCount: 0,
+							link: '',
+							iconUrl: '',
+							bannerUrl: '',
+							ownerProfileUrl: '',
+							promoted: true,
+							promotedUntil: Date.now() + 86400000
+						}],
+						count: 1,
+						timestamp: Date.now()
+					}
+				});
+			}
+			if (u.endsWith('/billing')) {
+				return createMockResponse({ success: true, data: { promoteEnabled: false, promoteDurationDays: 7 } });
+			}
+			if (u.endsWith('/categories')) {
+				return createMockResponse({ success: true, data: {} });
+			}
+			return createMockResponse({ success: false, error: `Unhandled fetch in test: ${u}` }, false, 404);
+		});
+
+		const script = fs.readFileSync(path.join(websiteRoot, 'script.js'), 'utf8');
+		window.eval(script);
+		window.setupEventListeners();
+		await window.loadSwitches();
+
+		const badge = document.querySelector('[data-field="promotedBadge"]');
+		expect(badge).toBeTruthy();
+		expect(badge.classList.contains('hidden')).toBe(false);
+		expect(badge.textContent).toBe('Promoted');
+	});
+
+	test('owner can start Stripe Checkout from the manage panel', async () => {
+		const websiteRoot = path.resolve(__dirname, '../../../website');
+		const html = fs.readFileSync(path.join(websiteRoot, 'index.html'), 'utf8');
+		document.documentElement.innerHTML = html;
+		window.setInterval = jest.fn();
+		window.alert = jest.fn();
+
+		const uid = 'vs_promote_owner';
+		const accessKey = '00000000-0000-4000-8000-333333333333';
+		const checkoutUrl = 'https://checkout.stripe.com/c/pay/cs_test_dir';
+
+		global.fetch = jest.fn(async (url) => {
+			const u = String(url);
+			if (u.endsWith('/public-switches')) {
+				return createMockResponse({
+					success: true,
+					data: {
+						switches: [{
+							uid,
+							name: 'Shop window',
+							description: 'Owner listing',
+							location: 'Test City',
+							category: 'Community',
+							state: false,
+							lastToggled: 0,
+							toggleCount: 0,
+							userCount: 0,
+							link: '',
+							iconUrl: '',
+							bannerUrl: '',
+							ownerProfileUrl: '',
+							promoted: false,
+							promotedUntil: 0
+						}],
+						count: 1,
+						timestamp: Date.now()
+					}
+				});
+			}
+			if (u.endsWith(`/switch/${uid}`)) {
+				return createMockResponse({
+					success: true,
+					data: {
+						uid,
+						name: 'Shop window',
+						description: 'Owner listing',
+						location: 'Test City',
+						category: 'Community',
+						state: false,
+						lastToggled: 0,
+						toggleCount: 0,
+						userCount: 0,
+						link: '',
+						iconUrl: '',
+						bannerUrl: '',
+						ownerProfileUrl: '',
+						events: [],
+						promoted: false,
+						promotedUntil: 0
+					}
+				});
+			}
+			if (u.endsWith('/billing')) {
+				return createMockResponse({
+					success: true,
+					data: { promoteEnabled: true, promoteDurationDays: 7 }
+				});
+			}
+			if (u.endsWith('/categories')) {
+				return createMockResponse({ success: true, data: {} });
+			}
+			if (u.endsWith(`/v2/switch/${uid}/promote`)) {
+				return createMockResponse({
+					success: true,
+					data: { url: checkoutUrl, id: 'cs_test_dir', durationDays: 7, alreadyPromoted: false }
+				});
+			}
+			return createMockResponse({ success: false, error: `Unhandled fetch in test: ${u}` }, false, 404);
+		});
+
+		const script = fs.readFileSync(path.join(websiteRoot, 'script.js'), 'utf8');
+		window.eval(script);
+		window.setupEventListeners();
+		window.sessionStorage.setItem(`vomesync_manage_key:${uid}`, accessKey);
+		await window.loadSwitches();
+		await window.openSwitchDetails(uid, true);
+
+		const panel = document.getElementById('promotePanel');
+		expect(panel.classList.contains('hidden')).toBe(false);
+		await window.startPromoteCheckout();
+
+		const promoteCall = global.fetch.mock.calls.find((call) => String(call[0]).includes('/promote'));
+		expect(promoteCall).toBeTruthy();
+		expect(promoteCall[1].method).toBe('POST');
+		expect(promoteCall[1].headers['X-Api-Key']).toBe(accessKey);
+		expect(document.getElementById('promoteStatus').classList.contains('error')).toBe(false);
+	});
+
+	test('owner can start premium Checkout from the manage panel', async () => {
+		const websiteRoot = path.resolve(__dirname, '../../../website');
+		const html = fs.readFileSync(path.join(websiteRoot, 'index.html'), 'utf8');
+		document.documentElement.innerHTML = html;
+		window.setInterval = jest.fn();
+		window.alert = jest.fn();
+
+		const uid = 'vs_premium_owner';
+		const accessKey = '00000000-0000-4000-8000-444444444444';
+		const checkoutUrl = 'https://checkout.stripe.com/c/pay/cs_test_prem';
+
+		global.fetch = jest.fn(async (url) => {
+			const u = String(url);
+			if (u.endsWith('/public-switches')) {
+				return createMockResponse({
+					success: true,
+					data: {
+						switches: [{
+							uid,
+							name: 'Shop window',
+							description: 'Owner listing',
+							location: 'Test City',
+							category: 'Community',
+							state: false,
+							lastToggled: 0,
+							toggleCount: 0,
+							userCount: 0,
+							link: '',
+							iconUrl: '',
+							bannerUrl: '',
+							ownerProfileUrl: '',
+							promoted: false,
+							promotedUntil: 0
+						}],
+						count: 1,
+						timestamp: Date.now()
+					}
+				});
+			}
+			if (u.endsWith(`/switch/${uid}`)) {
+				return createMockResponse({
+					success: true,
+					data: {
+						uid,
+						name: 'Shop window',
+						description: 'Owner listing',
+						location: 'Test City',
+						category: 'Community',
+						state: false,
+						lastToggled: 0,
+						toggleCount: 0,
+						userCount: 0,
+						link: '',
+						iconUrl: '',
+						bannerUrl: '',
+						ownerProfileUrl: '',
+						events: [],
+						promoted: false,
+						promotedUntil: 0
+					}
+				});
+			}
+			if (u.endsWith('/billing')) {
+				return createMockResponse({
+					success: true,
+					data: {
+						promoteEnabled: false,
+						premiumEnabled: true,
+						premiumAmount: 900,
+						premiumCurrency: 'eur',
+						maxPrivate: 5,
+						maxPublic: 10
+					}
+				});
+			}
+			if (u.endsWith('/categories')) {
+				return createMockResponse({ success: true, data: {} });
+			}
+			if (u.endsWith(`/v2/switch/${uid}/premium`)) {
+				return createMockResponse({
+					success: true,
+					data: { url: checkoutUrl, id: 'cs_test_prem' }
+				});
+			}
+			return createMockResponse({ success: false, error: `Unhandled fetch in test: ${u}` }, false, 404);
+		});
+
+		const script = fs.readFileSync(path.join(websiteRoot, 'script.js'), 'utf8');
+		window.eval(script);
+		window.setupEventListeners();
+		window.sessionStorage.setItem(`vomesync_manage_key:${uid}`, accessKey);
+		await window.loadSwitches();
+		await window.openSwitchDetails(uid, true);
+
+		const panel = document.getElementById('premiumPanel');
+		expect(panel.classList.contains('hidden')).toBe(false);
+		await window.startPremiumCheckout();
+
+		const premiumCall = global.fetch.mock.calls.find((call) => String(call[0]).includes('/premium'));
+		expect(premiumCall).toBeTruthy();
+		expect(premiumCall[1].method).toBe('POST');
+		expect(premiumCall[1].headers['X-Api-Key']).toBe(accessKey);
+		expect(document.getElementById('premiumStatus').classList.contains('error')).toBe(false);
+	});
+
+	test('owner can open Stripe Customer Portal from the manage panel', async () => {
+		window.setInterval = jest.fn();
+		window.alert = jest.fn();
+
+		const websiteRoot = path.resolve(__dirname, '../../../website');
+		const html = fs.readFileSync(path.join(websiteRoot, 'index.html'), 'utf8');
+		document.documentElement.innerHTML = html;
+		window.history.pushState({}, '', '/');
+
+		const uid = 'vs_portal_owner';
+		const accessKey = '00000000-0000-4000-8000-000000000001';
+		const portalUrl = 'https://billing.stripe.com/p/session/bps_test';
+
+		global.fetch = jest.fn(async (url) => {
+			const u = String(url);
+			if (u.endsWith('/public-switches')) {
+				return createMockResponse({
+					success: true,
+					data: {
+						switches: [{
+							uid,
+							name: 'Shop window',
+							description: 'Owner listing',
+							location: 'Test City',
+							category: 'Community',
+							state: false,
+							lastToggled: 0,
+							toggleCount: 0,
+							userCount: 0,
+							link: '',
+							iconUrl: '',
+							bannerUrl: '',
+							ownerProfileUrl: '',
+							events: [],
+							promoted: false,
+							promotedUntil: 0
+						}],
+						count: 1,
+						timestamp: Date.now()
+					}
+				});
+			}
+			if (u.endsWith(`/switch/${uid}`)) {
+				return createMockResponse({
+					success: true,
+					data: {
+						uid,
+						name: 'Shop window',
+						description: 'Owner listing',
+						location: 'Test City',
+						category: 'Community',
+						state: false,
+						lastToggled: 0,
+						toggleCount: 0,
+						userCount: 0,
+						link: '',
+						iconUrl: '',
+						bannerUrl: '',
+						ownerProfileUrl: '',
+						events: [],
+						promoted: false,
+						promotedUntil: 0
+					}
+				});
+			}
+			if (u.endsWith('/billing')) {
+				return createMockResponse({
+					success: true,
+					data: {
+						promoteEnabled: false,
+						premiumEnabled: true,
+						premiumAmount: 900,
+						premiumCurrency: 'eur',
+						maxPrivate: 5,
+						maxPublic: 10,
+						taxEnabled: true
+					}
+				});
+			}
+			if (u.endsWith('/categories')) {
+				return createMockResponse({ success: true, data: {} });
+			}
+			if (u.endsWith(`/v2/switch/${uid}/billing-portal`)) {
+				return createMockResponse({
+					success: true,
+					data: { url: portalUrl, id: 'bps_test' }
+				});
+			}
+			return createMockResponse({ success: false, error: `Unhandled fetch in test: ${u}` }, false, 404);
+		});
+
+		const script = fs.readFileSync(path.join(websiteRoot, 'script.js'), 'utf8');
+		window.eval(script);
+		window.setupEventListeners();
+		window.sessionStorage.setItem(`vomesync_manage_key:${uid}`, accessKey);
+		await window.loadSwitches();
+		await window.openSwitchDetails(uid, true);
+
+		await window.startBillingPortal();
+
+		const portalCall = global.fetch.mock.calls.find((call) => String(call[0]).includes('/billing-portal'));
+		expect(portalCall).toBeTruthy();
+		expect(portalCall[1].method).toBe('POST');
+		expect(portalCall[1].headers['X-Api-Key']).toBe(accessKey);
+		expect(document.getElementById('premiumStatus').classList.contains('error')).toBe(false);
 	});
 });
 
