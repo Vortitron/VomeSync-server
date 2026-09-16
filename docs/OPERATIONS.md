@@ -33,6 +33,8 @@ This document is a practical checklist/runbook for operating VomeSync safely, es
 	- Set `STRIPE_SECRET_KEY` (prefer `rk_`) and `STRIPE_WEBHOOK_SECRET`. Optional `STRIPE_PRICE_PROMOTE` / `STRIPE_PRICE_PREMIUM`; otherwise €5 / 7 days and €9 / month from the amount env vars.
 	- Dashboard webhook URL: `https://sync.vome.io/api/stripe/webhook` (`checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.deleted`, `customer.subscription.updated`).
 	- `VOMESYNC_PUBLIC_BASE_URL` must be the public website origin used in Checkout success/cancel URLs.
+	- VAT: the live Stripe account already has Tax (Sweden small seller, inclusive, SaaS personal `txcd_10103000`). Checkout sends `automatic_tax` + `tax_id_collection`. Live promote/premium Prices are `tax_behavior=inclusive` with that product tax code. Leave `STRIPE_TAX_ENABLED` unset (defaults on).
+	- Customer Portal: `POST /api/v2/switch/:uid/billing-portal` (access key) and `POST /api/v2/owner/billing-portal` (signed). Needs a `stripeCustomerId` from a paid Checkout — promo grants have nothing to manage. If `billingPortal.sessions.create` fails, save Customer portal once in the Stripe Dashboard (Settings → Billing → Customer portal).
 	- Leave keys empty to keep Promote / Upgrade hidden. Do not put live keys in git.
 - **Public directory catalogue** (staff-owned illustrated switches):
 	- Source: `catalogue/switches.json`. CLI: `node catalogue/cli.js apply` then `observe`.

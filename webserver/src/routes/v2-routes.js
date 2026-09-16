@@ -15,7 +15,8 @@ const {
 	isPromoteConfigured,
 	isPremiumConfigured,
 	createPromoteCheckoutSession,
-	createPremiumCheckoutSession
+	createPremiumCheckoutSession,
+	createBillingPortalSession
 } = require('../utils/stripe');
 const { promotionBlockReason, isPromoted } = require('../utils/promote');
 const {
@@ -50,7 +51,8 @@ const {
 	v2CanonicalUpdateAccessKeyPermissions,
 	v2CanonicalRedeemPromo,
 	v2CanonicalGetOwnerTier,
-	v2CanonicalPremiumCheckout
+	v2CanonicalPremiumCheckout,
+	v2CanonicalBillingPortal
 } = require('./route-helpers');
 
 const router = express.Router();
@@ -965,7 +967,8 @@ router.post('/v2/owner/tier',
 					tier: tierInfo.tier,
 					expiresAt: tierInfo.expiresAt || null,
 					...limits,
-					premiumEnabled: isPremiumConfigured()
+					premiumEnabled: isPremiumConfigured(),
+					hasStripeCustomer: Boolean(tierInfo.stripeCustomerId)
 				}
 			});
 		} catch (error) {
@@ -1059,6 +1062,75 @@ router.post('/v2/owner/premium',
 		} catch (error) {
 			logger.error('Error creating owner premium checkout:', error);
 			return res.status(500).json({ success: false, error: 'Failed to start premium checkout' });
+		}
+	}
+);
+
+async function startBillingPortalResponse(res, ownerId, uid) {
+	if (!isPremiumConfigured()) {
+		return res.status(503).json({ success: false, error: 'Premium is not configured' });
+	}
+	if (!ownerId) {
+		return res.status(400).json({ success: false, error: 'Switch has no owner' });
+	}
+	const tier = await redisClient.getOwnerTier(ownerId);
+	if (!tier.stripeCustomerId) {
+		return res.status(404).json({
+			success: false,
+			error: 'No Stripe customer for this owner. Pay for premium first — promo grants have nothing to manage here.'
+		});
+	}
+	const session = await createBillingPortalSession({
+		customerId: tier.stripeCustomerId,
+		uid: uid || ''
+	});
+	return res.json({
+		success: true,
+		data: { url: session.url, id: session.id }
+	});
+}
+
+router.post('/v2/switch/:uid/billing-portal',
+	validateUID,
+	authManager.rateLimit('v2_billing_portal', 20, 900000, { perKey: true, keyLimit: 6 }),
+	authManager.requireV2AccessKey('metadata'),
+	async (req, res) => {
+		try {
+			return await startBillingPortalResponse(
+				res,
+				req.switchData && req.switchData.ownerId,
+				req.params.uid
+			);
+		} catch (error) {
+			logger.error(`Error creating billing portal for ${req.params.uid}:`, error);
+			return res.status(500).json({ success: false, error: 'Failed to open billing portal' });
+		}
+	}
+);
+
+router.post('/v2/owner/billing-portal',
+	authManager.rateLimit('v2_owner_billing_portal', 20, 900000),
+	validateRequest(schemas.v2BillingPortal),
+	async (req, res) => {
+		try {
+			const data = req.validatedData;
+			if (!assertFreshTimestamp(data.ts)) {
+				return res.status(400).json(clockSkewError());
+			}
+			const ownerId = deriveOwnerIdFromOwnerPubKeyB64Url(data.ownerPubKey);
+			const canonical = v2CanonicalBillingPortal(data);
+			const ok = verifyEd25519SignatureB64Url(data.ownerPubKey, canonical, data.sigOwner);
+			if (!ok) {
+				return res.status(401).json({ success: false, error: 'Invalid owner signature' });
+			}
+			const claimed = await redisClient.claimV2Nonce(ownerId, data.nonce, 10 * 60 * 1000);
+			if (!claimed) {
+				return res.status(409).json({ success: false, error: 'Nonce already used' });
+			}
+			return await startBillingPortalResponse(res, ownerId, '');
+		} catch (error) {
+			logger.error('Error creating owner billing portal:', error);
+			return res.status(500).json({ success: false, error: 'Failed to open billing portal' });
 		}
 	}
 );

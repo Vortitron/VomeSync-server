@@ -134,6 +134,7 @@ const promoteStatus = document.getElementById('promoteStatus');
 const promoteCopy = document.getElementById('promoteCopy');
 const premiumPanel = document.getElementById('premiumPanel');
 const premiumBtn = document.getElementById('premiumBtn');
+const billingPortalBtn = document.getElementById('billingPortalBtn');
 const premiumStatus = document.getElementById('premiumStatus');
 const premiumCopy = document.getElementById('premiumCopy');
 const detailPromoted = document.getElementById('detailPromoted');
@@ -144,7 +145,8 @@ let billing = {
 	premiumAmount: 900,
 	premiumCurrency: 'eur',
 	maxPrivate: 5,
-	maxPublic: 10
+	maxPublic: 10,
+	taxEnabled: true
 };
 
 // Manage media pickers (previews + replace UX)
@@ -942,6 +944,12 @@ function setupEventListeners() {
 		});
 	}
 
+	if (billingPortalBtn) {
+		billingPortalBtn.addEventListener('click', async () => {
+			await startBillingPortal();
+		});
+	}
+
 	if (adminKeySaveBtn) {
 		adminKeySaveBtn.addEventListener('click', () => {
 			const key = adminKeyInput ? String(adminKeyInput.value || '').trim() : '';
@@ -1401,7 +1409,8 @@ async function loadBilling() {
 				premiumAmount: Number(data.data.premiumAmount) || 900,
 				premiumCurrency: String(data.data.premiumCurrency || 'eur').toLowerCase(),
 				maxPrivate: Number(data.data.maxPrivate) || 5,
-				maxPublic: Number(data.data.maxPublic) || 10
+				maxPublic: Number(data.data.maxPublic) || 10,
+				taxEnabled: data.data.taxEnabled !== false
 			};
 		}
 	} catch {
@@ -3450,9 +3459,13 @@ function restoreSwitchFromQuery() {
 		Promise.resolve(openSwitchDetails(switchId, true)).finally(() => {
 			consumePromotedQuery();
 			consumePremiumQuery();
+			consumeBillingQuery();
 		});
 	} else {
 		closeDetail();
+		consumePromotedQuery();
+		consumePremiumQuery();
+		consumeBillingQuery();
 	}
 }
 
@@ -3579,7 +3592,7 @@ function updatePromotePanel(detail) {
 	}
 	const days = Number(billing.promoteDurationDays) || 7;
 	if (promoteCopy) {
-		promoteCopy.textContent = `Paid placement pins this card to the top of the directory for ${days} day${days === 1 ? '' : 's'} with a Promoted badge. You pay Vome; everyone can still watch the switch for free.`;
+		promoteCopy.textContent = `Paid placement pins this card to the top of the directory for ${days} day${days === 1 ? '' : 's'} with a Promoted badge. You pay Vome; everyone can still watch the switch for free.${billing.taxEnabled !== false ? ' The listed price includes VAT.' : ''}`;
 	}
 	if (promoteBtn) {
 		promoteBtn.disabled = false;
@@ -3638,7 +3651,7 @@ function updatePremiumPanel(detail) {
 	const maxPublic = Number(billing.maxPublic) || 10;
 	const maxPrivate = Number(billing.maxPrivate) || 5;
 	if (premiumCopy) {
-		premiumCopy.textContent = `Free accounts can create ${maxPublic} public and ${maxPrivate} private switches. Premium is ${formatPremiumPrice()} a month and lifts the cap to 50 switches (25 public). Catalogue watches stay free.`;
+		premiumCopy.textContent = `Free accounts can create ${maxPublic} public and ${maxPrivate} private switches. Premium is ${formatPremiumPrice()} a month${billing.taxEnabled !== false ? ' including VAT' : ''} and lifts the cap to 50 switches (25 public). Catalogue watches stay free.`;
 	}
 	if (premiumBtn) {
 		premiumBtn.disabled = false;
@@ -3701,6 +3714,54 @@ async function startPremiumCheckout() {
 	}
 }
 
+function consumeBillingQuery() {
+	const params = new URLSearchParams(window.location.search);
+	const result = params.get('billing');
+	if (!result) return;
+	params.delete('billing');
+	const suffix = params.toString();
+	const next = `${window.location.pathname}${suffix ? `?${suffix}` : ''}${window.location.hash || ''}`;
+	try {
+		window.history.replaceState({}, '', next);
+	} catch {
+		// ignore
+	}
+	if (result === 'return') {
+		setPremiumStatus('Back from Stripe billing. Changes can take a minute to apply.', false);
+	}
+}
+
+async function startBillingPortal() {
+	if (!currentSwitchId) return;
+	const apiKey = getActiveManagementKey(currentSwitchId) || getStoredManagementKey(currentSwitchId);
+	if (!apiKey) {
+		setPremiumStatus('Access key required.', true);
+		return;
+	}
+	if (billingPortalBtn) billingPortalBtn.disabled = true;
+	setPremiumStatus('Opening Stripe billing…', false);
+	try {
+		const response = await fetch(`${API_BASE_URL}/v2/switch/${encodeURIComponent(currentSwitchId)}/billing-portal`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-Api-Key': apiKey
+			}
+		});
+		const data = await response.json();
+		if (!response.ok || !data.success || !data.data || !data.data.url) {
+			setPremiumStatus((data && data.error) || 'Could not open billing.', true);
+			if (billingPortalBtn) billingPortalBtn.disabled = false;
+			return;
+		}
+		window.location.assign(data.data.url);
+	} catch (error) {
+		console.error('Billing portal failed:', error);
+		setPremiumStatus('Could not open billing.', true);
+		if (billingPortalBtn) billingPortalBtn.disabled = false;
+	}
+}
+
 async function startPromoteCheckout() {
 	if (!currentSwitchId) return;
 	const apiKey = getActiveManagementKey(currentSwitchId) || getStoredManagementKey(currentSwitchId);
@@ -3750,3 +3811,4 @@ window.filterByCategory = filterByCategory;
 window.copyUID = copyUID;
 window.startPromoteCheckout = startPromoteCheckout;
 window.startPremiumCheckout = startPremiumCheckout;
+window.startBillingPortal = startBillingPortal;

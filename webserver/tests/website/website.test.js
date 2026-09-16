@@ -889,6 +889,113 @@ describe('Website SPA (v2 directory)', () => {
 		expect(premiumCall[1].headers['X-Api-Key']).toBe(accessKey);
 		expect(document.getElementById('premiumStatus').classList.contains('error')).toBe(false);
 	});
+
+	test('owner can open Stripe Customer Portal from the manage panel', async () => {
+		window.setInterval = jest.fn();
+		window.alert = jest.fn();
+
+		const websiteRoot = path.resolve(__dirname, '../../../website');
+		const html = fs.readFileSync(path.join(websiteRoot, 'index.html'), 'utf8');
+		document.documentElement.innerHTML = html;
+		window.history.pushState({}, '', '/');
+
+		const uid = 'vs_portal_owner';
+		const accessKey = '00000000-0000-4000-8000-000000000001';
+		const portalUrl = 'https://billing.stripe.com/p/session/bps_test';
+
+		global.fetch = jest.fn(async (url) => {
+			const u = String(url);
+			if (u.endsWith('/public-switches')) {
+				return createMockResponse({
+					success: true,
+					data: {
+						switches: [{
+							uid,
+							name: 'Shop window',
+							description: 'Owner listing',
+							location: 'Test City',
+							category: 'Community',
+							state: false,
+							lastToggled: 0,
+							toggleCount: 0,
+							userCount: 0,
+							link: '',
+							iconUrl: '',
+							bannerUrl: '',
+							ownerProfileUrl: '',
+							events: [],
+							promoted: false,
+							promotedUntil: 0
+						}],
+						count: 1,
+						timestamp: Date.now()
+					}
+				});
+			}
+			if (u.endsWith(`/switch/${uid}`)) {
+				return createMockResponse({
+					success: true,
+					data: {
+						uid,
+						name: 'Shop window',
+						description: 'Owner listing',
+						location: 'Test City',
+						category: 'Community',
+						state: false,
+						lastToggled: 0,
+						toggleCount: 0,
+						userCount: 0,
+						link: '',
+						iconUrl: '',
+						bannerUrl: '',
+						ownerProfileUrl: '',
+						events: [],
+						promoted: false,
+						promotedUntil: 0
+					}
+				});
+			}
+			if (u.endsWith('/billing')) {
+				return createMockResponse({
+					success: true,
+					data: {
+						promoteEnabled: false,
+						premiumEnabled: true,
+						premiumAmount: 900,
+						premiumCurrency: 'eur',
+						maxPrivate: 5,
+						maxPublic: 10,
+						taxEnabled: true
+					}
+				});
+			}
+			if (u.endsWith('/categories')) {
+				return createMockResponse({ success: true, data: {} });
+			}
+			if (u.endsWith(`/v2/switch/${uid}/billing-portal`)) {
+				return createMockResponse({
+					success: true,
+					data: { url: portalUrl, id: 'bps_test' }
+				});
+			}
+			return createMockResponse({ success: false, error: `Unhandled fetch in test: ${u}` }, false, 404);
+		});
+
+		const script = fs.readFileSync(path.join(websiteRoot, 'script.js'), 'utf8');
+		window.eval(script);
+		window.setupEventListeners();
+		window.sessionStorage.setItem(`vomesync_manage_key:${uid}`, accessKey);
+		await window.loadSwitches();
+		await window.openSwitchDetails(uid, true);
+
+		await window.startBillingPortal();
+
+		const portalCall = global.fetch.mock.calls.find((call) => String(call[0]).includes('/billing-portal'));
+		expect(portalCall).toBeTruthy();
+		expect(portalCall[1].method).toBe('POST');
+		expect(portalCall[1].headers['X-Api-Key']).toBe(accessKey);
+		expect(document.getElementById('premiumStatus').classList.contains('error')).toBe(false);
+	});
 });
 
 

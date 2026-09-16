@@ -1,6 +1,7 @@
 const {
 	createPromoteCheckoutSession,
 	createPremiumCheckoutSession,
+	createBillingPortalSession,
 	setStripeForTests,
 	isStripeConfigured
 } = require('../../../src/utils/stripe');
@@ -43,6 +44,11 @@ describe('stripe checkout helper', () => {
 		});
 		expect(payload.success_url).toContain('/switch/vs_rh66f3z5z6hmffa82nte1nxmg0?promoted=success');
 		expect(payload.cancel_url).toContain('/switch/vs_rh66f3z5z6hmffa82nte1nxmg0?promoted=cancel');
+		expect(payload.automatic_tax).toEqual({ enabled: true });
+		expect(payload.tax_id_collection).toEqual({ enabled: true });
+		expect(payload.adaptive_pricing).toEqual({ enabled: true });
+		expect(payload.line_items[0].price_data.tax_behavior).toBe('inclusive');
+		expect(payload.line_items[0].price_data.product_data.tax_code).toBe('txcd_10103000');
 	});
 
 	test('creates a hosted subscription Checkout Session for premium', async () => {
@@ -71,5 +77,31 @@ describe('stripe checkout helper', () => {
 			ownerId: 'owner-1'
 		});
 		expect(payload.line_items[0].price_data.recurring).toEqual({ interval: 'month' });
+		expect(payload.automatic_tax).toEqual({ enabled: true });
+		expect(payload.tax_id_collection).toEqual({ enabled: true });
+		expect(payload.line_items[0].price_data.tax_behavior).toBe('inclusive');
+		expect(payload.line_items[0].price_data.product_data.tax_code).toBe('txcd_10103000');
+	});
+
+	test('creates a Customer Portal session for an existing Stripe customer', async () => {
+		const create = jest.fn().mockResolvedValue({
+			id: 'bps_test',
+			url: 'https://billing.stripe.com/p/session/bps_test'
+		});
+		setStripeForTests({ billingPortal: { sessions: { create } } });
+
+		const session = await createBillingPortalSession({
+			customerId: 'cus_test',
+			uid: 'vs_rh66f3z5z6hmffa82nte1nxmg0'
+		});
+
+		expect(session).toEqual({
+			id: 'bps_test',
+			url: 'https://billing.stripe.com/p/session/bps_test'
+		});
+		expect(create).toHaveBeenCalledWith({
+			customer: 'cus_test',
+			return_url: expect.stringContaining('/switch/vs_rh66f3z5z6hmffa82nte1nxmg0?billing=return')
+		});
 	});
 });

@@ -3,6 +3,10 @@
  *
  * Hosted Checkout Sessions (no payment_method_types — Dashboard decides
  * methods). Restricted keys (rk_) preferred over sk_ in production.
+ *
+ * Tax matches vome.io: Stripe Tax is already registered (Sweden small
+ * seller, inclusive amounts, SaaS personal txcd_10103000). Checkout still
+ * has to send automatic_tax or it silently collects 0.
  */
 const crypto = require('crypto');
 const Stripe = require('stripe');
@@ -60,6 +64,37 @@ function publicBaseUrl() {
 	return String(config.stripe.publicBaseUrl).replace(/\/+$/, '');
 }
 
+function checkoutPresentment() {
+	const stripe = config.stripe || {};
+	const extras = {};
+	if (stripe.adaptivePricing !== false) {
+		extras.adaptive_pricing = { enabled: true };
+	}
+	if (stripe.taxEnabled !== false) {
+		extras.automatic_tax = { enabled: true };
+		extras.tax_id_collection = { enabled: true };
+	}
+	return extras;
+}
+
+function productData(name) {
+	const stripe = config.stripe || {};
+	const data = { name };
+	if (stripe.taxEnabled !== false && stripe.taxCode) {
+		data.tax_code = stripe.taxCode;
+	}
+	return data;
+}
+
+function priceDataTax() {
+	const stripe = config.stripe || {};
+	const behavior = stripe.taxBehavior;
+	if (stripe.taxEnabled !== false && (behavior === 'inclusive' || behavior === 'exclusive')) {
+		return { tax_behavior: behavior };
+	}
+	return {};
+}
+
 function promoteLineItems() {
 	const stripe = config.stripe;
 	if (stripe.pricePromote) {
@@ -70,9 +105,10 @@ function promoteLineItems() {
 		price_data: {
 			currency: stripe.promoteCurrency,
 			unit_amount: stripe.promoteAmount,
-			product_data: {
-				name: `VomeSync promoted listing (${stripe.promoteDurationDays} days)`
-			}
+			...priceDataTax(),
+			product_data: productData(
+				`VomeSync promoted listing (${stripe.promoteDurationDays} days)`
+			)
 		}
 	}];
 }
@@ -88,9 +124,8 @@ function premiumLineItems() {
 			currency: stripe.premiumCurrency,
 			unit_amount: stripe.premiumAmount,
 			recurring: { interval: 'month' },
-			product_data: {
-				name: 'VomeSync premium'
-			}
+			...priceDataTax(),
+			product_data: productData('VomeSync premium')
 		}
 	}];
 }
@@ -113,7 +148,8 @@ async function createPromoteCheckoutSession({ uid, ownerId, durationDays }) {
 			uid,
 			ownerId: ownerId || '',
 			durationDays: String(durationDays)
-		}
+		},
+		...checkoutPresentment()
 	});
 	if (!session.url) {
 		throw new Error('Stripe Checkout did not return a URL');
@@ -147,10 +183,33 @@ async function createPremiumCheckoutSession({ ownerId, uid }) {
 				kind: 'vomesync_premium',
 				ownerId: ownerId || ''
 			}
-		}
+		},
+		...checkoutPresentment()
 	});
 	if (!session.url) {
 		throw new Error('Stripe Checkout did not return a URL');
+	}
+	return { id: session.id, url: session.url };
+}
+
+async function createBillingPortalSession({ customerId, uid }) {
+	const stripe = getStripe();
+	if (!stripe) {
+		throw new Error('Stripe is not configured');
+	}
+	if (!customerId) {
+		throw new Error('No Stripe customer');
+	}
+	const publicBase = publicBaseUrl();
+	const returnPath = uid
+		? `/switch/${encodeURIComponent(uid)}?billing=return`
+		: '/?billing=return';
+	const session = await stripe.billingPortal.sessions.create({
+		customer: customerId,
+		return_url: `${publicBase}${returnPath}`
+	});
+	if (!session.url) {
+		throw new Error('Stripe Customer Portal did not return a URL');
 	}
 	return { id: session.id, url: session.url };
 }
@@ -172,5 +231,6 @@ module.exports = {
 	setStripeForTests,
 	createPromoteCheckoutSession,
 	createPremiumCheckoutSession,
+	createBillingPortalSession,
 	constructWebhookEvent
 };

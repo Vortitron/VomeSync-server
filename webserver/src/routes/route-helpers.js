@@ -414,6 +414,14 @@ const v2CanonicalPremiumCheckout = (data) => stableJsonStringify({
 	nonce: data.nonce
 });
 
+const v2CanonicalBillingPortal = (data) => stableJsonStringify({
+	v: 2,
+	action: 'billing_portal',
+	ownerPubKey: data.ownerPubKey,
+	ts: data.ts,
+	nonce: data.nonce
+});
+
 module.exports = {
 	// Constants
 	V2_ACCESS_KEY_MAX_TTL_SECONDS,
@@ -450,6 +458,7 @@ module.exports = {
 	v2CanonicalUpdateAccessKeyPermissions,
 	v2CanonicalRedeemPromo,
 	v2CanonicalGetOwnerTier,
-	v2CanonicalPremiumCheckout
+	v2CanonicalPremiumCheckout,
+	v2CanonicalBillingPortal
 };
 

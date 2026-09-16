@@ -9,6 +9,20 @@ const parsePositiveInt = (value, fallback) => {
 	return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
+const parseEnvFlag = (value, fallback) => {
+	if (value === undefined || value === null || value === '') {
+		return fallback;
+	}
+	const normalised = String(value).trim().toLowerCase();
+	if (['1', 'true', 'yes', 'on'].includes(normalised)) {
+		return true;
+	}
+	if (['0', 'false', 'no', 'off'].includes(normalised)) {
+		return false;
+	}
+	return fallback;
+};
+
 const config = {
 	server: {
 		port: parseInt(process.env.PORT, 10) || 3000,
@@ -190,7 +204,12 @@ const config = {
 		pricePremium: process.env.STRIPE_PRICE_PREMIUM || '',
 		premiumAmount: parsePositiveInt(process.env.STRIPE_PREMIUM_AMOUNT, 900),
 		premiumCurrency: String(process.env.STRIPE_PREMIUM_CURRENCY || 'eur').toLowerCase(),
-		publicBaseUrl: process.env.VOMESYNC_PUBLIC_BASE_URL || 'https://sync.vome.io'
+		publicBaseUrl: process.env.VOMESYNC_PUBLIC_BASE_URL || 'https://sync.vome.io',
+		// Same account as vome.io: Sweden small-seller VAT, advertised prices include tax.
+		taxEnabled: parseEnvFlag(process.env.STRIPE_TAX_ENABLED, true),
+		taxCode: process.env.STRIPE_TAX_CODE || 'txcd_10103000',
+		taxBehavior: String(process.env.STRIPE_TAX_BEHAVIOR || 'inclusive').toLowerCase(),
+		adaptivePricing: parseEnvFlag(process.env.STRIPE_ADAPTIVE_PRICING, true)
 	}
 };
 

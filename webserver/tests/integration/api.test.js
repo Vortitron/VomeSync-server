@@ -656,6 +656,7 @@ describe('API Integration Tests', () => {
 			expect(response.body.data.promoteEnabled).toBe(false);
 			expect(response.body.data.premiumEnabled).toBe(false);
 			expect(response.body.data.promoteDurationDays).toBe(7);
+			expect(response.body.data.taxEnabled).toBe(true);
 			expect(response.body.data.maxPublic).toBe(10);
 			expect(response.body.data.maxPrivate).toBe(5);
 		});

@@ -247,6 +247,13 @@ const schemas = {
 		ts: Joi.number().integer().min(0).required(),
 		nonce: Joi.string().min(8).max(128).required(),
 		sigOwner: Joi.string().max(200).required()
+	}),
+
+	v2BillingPortal: Joi.object({
+		ownerPubKey: Joi.string().max(200).required(),
+		ts: Joi.number().integer().min(0).required(),
+		nonce: Joi.string().min(8).max(128).required(),
+		sigOwner: Joi.string().max(200).required()
 	})
 };
 

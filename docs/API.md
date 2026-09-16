@@ -120,7 +120,9 @@ sequenceDiagram
 | POST | `/api/v2/switch/{uid}/comment` | X‑Api‑Key | Add comment |
 | POST | `/api/v2/switch/{uid}/promote` | X‑Api‑Key (`metadata`) | Start Stripe Checkout for a promoted listing |
 | POST | `/api/v2/switch/{uid}/premium` | X‑Api‑Key (`metadata`) | Start Stripe Checkout for owner premium |
+| POST | `/api/v2/switch/{uid}/billing-portal` | X‑Api‑Key (`metadata`) | Open Stripe Customer Portal |
 | POST | `/api/v2/owner/premium` | Signed (v2) | Start Stripe Checkout for owner premium |
+| POST | `/api/v2/owner/billing-portal` | Signed (v2) | Open Stripe Customer Portal |
 | POST | `/api/v2/owner/tier` | Signed (v2) | Current owner tier and limits |
 | POST | `/api/generate-key` | Public | Create personal key |
 | POST | `/api/create-switch` | Personal key | Create legacy switch |
@@ -370,6 +372,34 @@ Same signed envelope as `get_owner_tier` (`action: premium_checkout`).
 ```
 
 Webhook `checkout.session.completed` with `metadata.kind=vomesync_premium` writes `owner_tier:<ownerId>`. `customer.subscription.deleted` / `updated` (canceled, unpaid, incomplete_expired) clears it unless a time-limited promo remains. `past_due` keeps premium during Smart Retries.
+
+Checkout Sessions send `automatic_tax` and `tax_id_collection`. Advertised amounts include VAT (`tax_behavior=inclusive`, product tax code `txcd_10103000`).
+
+#### Manage billing (Customer Portal)
+
+Opens Stripe Customer Portal so the owner can change payment method or cancel. Needs a `stripeCustomerId` stored from a paid Checkout. Promo grants return `404`.
+
+**POST** `/api/v2/switch/{uid}/billing-portal`
+
+Header:
+```
+X-Api-Key: uuid-v4-string
+```
+
+**POST** `/api/v2/owner/billing-portal`
+
+Same signed envelope as `get_owner_tier` (`action: billing_portal`).
+
+**Response (example):**
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://billing.stripe.com/p/session/...",
+    "id": "bps_..."
+  }
+}
+```
 
 ### Get My Switches (v2)
 
@@ -623,7 +653,8 @@ Whether paid promotion and premium are live. No secrets. The website uses this t
     "premiumCurrency": "eur",
     "maxPrivate": 5,
     "maxPublic": 10,
-    "maxSwitches": 15
+    "maxSwitches": 15,
+    "taxEnabled": true
   }
 }
 ```
