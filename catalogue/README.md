@@ -88,7 +88,7 @@ Swedish election 2026 is **one** switch on purpose: ON after polls close while t
 
 Øresund and the Great Belt: ON means open to road traffic — the opposite of Tower Bridge / Erasmusbrug, where ON means open to ships.
 
-Government listings keep a stable UID. The observer renames the listing when Wikidata’s office-holder (P1308) changes.
+Government listings keep a stable UID. The observer renames the listing when Wikidata’s office-holder (P1308) changes. If Wikidata omits an English label, keep the last good name — never publish a Q-id.
 
 ## Tests
 

@@ -20,7 +20,7 @@
 				"params": {
 					"source": "towerbridge.org.uk/flat/lift-times"
 				},
-				"observedAt": "2026-09-15T14:46:21.926Z"
+				"observedAt": "2026-09-16T06:51:38.305Z"
 			}
 		},
 		{
@@ -42,7 +42,7 @@
 					"source": "isdetunnelopen.nl",
 					"hasBridgeEvent": false
 				},
-				"observedAt": "2026-09-15T14:46:21.926Z"
+				"observedAt": "2026-09-16T06:51:38.305Z"
 			}
 		},
 		{
@@ -59,11 +59,11 @@
 			"schedule": {
 				"kind": "observe",
 				"source": "uk-commons",
-				"state": true,
+				"state": false,
 				"params": {
-					"dayType": "Sitting day"
+					"dayType": "Adjournment day (Conference recess)"
 				},
-				"observedAt": "2026-09-15T14:46:21.926Z"
+				"observedAt": "2026-09-16T06:51:38.305Z"
 			}
 		},
 		{
@@ -80,11 +80,11 @@
 			"schedule": {
 				"kind": "observe",
 				"source": "us-congress",
-				"state": true,
+				"state": false,
 				"params": {
 					"sittingDay": true
 				},
-				"observedAt": "2026-09-15T14:46:21.926Z"
+				"observedAt": "2026-09-16T06:51:38.305Z"
 			}
 		},
 		{
@@ -107,7 +107,7 @@
 					"holder": "Andy Burnham",
 					"party": "Labour"
 				},
-				"observedAt": "2026-09-15T14:46:21.926Z"
+				"observedAt": "2026-09-16T06:51:38.305Z"
 			}
 		},
 		{
@@ -129,7 +129,7 @@
 					"office": "president",
 					"holder": "Donald Trump"
 				},
-				"observedAt": "2026-09-15T14:46:21.926Z"
+				"observedAt": "2026-09-16T06:51:38.305Z"
 			}
 		},
 		{
@@ -151,7 +151,7 @@
 					"office": "pope",
 					"holder": "Leo XIV"
 				},
-				"observedAt": "2026-09-15T14:46:21.926Z"
+				"observedAt": "2026-09-16T06:51:38.305Z"
 			}
 		},
 		{
@@ -173,7 +173,7 @@
 					"vacant": false,
 					"holder": "Leo XIV"
 				},
-				"observedAt": "2026-09-15T14:46:21.926Z"
+				"observedAt": "2026-09-16T06:51:38.305Z"
 			}
 		},
 		{
@@ -192,9 +192,9 @@
 				"source": "uk-election",
 				"state": false,
 				"params": {
-					"dayType": "Sitting day"
+					"dayType": "Adjournment day (Conference recess)"
 				},
-				"observedAt": "2026-09-15T14:46:21.926Z"
+				"observedAt": "2026-09-16T06:51:38.305Z"
 			}
 		},
 		{
@@ -215,7 +215,7 @@
 				"params": {
 					"gScale": 0
 				},
-				"observedAt": "2026-09-15T14:46:21.926Z"
+				"observedAt": "2026-09-16T06:51:38.305Z"
 			}
 		},
 		{
@@ -535,7 +535,7 @@
 					"phase": "formation",
 					"pm": "Ulf Kristersson"
 				},
-				"observedAt": "2026-09-15T14:46:21.926Z"
+				"observedAt": "2026-09-16T06:51:38.305Z"
 			}
 		},
 		{
@@ -556,7 +556,7 @@
 				"params": {
 					"source": "oresundsbron.com/traffic-information"
 				},
-				"observedAt": "2026-09-15T14:46:21.926Z"
+				"observedAt": "2026-09-16T06:51:38.305Z"
 			}
 		},
 		{
@@ -577,7 +577,7 @@
 				"params": {
 					"source": "storebaelt.dk/trafik-vejr"
 				},
-				"observedAt": "2026-09-15T14:46:21.926Z"
+				"observedAt": "2026-09-16T06:51:38.305Z"
 			}
 		}
 	]

@@ -218,11 +218,13 @@ const {
 	parseCommonsDayType,
 	parseHouseSchedule,
 	geomagneticFromScales,
-	pickOfficeClaim
+	pickOfficeClaim,
+	isWikidataItemId,
+	englishEntityLabel,
+	SOURCE_IDS
 } = require('../../../catalogue/lib/sources');
 const { observeCatalogue } = require('../../../catalogue/lib/observe');
 const { isTestDebris } = require('../../../catalogue/lib/apply');
-const { SOURCE_IDS } = require('../../../catalogue/lib/sources');
 
 describe('catalogue observers', () => {
 	test('Tower Bridge is on only inside the 15-minute lift window', () => {
@@ -261,6 +263,72 @@ describe('catalogue observers', () => {
 			{ rank: 'preferred', mainsnak: { datavalue: { value: { id: 'Q2' } } }, qualifiers: { P580: [{ datavalue: { value: { time: '+2026-09-01T00:00:00Z' } } }] } }
 		];
 		expect(pickOfficeClaim(claims).mainsnak.datavalue.value.id).toBe('Q2');
+	});
+
+	test('Wikidata office labels must be English names, not Q-ids', () => {
+		expect(isWikidataItemId('Q22686')).toBe(true);
+		expect(isWikidataItemId('Donald Trump')).toBe(false);
+		expect(englishEntityLabel({ Q22686: { labels: { en: { value: 'Donald Trump' } } } }, 'Q22686')).toBe('Donald Trump');
+		expect(() => englishEntityLabel({ Q22686: { labels: {} } }, 'Q22686')).toThrow(/English label/);
+		expect(() => englishEntityLabel({ Q22686: { labels: { en: { value: 'Q22686' } } } }, 'Q22686')).toThrow(/English label/);
+	});
+
+	test('observeCatalogue keeps last office name when Wikidata omits the English label', async () => {
+		const fetchImpl = async (url) => {
+			if (String(url).includes('props=claims')) {
+				return {
+					ok: true,
+					status: 200,
+					json: async () => ({
+						entities: {
+							Q11696: {
+								claims: {
+									P1308: [{
+										rank: 'preferred',
+										mainsnak: { datavalue: { value: { id: 'Q22686' } } }
+									}]
+								}
+							}
+						}
+					})
+				};
+			}
+			if (String(url).includes('props=labels')) {
+				return {
+					ok: true,
+					status: 200,
+					json: async () => ({ entities: { Q22686: { labels: {} } } })
+				};
+			}
+			return { ok: false, status: 503, text: async () => 'down' };
+		};
+		const entries = [{
+			id: 'us-government',
+			index: 5,
+			name: 'US President: Donald Trump',
+			description: 'ON while Donald Trump is President of the United States.',
+			location: 'United States',
+			category: 'Community',
+			link: 'https://www.whitehouse.gov/',
+			art: 'us-president',
+			onMeans: 'Donald Trump currently holds the office.',
+			offMeans: 'Someone else is President, or the office is vacant.',
+			schedule: {
+				kind: 'observe',
+				source: 'us-president',
+				state: true,
+				params: { office: 'president', holder: 'Donald Trump' }
+			}
+		}];
+		const { results, entries: next } = await observeCatalogue({
+			entries,
+			fetchImpl,
+			now: new Date('2026-09-16T08:00:00Z')
+		});
+		expect(results[0].ok).toBe(false);
+		expect(results[0].error).toMatch(/English label/);
+		expect(next[0].name).toBe('US President: Donald Trump');
+		expect(next[0].schedule.params.holder).toBe('Donald Trump');
 	});
 
 	test('observeCatalogue writes ON/OFF and keeps last state on fetch failure', async () => {

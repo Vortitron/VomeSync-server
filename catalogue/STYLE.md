@@ -73,7 +73,7 @@ Calendar switches are UTC on purpose. Local midnight is not something a global d
 
 `node catalogue/cli.js observe` fetches live sources, writes JSON, and pushes ON/OFF. A systemd timer runs it every five minutes. A fetch error must not flip the switch.
 
-When an office-holder changes, the observer updates `name` / description / `schedule.params` and keeps the same `id` / `index`.
+When an office-holder changes, the observer updates `name` / description / `schedule.params` and keeps the same `id` / `index`. A missing English label must not fall back to the Wikidata Q-id.
 
 ## Adding quickly
 

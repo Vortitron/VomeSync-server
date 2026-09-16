@@ -95,6 +95,25 @@ function claimStartMs(claim) {
 	return null;
 }
 
+function isWikidataItemId(value) {
+	return /^Q[1-9]\d*$/i.test(String(value || '').trim());
+}
+
+function englishEntityLabel(entities, qid) {
+	const labels = ((entities || {})[qid] || {}).labels || {};
+	const value = (labels.en && labels.en.value)
+		|| (labels['en-gb'] && labels['en-gb'].value)
+		|| (labels['en-us'] && labels['en-us'].value)
+		|| '';
+	const trimmed = String(value).trim();
+	// Missing labels used to fall back to the Q-id and that shipped as
+	// "US President: Q22686" on the public directory.
+	if (!trimmed || isWikidataItemId(trimmed)) {
+		throw new Error(`Wikidata missing English label for ${qid}`);
+	}
+	return trimmed;
+}
+
 function pickOfficeClaim(claims) {
 	const live = (claims || []).filter((claim) => claim && claim.rank !== 'deprecated');
 	const preferred = live.filter((claim) => claim.rank === 'preferred');
@@ -198,10 +217,10 @@ async function wikidataOfficeholder(officeId, options) {
 		return { qid: '', holder: '', startMs: claimStartMs(claim) };
 	}
 	const labels = await fetchJson(
-		`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${encodeURIComponent(qid)}&props=labels&languages=en&format=json`,
+		`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${encodeURIComponent(qid)}&props=labels&languages=en&languagefallback=1&format=json`,
 		options
 	);
-	const holder = ((((labels.entities || {})[qid] || {}).labels || {}).en || {}).value || qid;
+	const holder = englishEntityLabel(labels.entities, qid);
 	return { qid, holder, startMs: claimStartMs(claim) };
 }
 
@@ -336,5 +355,7 @@ module.exports = {
 	oresundClosedNow,
 	storebaeltClosedNow,
 	pickOfficeClaim,
+	isWikidataItemId,
+	englishEntityLabel,
 	observeEntry
 };
