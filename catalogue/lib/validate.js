@@ -6,6 +6,7 @@ const CATEGORIES = Object.freeze([
 	'Government',
 	'Holiday',
 	'Weather',
+	'IsUp',
 	'Test',
 	'Other'
 ]);

@@ -51,11 +51,12 @@ node catalogue/cli.js purge-debris
 | `lib/paths.js` | Live vs repo catalogue paths. Live default `/var/lib/vomesync-catalogue`. |
 | `lib/artwork.js` | SVG icons (256²) and banners (1600×900). |
 | `lib/refresh.js` | Calendar / last observed state → desired ON/OFF. Stale live sources are OFF. |
-| `lib/sources.js` | Live observers (bridges, sittings, Commons division, offices, storms, elections, USGS, TfL, Launch Library, GDACS). |
+| `lib/sources.js` | Live observers (bridges, sittings, Commons division, offices, storms, elections, USGS, TfL, Launch Library, GDACS, IsUp). |
 | `lib/offices.js` | Wikidata P1308 office-holders. |
 | `lib/dutch-bridges.js` | Extra isdetunnelopen.nl movable spans. |
-| `lib/live-listings.js` | Extra offices, bridges, live events, and AliExpress tentpole windows. |
+| `lib/live-listings.js` | Extra offices, bridges, live events, AliExpress tentpole windows, and IsUp status lamps. |
 | `lib/aliexpress-sales.js` | UTC windows for Anniversary, Summer, 11.11 and 12.12, plus Choice Day as the first seven UTC days of each month. Not a live scrape: Open Platform wants a business account, the storefront bot-walls us, and MTOP needs signed browser cookies. |
+| `lib/uptime.js` | IsUp observers. Statuspage JSON, Slack current, Google Workspace/Cloud incidents. ON only while the vendor says operational. |
 | `append-live-listings.js` | Idempotent merge of those extras into `switches.json`. |
 | `lib/observe.js` | Fetch each source; short outages keep last state, then force OFF. |
 | `lib/stale.js` | `staleAfterHours` clock from last successful `observedAt`. |
@@ -108,6 +109,8 @@ Swedish election 2026 is **one** switch on purpose: ON after polls close while t
 Government listings keep a stable UID. The observer renames the listing when Wikidata’s office-holder (P1308) changes. If Wikidata omits an English label, keep the last good name — never publish a Q-id.
 
 AliExpress tentpoles are UTC `windows`, not a scrape: their storefront returns a punish page to anonymous clients, and Open Platform signup asks for a full business account. **AliExpress sale** is ON during any listed tentpole; 11.11, Summer and Anniversary are the named ones. **AliExpress Choice Day** is the first seven UTC days of each month — that is the usual pattern, not a live campaign feed. Extend tentpole windows when they publish the next year.
+
+IsUp listings are official status feeds, not a ping of the homepage. GitHub, OpenAI, Claude, Home Assistant, Nabu Casa, Cloudflare, Discord, Twilio, Reddit, Wikipedia, npm and PyPI use Statuspage `indicator=none`. Slack uses `status=ok` with no active incidents. Google Workspace and Gemini use Google’s incidents JSON (a row without `end` is open). xAI/Grok, Groq, Mistral and Perplexity are omitted: they 403 or return HTML to anonymous clients. Amazon Associates is not a status API — disclosed hardware links on a card are a later shopping path, not an IsUp lamp.
 
 ## Tests
 

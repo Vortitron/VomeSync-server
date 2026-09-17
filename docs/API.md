@@ -489,7 +489,7 @@ Create a new virtual switch.
 **Parameters:**
 - `description` (string, optional): Human-readable description
 - `location` (string, optional): City-level location for privacy
-- `category` (string, optional): One of `Community`, `Personal`, `Event`, `Transport`, `Government`, `Holiday`, `Weather`, `Test`, `Other`
+- `category` (string, optional): One of `Community`, `Personal`, `Event`, `Transport`, `Government`, `Holiday`, `Weather`, `IsUp`, `Test`, `Other`
 - `publicize` (boolean, optional): Whether to list publicly
 
 **Response:**

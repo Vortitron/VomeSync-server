@@ -63,7 +63,9 @@ function artIds() {
 		'volcano',
 		'crown',
 		'disaster',
-		'parcel'
+		'parcel',
+		'uptime',
+		'uptime-ai'
 	]);
 }
 
@@ -363,6 +365,20 @@ function glyph(artId, color) {
 				<rect x="56" y="92" width="144" height="28" fill="${PALETTE.gold}"/>
 				<rect x="118" y="64" width="20" height="56" rx="4" fill="${PALETTE.gold}"/>
 				<rect x="56" y="140" width="144" height="10" fill="${PALETTE.bg}" opacity="0.45"/>`;
+		case 'uptime':
+			return `
+				<circle cx="128" cy="196" r="16" fill="${color}"/>
+				<path d="M84 168 A56 56 0 0 1 172 168" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"/>
+				<path d="M60 140 A84 84 0 0 1 196 140" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"/>
+				<path d="M40 108 A112 112 0 0 1 216 108" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"/>`;
+		case 'uptime-ai':
+			return `
+				<circle cx="80" cy="84" r="26" fill="${color}"/>
+				<circle cx="176" cy="84" r="26" fill="${color}"/>
+				<circle cx="128" cy="176" r="26" fill="${color}"/>
+				<rect x="98" y="92" width="60" height="12" rx="6" fill="${color}" transform="rotate(38 128 128)"/>
+				<rect x="98" y="92" width="60" height="12" rx="6" fill="${color}" transform="rotate(-38 128 128)"/>
+				<rect x="98" y="78" width="60" height="12" rx="6" fill="${color}"/>`;
 		default:
 			return `
 				<circle cx="128" cy="128" r="48" fill="${color}"/>
@@ -407,7 +423,10 @@ function accentFor(artId) {
 		case 'storebaelt':
 		case 'underground':
 		case 'rocket':
+		case 'uptime':
 			return PALETTE.sky;
+		case 'uptime-ai':
+			return PALETTE.violet;
 		case 'sweden-election':
 			return PALETTE.gold;
 		default:
