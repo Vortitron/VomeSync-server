@@ -191,8 +191,9 @@ const config = {
 		freeTierMaxSwitches: parsePositiveInt(process.env.FREE_TIER_MAX_SWITCHES, 15),
 		freeTierMaxPublicSwitches: parsePositiveInt(process.env.FREE_TIER_MAX_PUBLIC_SWITCHES, 10),
 		freeTierMaxPrivateSwitches: parsePositiveInt(process.env.FREE_TIER_MAX_PRIVATE_SWITCHES, 5),
-		premiumMaxSwitches: parsePositiveInt(process.env.PREMIUM_MAX_SWITCHES, 150),
-		premiumMaxPublicSwitches: parsePositiveInt(process.env.PREMIUM_MAX_PUBLIC_SWITCHES, 120)
+		premiumMaxSwitches: parsePositiveInt(process.env.PREMIUM_MAX_SWITCHES, 50),
+		premiumMaxPublicSwitches: parsePositiveInt(process.env.PREMIUM_MAX_PUBLIC_SWITCHES, 25),
+		catalogueOwnerId: String(process.env.CATALOGUE_OWNER_ID || '').trim().toLowerCase()
 	},
 	stripe: {
 		secretKey: process.env.STRIPE_SECRET_KEY || '',

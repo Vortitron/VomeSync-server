@@ -7,6 +7,8 @@
 const { observeEntry } = require('./sources');
 const { observationIsStale } = require('./stale');
 
+const BATCH_OBSERVE_MINUTES = 5;
+
 function cloneEntry(entry) {
 	return {
 		...entry,
@@ -59,6 +61,29 @@ function forceStaleOff(entry, error) {
 		entry: next,
 		changed: previousOn !== false,
 		on: false
+	};
+}
+
+function isFastObserveSource(entry) {
+	const minutes = Number(entry && entry.schedule && entry.schedule.observeEveryMinutes);
+	return Number.isInteger(minutes) && minutes > 0 && minutes < BATCH_OBSERVE_MINUTES;
+}
+
+function resultFlags(result, extra = {}) {
+	const skipped = Boolean(result.skipped);
+	const staleOff = Boolean(result.staleOff);
+	const fetched = staleOff || (result.ok && !skipped);
+	return {
+		id: result.id,
+		ok: result.ok,
+		skipped,
+		deferred: Boolean(extra.deferred),
+		fetched,
+		staleOff,
+		on: result.on,
+		changed: result.changed,
+		metaChanged: result.metaChanged,
+		error: result.error || null
 	};
 }
 
@@ -132,22 +157,25 @@ async function observeCatalogue(options) {
 		throw new Error(`unknown switch id(s): ${missing.join(', ')}`);
 	}
 
+	const force = Boolean(options.onlyIds && options.onlyIds.length);
 	const replacements = new Map();
 	const results = [];
 	for (const entry of selected) {
+		if (!force && isFastObserveSource(entry)) {
+			results.push(resultFlags({
+				id: entry.id,
+				ok: true,
+				skipped: true,
+				on: Boolean(entry.schedule && entry.schedule.state),
+				changed: false,
+				metaChanged: false
+			}, { deferred: true }));
+			continue;
+		}
 		log(`observe ${entry.id}`);
 		const result = await observeOne(entry, { ...options, now });
 		replacements.set(entry.id, result.entry);
-		results.push({
-			id: result.id,
-			ok: result.ok,
-			skipped: Boolean(result.skipped),
-			staleOff: Boolean(result.staleOff),
-			on: result.on,
-			changed: result.changed,
-			metaChanged: result.metaChanged,
-			error: result.error || null
-		});
+		results.push(resultFlags(result));
 		if (!result.ok && result.staleOff) {
 			log(`${entry.id}: stale — forced OFF (${result.error})`);
 		} else if (!result.ok) {
@@ -167,9 +195,11 @@ async function observeCatalogue(options) {
 }
 
 module.exports = {
+	BATCH_OBSERVE_MINUTES,
 	cloneEntry,
 	applyObservation,
 	forceStaleOff,
+	isFastObserveSource,
 	observeOne,
 	observeCatalogue
 };

@@ -61,7 +61,7 @@ To correct copy or art, edit the JSON and run `apply --only <id>`. Office-holder
 
 | `schedule.kind` | When it is ON |
 |---|---|
-| `observe` | Last value written by `cli.js observe` from `schedule.source` (bridges, sittings, offices, storms, elections, Tube, quakes, launches, volcanoes, GDACS). Silent past `staleAfterHours` (default 24) is treated as OFF. |
+| `observe` | Last value written by `cli.js observe` from `schedule.source` (bridges, sittings, Commons division, offices, storms, elections, Tube, quakes, launches, volcanoes, GDACS). Silent past `staleAfterHours` (default 24) is treated as OFF. |
 | `manual` / `held` | Operator-held leftovers. Do not add new ones; wire a source instead. |
 | `windows` | Inside explicit UTC intervals (lunar holidays, Easter, Eid). |
 | `annual` | That UTC month/day every year (Christmas). |
@@ -71,7 +71,7 @@ To correct copy or art, edit the JSON and run `apply --only <id>`. Office-holder
 
 Calendar switches are UTC on purpose. Local midnight is not something a global directory can know. Say so in the description when it matters.
 
-`node catalogue/cli.js observe` fetches live sources, writes JSON, and pushes ON/OFF. A systemd timer runs it every five minutes. A fetch error must not flip the switch until `observedAt` is older than `staleAfterHours` (per listing, default 24 hours; bridges, Tube and launches use 2; quakes, volcanoes and GDACS use 6; offices use 72). Then it is forced OFF and `params.stale` is set, so a dead feed cannot leave Tower Bridge “open” overnight. A listing that has never fetched successfully is not treated as stale — seed those OFF.
+`node catalogue/cli.js observe` fetches live sources, writes JSON, and pushes ON/OFF. A systemd timer runs it every five minutes. `uk-commons-division` sets `observeEveryMinutes: 1` and has its own timer — the eight-minute lobby window is too short for a five-minute poll, and the batch pass skips that id so the two jobs do not overwrite each other. A fetch error must not flip the switch until `observedAt` is older than `staleAfterHours` (per listing, default 24 hours; bridges, Tube and launches use 2; Commons division uses 1; quakes, volcanoes and GDACS use 6; offices use 72). Then it is forced OFF and `params.stale` is set, so a dead feed cannot leave Tower Bridge “open” overnight. A listing that has never fetched successfully is not treated as stale — seed those OFF.
 
 When an office-holder changes, the observer updates `name` / description / `schedule.params` and keeps the same `id` / `index`. A missing English label must not fall back to the Wikidata Q-id.
 
@@ -98,6 +98,6 @@ EOF
 
 Reuse an existing `art` key if the glyph is close enough. Add a new glyph when it is not.
 
-If the public listing is already at the premium cap, grant premium to the catalogue owner (`grant-premium`) or raise `PREMIUM_MAX_PUBLIC_SWITCHES` (default 120).
+If the public listing is already at the premium cap, grant premium to the catalogue owner (`grant-premium`) and set `CATALOGUE_OWNER_ID` so that owner is exempt. Do not raise `PREMIUM_MAX_PUBLIC_SWITCHES` for paying customers.
 
 Do not pad the directory with more holidays, sports, stocks, weather, sun/moon, extra Tube lines, or extra USGS quakes. Those already have Home Assistant integrations, or they are calendar events. Add live civic feeds (offices, movable bridges, launches, volcanoes, disaster alerts) instead.

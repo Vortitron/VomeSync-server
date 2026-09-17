@@ -658,9 +658,9 @@ Whether paid promotion and premium are live. No secrets. The website uses this t
     "maxPrivate": 5,
     "maxPublic": 10,
     "maxSwitches": 15,
-    "premiumMaxPrivate": 150,
-    "premiumMaxPublic": 120,
-    "premiumMaxSwitches": 150,
+    "premiumMaxPrivate": 50,
+    "premiumMaxPublic": 25,
+    "premiumMaxSwitches": 50,
     "taxEnabled": true
   }
 }

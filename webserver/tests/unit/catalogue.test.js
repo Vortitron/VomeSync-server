@@ -19,6 +19,11 @@ const { artIds, renderIconSvg, renderBannerSvg } = require('../../../catalogue/l
 const { parseArgs, loadDotEnv } = require('../../../catalogue/cli');
 const { metadataDiffers, publicMeta } = require('../../../catalogue/lib/apply');
 const { extraLiveListings } = require('../../../catalogue/lib/live-listings');
+const {
+	DEFAULT_LIVE_DIR,
+	repoCataloguePath,
+	resolveCataloguePath
+} = require('../../../catalogue/lib/paths');
 
 const CATALOGUE_PATH = path.resolve(__dirname, '../../../catalogue/switches.json');
 
@@ -30,7 +35,7 @@ function loadEntries() {
 describe('public switch catalogue', () => {
 	test('switches.json validates and has unique ids and indexes', () => {
 		const entries = validateCatalogue(loadEntries(), artIds());
-		expect(entries.length).toBe(100);
+		expect(entries.length).toBe(101);
 		expect(entries.every((entry) => entry.name && entry.description && entry.art)).toBe(true);
 		expect(entries.some((entry) => entry.id === 'yom-kippur')).toBe(true);
 		expect(entries.some((entry) => entry.id === 'tower-bridge')).toBe(true);
@@ -52,8 +57,9 @@ describe('public switch catalogue', () => {
 
 	test('extra listings are live civic feeds, not calendars', () => {
 		const extra = extraLiveListings();
-		expect(extra).toHaveLength(56);
+		expect(extra).toHaveLength(57);
 		expect(extra.every((entry) => entry.schedule.kind === 'observe')).toBe(true);
+		expect(extra.some((entry) => entry.id === 'uk-commons-division' && entry.schedule.observeEveryMinutes === 1)).toBe(true);
 		const have = new Set(loadEntries().map((entry) => entry.id));
 		for (const entry of extra) {
 			expect(have.has(entry.id)).toBe(true);
@@ -176,7 +182,7 @@ describe('catalogue schedule', () => {
 
 	test('live listings observe a source instead of waiting for an operator', () => {
 		const live = [
-			'tower-bridge', 'erasmusbrug', 'uk-commons', 'us-congress',
+			'tower-bridge', 'erasmusbrug', 'uk-commons', 'uk-commons-division', 'us-congress',
 			'uk-government', 'us-government', 'pope', 'papal-conclave',
 			'uk-election', 'geomagnetic-storm', 'sweden-election-2026',
 			'oresund-bridge', 'great-belt-bridge',
@@ -259,6 +265,13 @@ describe('catalogue CLI helpers', () => {
 		expect(args.dryRun).toBe(true);
 		expect(args.only).toEqual(['tower-bridge']);
 	});
+
+	test('live observe path is outside the git tree when the live file exists', () => {
+		const live = `${DEFAULT_LIVE_DIR}/switches.json`;
+		expect(resolveCataloguePath({}, (filePath) => filePath === live)).toBe(live);
+		expect(resolveCataloguePath({}, () => false)).toBe(repoCataloguePath());
+		expect(repoCataloguePath()).toBe(CATALOGUE_PATH);
+	});
 });
 
 const {
@@ -266,6 +279,7 @@ const {
 	storebaeltClosedNow,
 	oresundClosedNow,
 	parseCommonsDayType,
+	commonsDivisionInProgress,
 	parseHouseSchedule,
 	geomagneticFromScales,
 	significantQuakes,
@@ -279,7 +293,7 @@ const {
 	englishEntityLabel,
 	SOURCE_IDS
 } = require('../../../catalogue/lib/sources');
-const { observeCatalogue } = require('../../../catalogue/lib/observe');
+const { observeCatalogue, isFastObserveSource } = require('../../../catalogue/lib/observe');
 const { isTestDebris } = require('../../../catalogue/lib/apply');
 
 describe('catalogue observers', () => {
@@ -322,6 +336,30 @@ describe('catalogue observers', () => {
 			{ name: 'Central', lineStatuses: [{ statusSeverity: 10 }] },
 			{ name: 'Northern', lineStatuses: [{ statusSeverity: 6 }] }
 		])).toEqual(['Northern']);
+	});
+
+	test('Commons division follows the annunciator bell and Division slide', () => {
+		expect(commonsDivisionInProgress({
+			showCommonsBell: false,
+			slides: [{ type: 'BlankSlide' }]
+		}).on).toBe(false);
+		expect(commonsDivisionInProgress({
+			showCommonsBell: true,
+			slides: [{ type: 'Debate' }],
+			publishTime: '2026-09-17T14:00:00'
+		})).toEqual({
+			on: true,
+			params: { source: 'now-api.parliament.uk', reason: 'bell', publishTime: '2026-09-17T14:00:00' }
+		});
+		expect(commonsDivisionInProgress({
+			showCommonsBell: false,
+			slides: [{ type: 'Division', soundToPlay: 'DivisionBell' }]
+		}).on).toBe(true);
+		expect(commonsDivisionInProgress({
+			showCommonsBell: false,
+			slides: [{ type: 'Debate', lines: [{ style: 'Division', content: 'Division' }] }]
+		}).on).toBe(true);
+		expect(commonsDivisionInProgress(null).on).toBe(false);
 	});
 
 	test('Wikidata preferred office claim wins', () => {
@@ -490,11 +528,60 @@ describe('catalogue observers', () => {
 	test('every observer id is wired', () => {
 		expect(SOURCE_IDS).toEqual(expect.arrayContaining([
 			'tower-bridge', 'erasmusbrug', 'oresund', 'storebaelt',
-			'uk-commons', 'us-congress', 'uk-pm', 'us-president',
+			'uk-commons', 'uk-commons-division', 'us-congress', 'uk-pm', 'us-president',
 			'pope', 'conclave', 'uk-election', 'geomagnetic', 'sweden-election',
 			'earthquake', 'london-underground',
 			'french-president', 'brienenoordbrug', 'launch', 'volcano', 'gdacs-red'
 		]));
+	});
+
+	test('batch observe skips Commons division so the one-minute timer owns it', async () => {
+		const division = {
+			id: 'uk-commons-division',
+			schedule: {
+				kind: 'observe',
+				source: 'uk-commons-division',
+				state: true,
+				observeEveryMinutes: 1
+			}
+		};
+		expect(isFastObserveSource(division)).toBe(true);
+		const fetchImpl = async () => {
+			throw new Error('batch observe must not fetch the division source');
+		};
+		const skipped = await observeCatalogue({
+			entries: [division],
+			fetchImpl,
+			now: new Date('2026-09-17T12:00:00Z')
+		});
+		expect(skipped.results[0]).toMatchObject({
+			id: 'uk-commons-division',
+			ok: true,
+			deferred: true,
+			fetched: false,
+			on: true
+		});
+		const fetchImplBell = async () => ({
+			ok: true,
+			status: 200,
+			json: async () => ({
+				showCommonsBell: true,
+				slides: [],
+				publishTime: '2026-09-17T12:00:00'
+			})
+		});
+		const forced = await observeCatalogue({
+			entries: [division],
+			onlyIds: ['uk-commons-division'],
+			fetchImpl: fetchImplBell,
+			now: new Date('2026-09-17T12:00:00Z')
+		});
+		expect(forced.results[0]).toMatchObject({
+			deferred: false,
+			fetched: true,
+			on: true
+		});
+		expect(forced.entries[0].schedule.params.reason).toBe('bell');
 	});
 
 	test('Dutch span, launch, volcano and GDACS parsers', () => {

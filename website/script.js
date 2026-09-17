@@ -146,8 +146,8 @@ let billing = {
 	premiumCurrency: 'eur',
 	maxPrivate: 5,
 	maxPublic: 10,
-	premiumMaxPublic: 120,
-	premiumMaxSwitches: 150,
+	premiumMaxPublic: 25,
+	premiumMaxSwitches: 50,
 	taxEnabled: true
 };
 
@@ -1412,8 +1412,8 @@ async function loadBilling() {
 				premiumCurrency: String(data.data.premiumCurrency || 'eur').toLowerCase(),
 				maxPrivate: Number(data.data.maxPrivate) || 5,
 				maxPublic: Number(data.data.maxPublic) || 10,
-				premiumMaxPublic: Number(data.data.premiumMaxPublic) || 120,
-				premiumMaxSwitches: Number(data.data.premiumMaxSwitches) || 150,
+				premiumMaxPublic: Number(data.data.premiumMaxPublic) || 25,
+				premiumMaxSwitches: Number(data.data.premiumMaxSwitches) || 50,
 				taxEnabled: data.data.taxEnabled !== false
 			};
 		}
@@ -3654,8 +3654,8 @@ function updatePremiumPanel(detail) {
 	}
 	const maxPublic = Number(billing.maxPublic) || 10;
 	const maxPrivate = Number(billing.maxPrivate) || 5;
-	const premiumMaxPublic = Number(billing.premiumMaxPublic) || 120;
-	const premiumMaxSwitches = Number(billing.premiumMaxSwitches) || 150;
+	const premiumMaxPublic = Number(billing.premiumMaxPublic) || 25;
+	const premiumMaxSwitches = Number(billing.premiumMaxSwitches) || 50;
 	if (premiumCopy) {
 		premiumCopy.textContent = `Free accounts can create ${maxPublic} public and ${maxPrivate} private switches. Premium is ${formatPremiumPrice()} a month${billing.taxEnabled !== false ? ' including VAT' : ''} and lifts the cap to ${premiumMaxSwitches} switches (${premiumMaxPublic} public). Catalogue watches stay free.`;
 	}

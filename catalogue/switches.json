@@ -2231,6 +2231,25 @@
 				"observedAt": "2026-09-16T13:06:40.786Z"
 			},
 			"index": 99
+		},
+		{
+			"id": "uk-commons-division",
+			"name": "UK Commons division",
+			"description": "ON while a Commons division is in progress — MPs have a few minutes to reach the lobbies. Useful as a remote switch if you are away from the estate. Source: UK Parliament annunciator.",
+			"location": "Westminster",
+			"category": "Government",
+			"link": "https://now.parliament.uk/",
+			"art": "commons-bell",
+			"onMeans": "A Commons division is under way; the lobbies are open.",
+			"offMeans": "No Commons division is in progress.",
+			"schedule": {
+				"kind": "observe",
+				"source": "uk-commons-division",
+				"state": false,
+				"staleAfterHours": 1,
+				"observeEveryMinutes": 1
+			},
+			"index": 100
 		}
 	]
 }

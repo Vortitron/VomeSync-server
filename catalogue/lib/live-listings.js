@@ -8,6 +8,24 @@ const { extraDutchBridgeSpecs } = require('./dutch-bridges');
 function extraEventSpecs() {
 	return [
 		{
+			id: 'uk-commons-division',
+			name: 'UK Commons division',
+			description: 'ON while a Commons division is in progress — MPs have a few minutes to reach the lobbies. Useful as a remote switch if you are away from the estate. Source: UK Parliament annunciator.',
+			location: 'Westminster',
+			category: 'Government',
+			link: 'https://now.parliament.uk/',
+			art: 'commons-bell',
+			onMeans: 'A Commons division is under way; the lobbies are open.',
+			offMeans: 'No Commons division is in progress.',
+			schedule: {
+				kind: 'observe',
+				source: 'uk-commons-division',
+				state: false,
+				staleAfterHours: 1,
+				observeEveryMinutes: 1
+			}
+		},
+		{
 			id: 'orbital-launch',
 			name: 'Orbital launch window',
 			description: 'ON while an orbital launch is in flight, or Go/Hold inside the launch window. Light a shed or hush the house for a countdown. Source: Launch Library 2.',
@@ -63,8 +81,8 @@ function extraEventSpecs() {
 
 function extraLiveListings() {
 	const listings = extraDutchBridgeSpecs().concat(extraOfficeSwitchSpecs(), extraEventSpecs());
-	if (listings.length !== 56) {
-		throw new Error(`expected 56 extra listings, got ${listings.length}`);
+	if (listings.length !== 57) {
+		throw new Error(`expected 57 extra listings, got ${listings.length}`);
 	}
 	return listings;
 }

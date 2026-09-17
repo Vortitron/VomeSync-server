@@ -28,6 +28,7 @@ function artIds() {
 		'tower-bridge',
 		'erasmusbrug',
 		'commons',
+		'commons-bell',
 		'capitol',
 		'uk-pm',
 		'us-president',
@@ -91,6 +92,13 @@ function glyph(artId, color) {
 				<rect x="72" y="160" width="112" height="28" rx="4" fill="${color}"/>
 				<rect x="96" y="88" width="16" height="36" fill="${PALETTE.bg}"/>
 				<rect x="144" y="88" width="16" height="36" fill="${PALETTE.bg}"/>`;
+		case 'commons-bell':
+			return `
+				<rect x="120" y="40" width="16" height="28" fill="${color}"/>
+				<ellipse cx="128" cy="72" rx="22" ry="12" fill="${color}"/>
+				<path d="M70 88 C74 168 100 188 128 188 C156 188 182 168 186 88 Z" fill="${color}"/>
+				<circle cx="128" cy="204" r="14" fill="${PALETTE.gold}"/>
+				<rect x="122" y="184" width="12" height="12" fill="${color}"/>`;
 		case 'capitol':
 			return `
 				<circle cx="128" cy="72" r="28" fill="${color}"/>

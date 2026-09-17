@@ -11,6 +11,7 @@ const { extraDutchBridgeSpecs } = require('./dutch-bridges');
 
 const TOWER_LIFT_MS = 15 * 60 * 1000;
 const SWEDEN_POLLS_CLOSE_MS = Date.parse('2026-09-13T18:00:00Z');
+const COMMONS_ANNUNCIATOR_URL = 'https://now-api.parliament.uk/api/Message/message/CommonsMain/current';
 const LAUNCH_LIVE_BEFORE_MS = 20 * 60 * 1000;
 const LAUNCH_LIVE_AFTER_MS = 20 * 60 * 1000;
 const LAUNCH_ON_STATUS = Object.freeze(['Go', 'Hold', 'In Flight']);
@@ -131,6 +132,33 @@ function parseCommonsDayType(csv, now) {
 		return '';
 	}
 	return line.split(',')[2] || '';
+}
+
+function slideIsCommonsDivision(slide) {
+	if (!slide || typeof slide !== 'object') {
+		return false;
+	}
+	if (slide.type === 'Division' || slide.soundToPlay === 'DivisionBell') {
+		return true;
+	}
+	const lines = Array.isArray(slide.lines) ? slide.lines : [];
+	return lines.some((line) => line && line.style === 'Division');
+}
+
+function commonsDivisionInProgress(message) {
+	const source = 'now-api.parliament.uk';
+	if (!message || typeof message !== 'object') {
+		return { on: false, params: { source, reason: 'empty' } };
+	}
+	const publishTime = String(message.publishTime || '');
+	if (message.showCommonsBell === true) {
+		return { on: true, params: { source, reason: 'bell', publishTime } };
+	}
+	const slides = Array.isArray(message.slides) ? message.slides : [];
+	if (slides.some(slideIsCommonsDivision)) {
+		return { on: true, params: { source, reason: 'slide', publishTime } };
+	}
+	return { on: false, params: { source, reason: 'none', publishTime } };
 }
 
 function parseHouseSchedule(html, now) {
@@ -366,6 +394,10 @@ const OBSERVERS = Object.freeze({
 		const on = sittingDay && parts.hour >= 9 && parts.hour < 23;
 		return { on, params: { dayType: type || 'unknown' } };
 	},
+	async 'uk-commons-division'(options) {
+		const message = await fetchJson(COMMONS_ANNUNCIATOR_URL, options);
+		return commonsDivisionInProgress(message);
+	},
 	async 'us-congress'(options) {
 		const html = await fetchText('https://www.majorityleader.gov/schedule/', options);
 		const sittingDay = parseHouseSchedule(html, options.now);
@@ -498,12 +530,14 @@ async function observeEntry(entry, options = {}) {
 module.exports = {
 	TOWER_LIFT_MS,
 	SWEDEN_POLLS_CLOSE_MS,
+	COMMONS_ANNUNCIATOR_URL,
 	SOURCE_IDS,
 	OFFICES,
 	zonedParts,
 	parseTowerLiftTimes,
 	towerBridgeOpen,
 	parseCommonsDayType,
+	commonsDivisionInProgress,
 	parseHouseSchedule,
 	geomagneticFromScales,
 	oresundClosedNow,

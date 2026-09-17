@@ -24,4 +24,10 @@ if [ -z "$NODE" ] || [ ! -x "$NODE" ]; then
 	exit 1
 fi
 
+export VOMESYNC_CATALOGUE_DIR="${VOMESYNC_CATALOGUE_DIR:-/var/lib/vomesync-catalogue}"
+if [ ! -f "$VOMESYNC_CATALOGUE_DIR/switches.json" ]; then
+	echo "live catalogue missing at $VOMESYNC_CATALOGUE_DIR/switches.json (run: node catalogue/cli.js install-live)" >&2
+	exit 1
+fi
+
 exec "$NODE" catalogue/cli.js observe "$@"

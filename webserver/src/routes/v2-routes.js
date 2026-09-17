@@ -61,10 +61,10 @@ function ownerLimitSnapshot(tierName) {
 	const limits = config.limits || {};
 	const isPremium = tierName === 'premium';
 	const maxSwitches = isPremium
-		? (Number(limits.premiumMaxSwitches) || 150)
+		? (Number(limits.premiumMaxSwitches) || 50)
 		: (Number(limits.freeTierMaxSwitches) || 15);
 	const maxPublic = isPremium
-		? (Number(limits.premiumMaxPublicSwitches) || 120)
+		? (Number(limits.premiumMaxPublicSwitches) || 25)
 		: (Number(limits.freeTierMaxPublicSwitches) || 10);
 	const maxPrivate = isPremium
 		? maxSwitches

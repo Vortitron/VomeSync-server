@@ -75,6 +75,12 @@ function validateSchedule(schedule, id) {
 				throw new Error(`${id}: staleAfterHours must be ${MIN_STALE_AFTER_HOURS}-${MAX_STALE_AFTER_HOURS}`);
 			}
 		}
+		if (Object.prototype.hasOwnProperty.call(schedule, 'observeEveryMinutes')) {
+			const minutes = Number(schedule.observeEveryMinutes);
+			if (!Number.isInteger(minutes) || minutes < 1 || minutes > 60) {
+				throw new Error(`${id}: observeEveryMinutes must be an integer 1-60`);
+			}
+		}
 	}
 	if (schedule.kind === 'windows') {
 		if (!Array.isArray(schedule.windows) || schedule.windows.length === 0) {
