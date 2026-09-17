@@ -8,6 +8,7 @@
 const { fetchText, fetchJson } = require('./http');
 const { OFFICES } = require('./offices');
 const { extraDutchBridgeSpecs } = require('./dutch-bridges');
+const { extraUptimeSpecs, observeUptime } = require('./uptime');
 
 const TOWER_LIFT_MS = 15 * 60 * 1000;
 const SWEDEN_POLLS_CLOSE_MS = Date.parse('2026-09-13T18:00:00Z');
@@ -366,6 +367,15 @@ function dutchBridgeObservers() {
 	return observers;
 }
 
+function uptimeObservers() {
+	const observers = {};
+	for (const spec of extraUptimeSpecs()) {
+		const source = spec.schedule.source;
+		observers[source] = (options) => observeUptime(source, options);
+	}
+	return observers;
+}
+
 const OBSERVERS = Object.freeze({
 	async 'tower-bridge'(options) {
 		const html = await fetchText('https://www.towerbridge.org.uk/flat/lift-times', options);
@@ -512,7 +522,8 @@ const OBSERVERS = Object.freeze({
 				name: String(first.name || first.eventname || '')
 			}
 		};
-	}
+	},
+	...uptimeObservers()
 });
 
 const SOURCE_IDS = Object.freeze(Object.keys(OBSERVERS));

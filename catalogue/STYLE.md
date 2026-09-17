@@ -19,7 +19,7 @@ British English. Short sentences. No marketing voice. If the listing claims a li
 | `name` | 80 | Event or office, not a slogan. Include the holder for government switches (`UK Prime Minister: Andy Burnham`). |
 | `description` | 500 | First sentence is the ON condition. Second is a suggested automation. Third is the source. |
 | `location` | 100 | City, country, or `Worldwide`. Never a street address. |
-| `category` | enum | `Transport` for bridges and lines. `Government` for offices and sittings. `Holiday` for calendars of observance. `Weather` for storms and quakes. `Event` for elections, conclaves, Earth Hour, full moon. `Community` for Pride and lasting observances that are not a holiday. `Other` only if it fits nowhere. Do not use `Test` on the public directory. |
+| `category` | enum | `Transport` for bridges and lines. `Government` for offices and sittings. `Holiday` for calendars of observance. `Weather` for storms and quakes. `Event` for elections, conclaves, Earth Hour, full moon. `Community` for Pride and lasting observances that are not a holiday. `IsUp` for official status-page lamps (ON while operational, OFF for any incident). `Other` only if it fits nowhere. Do not use `Test` on the public directory. |
 | `link` | 500 | Canonical https source. Parliament, GOV.UK, Hebcal, NOAA — not a tracking redirect. |
 
 ON/OFF must be defined in `onMeans` / `offMeans` as well. Those fields stay in the catalogue JSON for operators; the public description still has to make sense on its own.
@@ -61,7 +61,7 @@ To correct copy or art, edit the JSON and run `apply --only <id>`. Office-holder
 
 | `schedule.kind` | When it is ON |
 |---|---|
-| `observe` | Last value written by `cli.js observe` from `schedule.source` (bridges, sittings, Commons division, offices, storms, elections, Tube, quakes, launches, volcanoes, GDACS). Silent past `staleAfterHours` (default 24) is treated as OFF. |
+| `observe` | Last value written by `cli.js observe` from `schedule.source` (bridges, sittings, Commons division, offices, storms, elections, Tube, quakes, launches, volcanoes, GDACS, IsUp status pages). Silent past `staleAfterHours` (default 24) is treated as OFF. |
 | `manual` / `held` | Operator-held leftovers. Do not add new ones; wire a source instead. |
 | `windows` | Inside explicit UTC intervals (lunar holidays, Easter, Eid). |
 | `annual` | That UTC month/day every year (Christmas). |
@@ -72,9 +72,11 @@ To correct copy or art, edit the JSON and run `apply --only <id>`. Office-holder
 
 Calendar switches are UTC on purpose. Local midnight is not something a global directory can know. Say so in the description when it matters.
 
-`node catalogue/cli.js observe` fetches live sources, writes JSON, and pushes ON/OFF. A systemd timer runs it every five minutes. `uk-commons-division` sets `observeEveryMinutes: 1` and has its own timer — the eight-minute lobby window is too short for a five-minute poll, and the batch pass skips that id so the two jobs do not overwrite each other. A fetch error must not flip the switch until `observedAt` is older than `staleAfterHours` (per listing, default 24 hours; bridges, Tube and launches use 2; Commons division uses 1; quakes, volcanoes and GDACS use 6; offices use 72). Then it is forced OFF and `params.stale` is set, so a dead feed cannot leave Tower Bridge “open” overnight. A listing that has never fetched successfully is not treated as stale — seed those OFF.
+`node catalogue/cli.js observe` fetches live sources, writes JSON, and pushes ON/OFF. A systemd timer runs it every five minutes. `uk-commons-division` sets `observeEveryMinutes: 1` and has its own timer — the eight-minute lobby window is too short for a five-minute poll, and the batch pass skips that id so the two jobs do not overwrite each other. A fetch error must not flip the switch until `observedAt` is older than `staleAfterHours` (per listing, default 24 hours; bridges, Tube, launches and IsUp use 2; Commons division uses 1; quakes, volcanoes and GDACS use 6; offices use 72). Then it is forced OFF and `params.stale` is set, so a dead feed cannot leave Tower Bridge “open” overnight. A listing that has never fetched successfully is not treated as stale — seed those OFF.
 
 When an office-holder changes, the observer updates `name` / description / `schedule.params` and keeps the same `id` / `index`. A missing English label must not fall back to the Wikidata Q-id.
+
+IsUp listings read the vendor’s status JSON, not the product homepage. Statuspage `indicator` must be `none` for ON; `minor` / `major` / `critical` is OFF. Slack is ON only for `status=ok` with no `active_incidents`. Google Workspace / Gemini use the incidents list (a row with no `end` is an open incident). Do not use third-party logos in the art — the wifi arcs and three-node graph are generic.
 
 ## Adding quickly
 

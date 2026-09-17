@@ -35,7 +35,7 @@ function loadEntries() {
 describe('public switch catalogue', () => {
 	test('switches.json validates and has unique ids and indexes', () => {
 		const entries = validateCatalogue(loadEntries(), artIds());
-		expect(entries.length).toBe(106);
+		expect(entries.length).toBe(121);
 		expect(entries.every((entry) => entry.name && entry.description && entry.art)).toBe(true);
 		expect(entries.some((entry) => entry.id === 'yom-kippur')).toBe(true);
 		expect(entries.some((entry) => entry.id === 'tower-bridge')).toBe(true);
@@ -49,22 +49,27 @@ describe('public switch catalogue', () => {
 		expect(entries.some((entry) => entry.id === 'french-president')).toBe(true);
 		expect(entries.some((entry) => entry.id === 'brienenoordbrug')).toBe(true);
 		expect(entries.some((entry) => entry.id === 'aliexpress-choice-day')).toBe(true);
+		expect(entries.some((entry) => entry.id === 'github-up')).toBe(true);
 		const cats = new Set(entries.map((entry) => entry.category));
-		for (const name of ['Transport', 'Government', 'Holiday', 'Weather', 'Event', 'Community']) {
+		for (const name of ['Transport', 'Government', 'Holiday', 'Weather', 'Event', 'Community', 'IsUp']) {
 			expect(cats.has(name)).toBe(true);
 		}
 	});
 
-	test('extra listings are civic feeds plus named AliExpress tentpoles', () => {
+	test('extra listings are civic feeds, AliExpress tentpoles and IsUp lamps', () => {
 		const extra = extraLiveListings();
-		expect(extra).toHaveLength(62);
+		expect(extra).toHaveLength(77);
 		const observe = extra.filter((entry) => entry.schedule.kind === 'observe');
 		const aliexpress = extra.filter((entry) => entry.id.startsWith('aliexpress-'));
-		expect(observe).toHaveLength(57);
+		const isUp = extra.filter((entry) => entry.category === 'IsUp');
+		expect(observe).toHaveLength(72);
 		expect(aliexpress).toHaveLength(5);
+		expect(isUp).toHaveLength(15);
 		expect(observe.every((entry) => entry.schedule.source)).toBe(true);
+		expect(isUp.every((entry) => entry.schedule.kind === 'observe' && entry.schedule.staleAfterHours === 2)).toBe(true);
 		expect(extra.some((entry) => entry.id === 'uk-commons-division' && entry.schedule.observeEveryMinutes === 1)).toBe(true);
 		expect(extra.some((entry) => entry.id === 'aliexpress-choice-day' && entry.schedule.kind === 'month_days')).toBe(true);
+		expect(extra.some((entry) => entry.id === 'github-up' && entry.schedule.source === 'github-up')).toBe(true);
 		const have = new Set(loadEntries().map((entry) => entry.id));
 		for (const entry of extra) {
 			expect(have.has(entry.id)).toBe(true);
@@ -322,8 +327,14 @@ const {
 	pickOfficeClaim,
 	isWikidataItemId,
 	englishEntityLabel,
-	SOURCE_IDS
+	SOURCE_IDS,
+	observeEntry
 } = require('../../../catalogue/lib/sources');
+const {
+	statuspageIsUp,
+	slackIsUp,
+	googleOpenIncidents
+} = require('../../../catalogue/lib/uptime');
 const { observeCatalogue, isFastObserveSource } = require('../../../catalogue/lib/observe');
 const { isTestDebris } = require('../../../catalogue/lib/apply');
 
@@ -562,7 +573,8 @@ describe('catalogue observers', () => {
 			'uk-commons', 'uk-commons-division', 'us-congress', 'uk-pm', 'us-president',
 			'pope', 'conclave', 'uk-election', 'geomagnetic', 'sweden-election',
 			'earthquake', 'london-underground',
-			'french-president', 'brienenoordbrug', 'launch', 'volcano', 'gdacs-red'
+			'french-president', 'brienenoordbrug', 'launch', 'volcano', 'gdacs-red',
+			'github-up', 'openai-up', 'anthropic-up', 'gemini-up', 'home-assistant-up'
 		]));
 	});
 
@@ -654,6 +666,71 @@ describe('catalogue observers', () => {
 				{ properties: { alertlevel: 'Orange', name: 'Flood' } }
 			]
 		}).length).toBe(1);
+	});
+
+	test('IsUp parsers treat only a clean status as ON', () => {
+		expect(statuspageIsUp({ status: { indicator: 'none' } })).toBe(true);
+		expect(statuspageIsUp({ status: { indicator: 'minor' } })).toBe(false);
+		expect(statuspageIsUp({ status: { indicator: 'major' } })).toBe(false);
+		expect(statuspageIsUp({ status: { indicator: 'critical' } })).toBe(false);
+		expect(() => statuspageIsUp({})).toThrow(/indicator/);
+		expect(slackIsUp({ status: 'ok', active_incidents: [] })).toBe(true);
+		expect(slackIsUp({ status: 'ok', active_incidents: [{ id: '1' }] })).toBe(false);
+		expect(slackIsUp({ status: 'active', active_incidents: [] })).toBe(false);
+		expect(googleOpenIncidents([{ id: 'a' }, { id: 'b', end: '2026-01-01T00:00:00Z' }])).toHaveLength(1);
+		expect(googleOpenIncidents([
+			{ service_name: 'Gemini' },
+			{ service_name: 'Gmail' },
+			{ affected_products: [{ title: 'Vertex Gemini API' }] }
+		], /gemini/i)).toHaveLength(2);
+		expect(() => googleOpenIncidents({ status: 'ok' })).toThrow(/not a list/);
+	});
+
+	test('IsUp observers read statuspage, Slack and Gemini incidents', async () => {
+		const github = await observeEntry(
+			{ id: 'github-up', schedule: { source: 'github-up' } },
+			{
+				fetchImpl: async () => ({
+					ok: true,
+					json: async () => ({ status: { indicator: 'none', description: 'All Systems Operational' } })
+				})
+			}
+		);
+		expect(github.on).toBe(true);
+		const cloudflareDown = await observeEntry(
+			{ id: 'cloudflare-up', schedule: { source: 'cloudflare-up' } },
+			{
+				fetchImpl: async () => ({
+					ok: true,
+					json: async () => ({ status: { indicator: 'minor', description: 'Minor Service Outage' } })
+				})
+			}
+		);
+		expect(cloudflareDown.on).toBe(false);
+		const slack = await observeEntry(
+			{ id: 'slack-up', schedule: { source: 'slack-up' } },
+			{
+				fetchImpl: async () => ({
+					ok: true,
+					json: async () => ({ status: 'ok', active_incidents: [] })
+				})
+			}
+		);
+		expect(slack.on).toBe(true);
+		const gemini = await observeEntry(
+			{ id: 'gemini-up', schedule: { source: 'gemini-up' } },
+			{
+				fetchImpl: async () => ({
+					ok: true,
+					json: async () => ([
+						{ id: 'open-gmail', service_name: 'Gmail' },
+						{ id: 'old-gemini', service_name: 'Gemini', end: '2026-09-11T20:22:00+00:00' }
+					])
+				})
+			}
+		);
+		expect(gemini.on).toBe(true);
+		expect(gemini.params.workspace).toBe(0);
 	});
 });
 

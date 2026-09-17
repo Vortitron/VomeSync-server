@@ -1,10 +1,11 @@
 /**
- * Extra public listings: live civic feeds plus a few named commercial
- * tentpoles (AliExpress). Not HA weather/sun/Tube duplicates.
+ * Extra public listings: live civic feeds, named AliExpress tentpoles,
+ * and IsUp status lamps. Not HA weather/sun/Tube duplicates.
  */
 const { extraOfficeSwitchSpecs } = require('./offices');
 const { extraDutchBridgeSpecs } = require('./dutch-bridges');
 const { extraAliExpressSaleSpecs } = require('./aliexpress-sales');
+const { extraUptimeSpecs } = require('./uptime');
 
 function extraEventSpecs() {
 	return [
@@ -84,10 +85,11 @@ function extraLiveListings() {
 	const listings = extraDutchBridgeSpecs().concat(
 		extraOfficeSwitchSpecs(),
 		extraEventSpecs(),
-		extraAliExpressSaleSpecs()
+		extraAliExpressSaleSpecs(),
+		extraUptimeSpecs()
 	);
-	if (listings.length !== 62) {
-		throw new Error(`expected 62 extra listings, got ${listings.length}`);
+	if (listings.length !== 77) {
+		throw new Error(`expected 77 extra listings, got ${listings.length}`);
 	}
 	return listings;
 }

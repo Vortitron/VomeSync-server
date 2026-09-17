@@ -2375,6 +2375,276 @@
 				"endDay": 7
 			},
 			"index": 105
+		},
+		{
+			"id": "github-up",
+			"name": "GitHub is up",
+			"description": "ON while GitHub reports all systems operational. Pause HACS, ESPHome, or git pulls when it drops. Source: githubstatus.com.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://www.githubstatus.com/",
+			"art": "uptime",
+			"onMeans": "GitHub reports all systems operational.",
+			"offMeans": "GitHub reports an incident, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "github-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 106
+		},
+		{
+			"id": "openai-up",
+			"name": "OpenAI is up",
+			"description": "ON while OpenAI reports all systems operational. Skip conversation agents or image jobs that need their API. Source: status.openai.com.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://status.openai.com/",
+			"art": "uptime-ai",
+			"onMeans": "OpenAI reports all systems operational.",
+			"offMeans": "OpenAI reports an incident, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "openai-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 107
+		},
+		{
+			"id": "anthropic-up",
+			"name": "Claude is up",
+			"description": "ON while Anthropic reports Claude as operational. Skip HA conversation that talks to Claude. Source: status.claude.com.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://status.claude.com/",
+			"art": "uptime-ai",
+			"onMeans": "Anthropic reports all systems operational.",
+			"offMeans": "Anthropic reports an incident, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "anthropic-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 108
+		},
+		{
+			"id": "gemini-up",
+			"name": "Google Gemini is up",
+			"description": "ON while Google lists no open Gemini incident (Workspace Gemini and Cloud/Vertex Gemini). Skip HA conversation that uses Gemini. Sources: Google Workspace and Cloud status.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://aistudio.google.com/status",
+			"art": "uptime-ai",
+			"onMeans": "No open Gemini incident on Google Workspace or Cloud status.",
+			"offMeans": "An open Gemini incident is listed, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "gemini-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 109
+		},
+		{
+			"id": "home-assistant-up",
+			"name": "Home Assistant is up",
+			"description": "ON while Home Assistant's official status page reports all systems operational (alerts, version, analytics — not your own box). Source: status.home-assistant.io.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://status.home-assistant.io/",
+			"art": "uptime",
+			"onMeans": "Home Assistant reports all systems operational.",
+			"offMeans": "Home Assistant reports an incident, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "home-assistant-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 110
+		},
+		{
+			"id": "nabucasa-up",
+			"name": "Home Assistant Cloud is up",
+			"description": "ON while Nabu Casa reports Home Assistant Cloud as operational. Pause remote UI or cloud TTS when it drops. Source: status.nabucasa.com.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://status.nabucasa.com/",
+			"art": "uptime",
+			"onMeans": "Nabu Casa reports all systems operational.",
+			"offMeans": "Nabu Casa reports an incident, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "nabucasa-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 111
+		},
+		{
+			"id": "cloudflare-up",
+			"name": "Cloudflare is up",
+			"description": "ON while Cloudflare reports all systems operational. Tunnels, DNS, and a lot of the public web sit behind this. Source: cloudflarestatus.com.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://www.cloudflarestatus.com/",
+			"art": "uptime",
+			"onMeans": "Cloudflare reports all systems operational.",
+			"offMeans": "Cloudflare reports an incident, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "cloudflare-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 112
+		},
+		{
+			"id": "discord-up",
+			"name": "Discord is up",
+			"description": "ON while Discord reports all systems operational. Pause notify.discord automations when it drops. Source: discordstatus.com.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://discordstatus.com/",
+			"art": "uptime",
+			"onMeans": "Discord reports all systems operational.",
+			"offMeans": "Discord reports an incident, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "discord-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 113
+		},
+		{
+			"id": "slack-up",
+			"name": "Slack is up",
+			"description": "ON while Slack reports status ok with no active incidents. Pause notify.slack when it drops. Source: status.slack.com.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://status.slack.com/",
+			"art": "uptime",
+			"onMeans": "Slack reports status ok and no active incidents.",
+			"offMeans": "Slack reports an incident, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "slack-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 114
+		},
+		{
+			"id": "twilio-up",
+			"name": "Twilio is up",
+			"description": "ON while Twilio reports all systems operational. Pause SMS and voice notify when it drops. Source: status.twilio.com.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://status.twilio.com/",
+			"art": "uptime",
+			"onMeans": "Twilio reports all systems operational.",
+			"offMeans": "Twilio reports an incident, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "twilio-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 115
+		},
+		{
+			"id": "reddit-up",
+			"name": "Reddit is up",
+			"description": "ON while Reddit reports all systems operational. A community lamp for when the front page is actually down. Source: redditstatus.com.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://www.redditstatus.com/",
+			"art": "uptime",
+			"onMeans": "Reddit reports all systems operational.",
+			"offMeans": "Reddit reports an incident, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "reddit-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 116
+		},
+		{
+			"id": "wikipedia-up",
+			"name": "Wikipedia is up",
+			"description": "ON while Wikimedia reports all systems operational. Pause automations that fetch Wikipedia. Source: wikimediastatus.net.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://www.wikimediastatus.net/",
+			"art": "uptime",
+			"onMeans": "Wikimedia reports all systems operational.",
+			"offMeans": "Wikimedia reports an incident, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "wikipedia-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 117
+		},
+		{
+			"id": "npm-up",
+			"name": "npm is up",
+			"description": "ON while npm reports all systems operational. Pause HACS or frontend builds that pull packages. Source: status.npmjs.org.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://status.npmjs.org/",
+			"art": "uptime",
+			"onMeans": "npm reports all systems operational.",
+			"offMeans": "npm reports an incident, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "npm-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 118
+		},
+		{
+			"id": "pypi-up",
+			"name": "PyPI is up",
+			"description": "ON while the Python package index reports all systems operational. Pause custom-component installs that hit PyPI. Source: status.python.org.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://status.python.org/",
+			"art": "uptime",
+			"onMeans": "PyPI reports all systems operational.",
+			"offMeans": "PyPI reports an incident, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "pypi-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 119
+		},
+		{
+			"id": "google-up",
+			"name": "Google Workspace is up",
+			"description": "ON while Google Workspace lists no open incident (Gmail, Drive, Meet, Gemini in Workspace). Search and YouTube are not this feed. Source: Google Workspace Status Dashboard.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://www.google.com/appsstatus/dashboard/",
+			"art": "uptime",
+			"onMeans": "Google Workspace lists no open incident.",
+			"offMeans": "An open Workspace incident is listed, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "google-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 120
 		}
 	]
 }

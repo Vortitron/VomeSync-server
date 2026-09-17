@@ -51,8 +51,8 @@ describe('Validation Utilities', () => {
 				expect(error.details[0].message).toContain('must be one of');
 			});
 
-			test('should accept Transport, Government, Holiday and Weather', () => {
-				for (const category of ['Transport', 'Government', 'Holiday', 'Weather']) {
+			test('should accept Transport, Government, Holiday, Weather and IsUp', () => {
+				for (const category of ['Transport', 'Government', 'Holiday', 'Weather', 'IsUp']) {
 					const { error, value } = schemas.createSwitch.validate({ category });
 					expect(error).toBeUndefined();
 					expect(value.category).toBe(category);
