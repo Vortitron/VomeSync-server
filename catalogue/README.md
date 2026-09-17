@@ -55,7 +55,7 @@ node catalogue/cli.js purge-debris
 | `lib/offices.js` | Wikidata P1308 office-holders. |
 | `lib/dutch-bridges.js` | Extra isdetunnelopen.nl movable spans. |
 | `lib/live-listings.js` | Extra offices, bridges, live events, and AliExpress tentpole windows. |
-| `lib/aliexpress-sales.js` | UTC windows for Anniversary, Summer, 11.11 and 12.12. Not a live scrape. |
+| `lib/aliexpress-sales.js` | UTC windows for Anniversary, Summer, 11.11 and 12.12, plus Choice Day as the first seven UTC days of each month. Not a live scrape: Open Platform wants a business account, the storefront bot-walls us, and MTOP needs signed browser cookies. |
 | `append-live-listings.js` | Idempotent merge of those extras into `switches.json`. |
 | `lib/observe.js` | Fetch each source; short outages keep last state, then force OFF. |
 | `lib/stale.js` | `staleAfterHours` clock from last successful `observedAt`. |
@@ -84,7 +84,7 @@ node catalogue/cli.js sync-live   # copy new git ids into the live file
 
 Nothing in this catalogue is flipped by a person. Two mechanisms:
 
-1. **Calendar** (`annual`, `windows`, `month`, `nth_weekday`, `full_moon`) — computed from UTC dates in JSON.
+1. **Calendar** (`annual`, `windows`, `month`, `month_days`, `nth_weekday`, `full_moon`) — computed from UTC dates in JSON.
 2. **Observe** (`kind: "observe"`, `source: "…"`) — `lib/sources.js` fetches a public page or API. A failed fetch leaves the last good ON/OFF until `staleAfterHours` (default 24) after the last success, then the listing is forced OFF.
 
 `node catalogue/cli.js observe` does both: it updates observed JSON, then `refresh` pushes every listing. Install the timer so it does not depend on a laptop:
@@ -107,7 +107,7 @@ Swedish election 2026 is **one** switch on purpose: ON after polls close while t
 
 Government listings keep a stable UID. The observer renames the listing when Wikidata’s office-holder (P1308) changes. If Wikidata omits an English label, keep the last good name — never publish a Q-id.
 
-AliExpress tentpoles are UTC `windows`, not a scrape: their storefront returns a punish page to anonymous clients. **AliExpress sale** is ON during any listed tentpole; 11.11, Summer and Anniversary are the named ones. Extend the windows when they publish the next year.
+AliExpress tentpoles are UTC `windows`, not a scrape: their storefront returns a punish page to anonymous clients, and Open Platform signup asks for a full business account. **AliExpress sale** is ON during any listed tentpole; 11.11, Summer and Anniversary are the named ones. **AliExpress Choice Day** is the first seven UTC days of each month — that is the usual pattern, not a live campaign feed. Extend tentpole windows when they publish the next year.
 
 ## Tests
 

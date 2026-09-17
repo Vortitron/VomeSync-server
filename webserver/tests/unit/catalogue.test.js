@@ -35,7 +35,7 @@ function loadEntries() {
 describe('public switch catalogue', () => {
 	test('switches.json validates and has unique ids and indexes', () => {
 		const entries = validateCatalogue(loadEntries(), artIds());
-		expect(entries.length).toBe(105);
+		expect(entries.length).toBe(106);
 		expect(entries.every((entry) => entry.name && entry.description && entry.art)).toBe(true);
 		expect(entries.some((entry) => entry.id === 'yom-kippur')).toBe(true);
 		expect(entries.some((entry) => entry.id === 'tower-bridge')).toBe(true);
@@ -48,7 +48,7 @@ describe('public switch catalogue', () => {
 		expect(entries.some((entry) => entry.id === 'orbital-launch')).toBe(true);
 		expect(entries.some((entry) => entry.id === 'french-president')).toBe(true);
 		expect(entries.some((entry) => entry.id === 'brienenoordbrug')).toBe(true);
-		expect(entries.some((entry) => entry.id === 'aliexpress-sale')).toBe(true);
+		expect(entries.some((entry) => entry.id === 'aliexpress-choice-day')).toBe(true);
 		const cats = new Set(entries.map((entry) => entry.category));
 		for (const name of ['Transport', 'Government', 'Holiday', 'Weather', 'Event', 'Community']) {
 			expect(cats.has(name)).toBe(true);
@@ -57,14 +57,14 @@ describe('public switch catalogue', () => {
 
 	test('extra listings are civic feeds plus named AliExpress tentpoles', () => {
 		const extra = extraLiveListings();
-		expect(extra).toHaveLength(61);
+		expect(extra).toHaveLength(62);
 		const observe = extra.filter((entry) => entry.schedule.kind === 'observe');
-		const sales = extra.filter((entry) => entry.schedule.kind === 'windows');
+		const aliexpress = extra.filter((entry) => entry.id.startsWith('aliexpress-'));
 		expect(observe).toHaveLength(57);
-		expect(sales).toHaveLength(4);
+		expect(aliexpress).toHaveLength(5);
 		expect(observe.every((entry) => entry.schedule.source)).toBe(true);
 		expect(extra.some((entry) => entry.id === 'uk-commons-division' && entry.schedule.observeEveryMinutes === 1)).toBe(true);
-		expect(extra.some((entry) => entry.id === 'aliexpress-sale')).toBe(true);
+		expect(extra.some((entry) => entry.id === 'aliexpress-choice-day' && entry.schedule.kind === 'month_days')).toBe(true);
 		const have = new Set(loadEntries().map((entry) => entry.id));
 		for (const entry of extra) {
 			expect(have.has(entry.id)).toBe(true);
@@ -110,6 +110,16 @@ describe('public switch catalogue', () => {
 			art: 'new-year',
 			schedule: { kind: 'manual', state: false }
 		})).toThrow(/kebab-case/);
+		expect(() => addEntry(entries, {
+			id: 'choice-bad',
+			name: 'Choice',
+			description: 'ON on inverted days.',
+			location: 'Worldwide',
+			category: 'Event',
+			link: 'https://www.aliexpress.com/',
+			art: 'parcel',
+			schedule: { kind: 'month_days', startDay: 8, endDay: 1 }
+		})).toThrow(/endDay/);
 	});
 });
 
@@ -227,6 +237,11 @@ describe('catalogue schedule', () => {
 		expect(desiredState(byId['aliexpress-1111'], new Date('2026-11-11T00:00:00Z'))).toBe(true);
 		expect(desiredState(byId['aliexpress-1111'], new Date('2026-11-20T00:00:00Z'))).toBe(false);
 		expect(desiredState(byId['aliexpress-sale'], new Date('2026-12-10T12:00:00Z'))).toBe(true);
+		expect(desiredState(byId['aliexpress-choice-day'], new Date('2026-09-01T00:00:00Z'))).toBe(true);
+		expect(desiredState(byId['aliexpress-choice-day'], new Date('2026-09-07T23:00:00Z'))).toBe(true);
+		expect(desiredState(byId['aliexpress-choice-day'], new Date('2026-09-08T00:00:00Z'))).toBe(false);
+		expect(desiredState(byId['aliexpress-choice-day'], new Date('2026-09-17T12:00:00Z'))).toBe(false);
+		expect(desiredState(byId['aliexpress-choice-day'], new Date('2026-10-01T12:00:00Z'))).toBe(true);
 	});
 
 	test('stale live sources are off until the feed works again', () => {

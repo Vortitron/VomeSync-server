@@ -66,6 +66,7 @@ To correct copy or art, edit the JSON and run `apply --only <id>`. Office-holder
 | `windows` | Inside explicit UTC intervals (lunar holidays, Easter, Eid). |
 | `annual` | That UTC month/day every year (Christmas). |
 | `month` | That UTC month (Pride). |
+| `month_days` | Inclusive UTC day range every month (AliExpress Choice Day, 1st–7th). |
 | `nth_weekday` | e.g. last Saturday of March (Earth Hour). |
 | `full_moon` | UTC civil day of each listed instant. |
 

@@ -24,6 +24,7 @@ const SCHEDULE_KINDS = Object.freeze([
 	'windows',
 	'annual',
 	'month',
+	'month_days',
 	'nth_weekday',
 	'full_moon'
 ]);
@@ -106,6 +107,19 @@ function validateSchedule(schedule, id) {
 	if (schedule.kind === 'month') {
 		if (!Number.isInteger(schedule.month) || schedule.month < 1 || schedule.month > 12) {
 			throw new Error(`${id}: month schedule needs month 1-12`);
+		}
+	}
+	if (schedule.kind === 'month_days') {
+		const startDay = schedule.startDay;
+		const endDay = schedule.endDay;
+		if (!Number.isInteger(startDay) || startDay < 1 || startDay > 31) {
+			throw new Error(`${id}: month_days needs startDay 1-31`);
+		}
+		if (!Number.isInteger(endDay) || endDay < 1 || endDay > 31) {
+			throw new Error(`${id}: month_days needs endDay 1-31`);
+		}
+		if (endDay < startDay) {
+			throw new Error(`${id}: month_days endDay must be >= startDay`);
 		}
 	}
 	if (schedule.kind === 'nth_weekday') {

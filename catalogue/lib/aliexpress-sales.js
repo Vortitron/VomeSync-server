@@ -36,14 +36,14 @@ function aliexpressWindows(which) {
 }
 
 function saleListing(spec) {
-	const { windows, ...rest } = spec;
+	const { windows, schedule, ...rest } = spec;
 	return {
 		location: 'Worldwide',
 		category: 'Event',
 		link: 'https://www.aliexpress.com/',
 		art: 'parcel',
 		...rest,
-		schedule: {
+		schedule: schedule || {
 			kind: 'windows',
 			windows
 		}
@@ -83,6 +83,18 @@ function extraAliExpressSaleSpecs() {
 			onMeans: 'The listed Anniversary sale window is under way.',
 			offMeans: 'It is outside the listed Anniversary sale windows.',
 			windows: aliexpressWindows('anniversary')
+		}),
+		saleListing({
+			id: 'aliexpress-choice-day',
+			name: 'AliExpress Choice Day',
+			description: 'ON for the first seven UTC days of each month, when AliExpress Choice Day usually runs. A monthly shopping lamp for Choice items. They publish no public calendar — Open Platform wants a business account and the storefront blocks bots.',
+			onMeans: 'It is the 1st to the 7th of the month, UTC.',
+			offMeans: 'It is the 8th or later of the UTC month.',
+			schedule: {
+				kind: 'month_days',
+				startDay: 1,
+				endDay: 7
+			}
 		})
 	];
 }

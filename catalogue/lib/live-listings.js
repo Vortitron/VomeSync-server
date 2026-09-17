@@ -86,8 +86,8 @@ function extraLiveListings() {
 		extraEventSpecs(),
 		extraAliExpressSaleSpecs()
 	);
-	if (listings.length !== 61) {
-		throw new Error(`expected 61 extra listings, got ${listings.length}`);
+	if (listings.length !== 62) {
+		throw new Error(`expected 62 extra listings, got ${listings.length}`);
 	}
 	return listings;
 }

@@ -76,6 +76,11 @@ function onFullMoonUtcDay(now, instants) {
 	});
 }
 
+function onMonthDays(now, startDay, endDay) {
+	const day = utcYmd(now).day;
+	return day >= startDay && day <= endDay;
+}
+
 function desiredState(entry, now = new Date()) {
 	const schedule = entry.schedule || { kind: 'manual', state: false };
 	switch (schedule.kind) {
@@ -93,6 +98,8 @@ function desiredState(entry, now = new Date()) {
 			return onAnnualDay(now, schedule.month, schedule.day);
 		case 'month':
 			return utcYmd(now).month === schedule.month;
+		case 'month_days':
+			return onMonthDays(now, schedule.startDay, schedule.endDay);
 		case 'nth_weekday':
 			return onNthWeekday(now, schedule);
 		case 'full_moon':
