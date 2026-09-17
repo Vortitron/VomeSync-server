@@ -28,6 +28,7 @@ function artIds() {
 		'tower-bridge',
 		'erasmusbrug',
 		'commons',
+		'commons-bell',
 		'capitol',
 		'uk-pm',
 		'us-president',
@@ -49,7 +50,20 @@ function artIds() {
 		'full-moon',
 		'sweden-election',
 		'oresund',
-		'storebaelt'
+		'storebaelt',
+		'halloween',
+		'harvest',
+		'solstice',
+		'holi',
+		'quake',
+		'underground',
+		'lucia',
+		'shamrock',
+		'rocket',
+		'volcano',
+		'crown',
+		'disaster',
+		'parcel'
 	]);
 }
 
@@ -79,6 +93,13 @@ function glyph(artId, color) {
 				<rect x="72" y="160" width="112" height="28" rx="4" fill="${color}"/>
 				<rect x="96" y="88" width="16" height="36" fill="${PALETTE.bg}"/>
 				<rect x="144" y="88" width="16" height="36" fill="${PALETTE.bg}"/>`;
+		case 'commons-bell':
+			return `
+				<rect x="120" y="40" width="16" height="28" fill="${color}"/>
+				<ellipse cx="128" cy="72" rx="22" ry="12" fill="${color}"/>
+				<path d="M70 88 C74 168 100 188 128 188 C156 188 182 168 186 88 Z" fill="${color}"/>
+				<circle cx="128" cy="204" r="14" fill="${PALETTE.gold}"/>
+				<rect x="122" y="184" width="12" height="12" fill="${color}"/>`;
 		case 'capitol':
 			return `
 				<circle cx="128" cy="72" r="28" fill="${color}"/>
@@ -252,6 +273,96 @@ function glyph(artId, color) {
 				<line x1="108" y1="72" x2="108" y2="160" stroke="${PALETTE.ink}" stroke-width="4"/>
 				<line x1="148" y1="72" x2="148" y2="160" stroke="${PALETTE.ink}" stroke-width="4"/>
 				<line x1="176" y1="88" x2="176" y2="160" stroke="${PALETTE.ink}" stroke-width="4"/>`;
+		case 'halloween':
+			return `
+				<ellipse cx="128" cy="140" rx="72" ry="56" fill="${PALETTE.amber}"/>
+				<polygon points="116,84 128,48 140,84" fill="${PALETTE.teal}"/>
+				<polygon points="96,124 112,148 80,148" fill="${PALETTE.bg}"/>
+				<polygon points="160,124 176,148 144,148" fill="${PALETTE.bg}"/>
+				<ellipse cx="128" cy="168" rx="22" ry="10" fill="${PALETTE.bg}"/>`;
+		case 'harvest':
+			return `
+				<ellipse cx="128" cy="176" rx="56" ry="16" fill="${color}" opacity="0.45"/>
+				<polygon points="128,40 148,176 108,176" fill="${PALETTE.gold}"/>
+				<line x1="88" y1="72" x2="128" y2="160" stroke="${PALETTE.amber}" stroke-width="10" stroke-linecap="round"/>
+				<line x1="168" y1="72" x2="128" y2="160" stroke="${PALETTE.amber}" stroke-width="10" stroke-linecap="round"/>
+				<circle cx="88" cy="64" r="10" fill="${PALETTE.gold}"/>
+				<circle cx="168" cy="64" r="10" fill="${PALETTE.gold}"/>
+				<circle cx="128" cy="36" r="10" fill="${PALETTE.gold}"/>`;
+		case 'solstice':
+			return `
+				<circle cx="128" cy="128" r="40" fill="${PALETTE.gold}"/>
+				<line x1="128" y1="40" x2="128" y2="64" stroke="${PALETTE.amber}" stroke-width="10" stroke-linecap="round"/>
+				<line x1="128" y1="192" x2="128" y2="216" stroke="${PALETTE.amber}" stroke-width="10" stroke-linecap="round"/>
+				<line x1="40" y1="128" x2="64" y2="128" stroke="${PALETTE.amber}" stroke-width="10" stroke-linecap="round"/>
+				<line x1="192" y1="128" x2="216" y2="128" stroke="${PALETTE.amber}" stroke-width="10" stroke-linecap="round"/>
+				<line x1="64" y1="64" x2="84" y2="84" stroke="${PALETTE.amber}" stroke-width="8" stroke-linecap="round"/>
+				<line x1="192" y1="64" x2="172" y2="84" stroke="${PALETTE.amber}" stroke-width="8" stroke-linecap="round"/>
+				<line x1="64" y1="192" x2="84" y2="172" stroke="${PALETTE.amber}" stroke-width="8" stroke-linecap="round"/>
+				<line x1="192" y1="192" x2="172" y2="172" stroke="${PALETTE.amber}" stroke-width="8" stroke-linecap="round"/>`;
+		case 'holi':
+			return `
+				<circle cx="96" cy="116" r="44" fill="${PALETTE.rose}" opacity="0.9"/>
+				<circle cx="160" cy="116" r="44" fill="${PALETTE.gold}" opacity="0.85"/>
+				<circle cx="128" cy="164" r="44" fill="${PALETTE.violet}" opacity="0.85"/>
+				<circle cx="128" cy="128" r="16" fill="${PALETTE.ink}"/>`;
+		case 'quake':
+			return `
+				<polyline points="32,168 72,168 88,96 112,188 136,120 160,176 184,88 224,168" fill="none" stroke="${PALETTE.crimson}" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+				<rect x="40" y="184" width="176" height="12" fill="${color}" opacity="0.4"/>`;
+		case 'underground':
+			return `
+				<path d="M48 176 Q48 72 128 72 Q208 72 208 176" fill="none" stroke="${color}" stroke-width="16" stroke-linecap="round"/>
+				<rect x="72" y="128" width="112" height="56" rx="8" fill="${PALETTE.sky}" opacity="0.85"/>
+				<rect x="88" y="144" width="24" height="24" fill="${PALETTE.bg}"/>
+				<rect x="144" y="144" width="24" height="24" fill="${PALETTE.bg}"/>`;
+		case 'lucia':
+			return `
+				<circle cx="128" cy="148" r="40" fill="${color}"/>
+				<rect x="88" y="92" width="80" height="16" rx="8" fill="${PALETTE.gold}"/>
+				<ellipse cx="96" cy="76" rx="7" ry="14" fill="${PALETTE.gold}"/>
+				<ellipse cx="116" cy="68" rx="7" ry="16" fill="${PALETTE.gold}"/>
+				<ellipse cx="140" cy="68" rx="7" ry="16" fill="${PALETTE.gold}"/>
+				<ellipse cx="160" cy="76" rx="7" ry="14" fill="${PALETTE.gold}"/>
+				<rect x="100" y="188" width="56" height="20" rx="8" fill="${color}"/>`;
+		case 'shamrock':
+			return `
+				<circle cx="128" cy="88" r="28" fill="${PALETTE.teal}"/>
+				<circle cx="96" cy="128" r="28" fill="${PALETTE.teal}"/>
+				<circle cx="160" cy="128" r="28" fill="${PALETTE.teal}"/>
+				<rect x="120" y="140" width="16" height="52" rx="8" fill="${PALETTE.teal}"/>`;
+		case 'rocket':
+			return `
+				<polygon points="128,36 160,120 96,120" fill="${color}"/>
+				<rect x="108" y="112" width="40" height="56" fill="${color}"/>
+				<polygon points="96,148 108,168 96,188" fill="${PALETTE.sky}"/>
+				<polygon points="160,148 148,168 160,188" fill="${PALETTE.sky}"/>
+				<polygon points="112,168 128,220 144,168" fill="${PALETTE.crimson}"/>
+				<circle cx="128" cy="88" r="10" fill="${PALETTE.bg}"/>`;
+		case 'volcano':
+			return `
+				<polygon points="40,196 96,88 128,136 160,72 216,196" fill="${color}"/>
+				<polygon points="112,88 128,36 144,88 136,96 120,96" fill="${PALETTE.crimson}"/>
+				<circle cx="128" cy="48" r="10" fill="${PALETTE.gold}"/>
+				<rect x="48" y="196" width="160" height="12" fill="${color}" opacity="0.45"/>`;
+		case 'crown':
+			return `
+				<polygon points="48,96 80,160 176,160 208,96 168,128 128,72 88,128" fill="${PALETTE.gold}"/>
+				<rect x="72" y="160" width="112" height="20" fill="${PALETTE.gold}"/>
+				<circle cx="48" cy="88" r="10" fill="${PALETTE.gold}"/>
+				<circle cx="128" cy="64" r="12" fill="${PALETTE.gold}"/>
+				<circle cx="208" cy="88" r="10" fill="${PALETTE.gold}"/>`;
+		case 'disaster':
+			return `
+				<polygon points="128,40 216,196 40,196" fill="${PALETTE.crimson}"/>
+				<rect x="118" y="92" width="20" height="60" rx="6" fill="${PALETTE.bg}"/>
+				<circle cx="128" cy="172" r="12" fill="${PALETTE.bg}"/>`;
+		case 'parcel':
+			return `
+				<rect x="56" y="92" width="144" height="108" rx="10" fill="${color}"/>
+				<rect x="56" y="92" width="144" height="28" fill="${PALETTE.gold}"/>
+				<rect x="118" y="64" width="20" height="56" rx="4" fill="${PALETTE.gold}"/>
+				<rect x="56" y="140" width="144" height="10" fill="${PALETTE.bg}" opacity="0.45"/>`;
 		default:
 			return `
 				<circle cx="128" cy="128" r="48" fill="${color}"/>
@@ -276,10 +387,26 @@ function accentFor(artId) {
 		case 'aurora':
 		case 'full-moon':
 			return PALETTE.violet;
+		case 'halloween':
+		case 'quake':
+		case 'volcano':
+		case 'disaster':
+			return PALETTE.crimson;
+		case 'harvest':
+		case 'solstice':
+		case 'lucia':
+		case 'crown':
+			return PALETTE.gold;
+		case 'holi':
+			return PALETTE.rose;
+		case 'shamrock':
+			return PALETTE.teal;
 		case 'tower-bridge':
 		case 'erasmusbrug':
 		case 'oresund':
 		case 'storebaelt':
+		case 'underground':
+		case 'rocket':
 			return PALETTE.sky;
 		case 'sweden-election':
 			return PALETTE.gold;

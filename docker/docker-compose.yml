@@ -83,6 +83,7 @@ services:
       - FREE_TIER_MAX_PRIVATE_SWITCHES=${FREE_TIER_MAX_PRIVATE_SWITCHES:-5}
       - PREMIUM_MAX_SWITCHES=${PREMIUM_MAX_SWITCHES:-50}
       - PREMIUM_MAX_PUBLIC_SWITCHES=${PREMIUM_MAX_PUBLIC_SWITCHES:-25}
+      - CATALOGUE_OWNER_ID=${CATALOGUE_OWNER_ID:-}
       - VOMESYNC_PUBLIC_BASE_URL=${VOMESYNC_PUBLIC_BASE_URL:-https://sync.vome.io}
       # Relay (outbound-tunnel HA): shared secret authenticating portal<->backend,
       # the portal endpoint that resolves a component's relay secret, and the

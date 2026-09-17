@@ -151,24 +151,36 @@ const sendTierLimitError = (res, limit, max, tier = 'free') => {
 // Keep legacy alias
 const sendFreeTierLimitError = sendTierLimitError;
 
+function isCatalogueOwner(ownerId, catalogueOwnerId) {
+	const wanted = String(catalogueOwnerId || '').trim().toLowerCase();
+	const got = String(ownerId || '').trim().toLowerCase();
+	return wanted.length > 0 && got.length > 0 && wanted === got;
+}
+
 /**
  * Check whether the owner/user has hit their tier limits.
  * Returns null if within limits, or { limit, max, tier } if exceeded.
  *
  * Free tier is 5 private + 10 public. Pass isCreate on new switches.
  * On updates, pass wantsPublicize as null when publicize is not changing.
+ * The staff catalogue owner is exempt — that account holds the public directory.
  */
 const checkFreeTierLimits = async ({
 	ownerId,
 	personalKeyId,
 	wantsPublicize,
 	currentPublicize,
-	isCreate = false
+	isCreate = false,
+	catalogueOwnerId
 }) => {
 	const limits = config?.limits || {};
 	const freeTierEnabled = limits.freeTierEnabled !== false;
 
 	if (!freeTierEnabled) {
+		return null;
+	}
+
+	if (isCatalogueOwner(ownerId, catalogueOwnerId !== undefined ? catalogueOwnerId : limits.catalogueOwnerId)) {
 		return null;
 	}
 
@@ -439,6 +451,7 @@ module.exports = {
 	// Helpers
 	sendFreeTierLimitError,
 	checkFreeTierLimits,
+	isCatalogueOwner,
 	abbreviateActor,
 	assertFreshTimestamp,
 	pickSwitchMetadata,

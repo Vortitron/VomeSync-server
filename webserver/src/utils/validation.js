@@ -13,6 +13,18 @@ const V2_ACCESS_KEY_PERMISSIONS = ['toggle', 'comment', 'metadata'];
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const V2_UID_REGEX = /^vs_[0-9a-hjkmnpqrstvwxyz]{26}$/i;
 
+const SWITCH_CATEGORIES = [
+	'Community',
+	'Personal',
+	'Event',
+	'Transport',
+	'Government',
+	'Holiday',
+	'Weather',
+	'Test',
+	'Other'
+];
+
 const isValidSwitchUid = (uid) => {
 	if (typeof uid !== 'string' || uid.length === 0) {
 		return false;
@@ -32,7 +44,7 @@ const schemas = {
 		name: Joi.string().max(MAX_SWITCH_NAME_LENGTH).allow('').default(''),
 		description: Joi.string().max(MAX_DESCRIPTION_LENGTH).allow('').default(''),
 		location: Joi.string().max(MAX_LOCATION_LENGTH).allow('').default(''),
-		category: Joi.string().valid('Community', 'Personal', 'Event', 'Test', 'Other').default('Other'),
+		category: Joi.string().valid(...SWITCH_CATEGORIES).default('Other'),
 		publicize: Joi.boolean().default(false),
 		link: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow('').default(''),
 		captchaToken: Joi.string().max(MAX_CAPTCHA_TOKEN_LENGTH).allow('')
@@ -42,7 +54,7 @@ const schemas = {
 		name: Joi.string().max(MAX_SWITCH_NAME_LENGTH).allow(''),
 		description: Joi.string().max(MAX_DESCRIPTION_LENGTH).allow(''),
 		location: Joi.string().max(MAX_LOCATION_LENGTH).allow(''),
-		category: Joi.string().valid('Community', 'Personal', 'Event', 'Test', 'Other'),
+		category: Joi.string().valid(...SWITCH_CATEGORIES),
 		publicize: Joi.boolean(),
 		link: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow(''),
 		captchaToken: Joi.string().max(MAX_CAPTCHA_TOKEN_LENGTH).allow('')
@@ -85,7 +97,7 @@ const schemas = {
 		name: Joi.string().max(MAX_SWITCH_NAME_LENGTH).allow(''),
 		description: Joi.string().max(MAX_DESCRIPTION_LENGTH).allow('').default(''),
 		location: Joi.string().max(MAX_LOCATION_LENGTH).allow('').default(''),
-		category: Joi.string().valid('Community', 'Personal', 'Event', 'Test', 'Other').default('Other'),
+		category: Joi.string().valid(...SWITCH_CATEGORIES).default('Other'),
 		publicize: Joi.boolean().default(false),
 		link: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow('').default(''),
 		// IMPORTANT: do NOT default these, otherwise older v2 clients will fail signature checks
@@ -110,7 +122,7 @@ const schemas = {
 		name: Joi.string().max(MAX_SWITCH_NAME_LENGTH).allow(''),
 		description: Joi.string().max(MAX_DESCRIPTION_LENGTH).allow(''),
 		location: Joi.string().max(MAX_LOCATION_LENGTH).allow(''),
-		category: Joi.string().valid('Community', 'Personal', 'Event', 'Test', 'Other'),
+		category: Joi.string().valid(...SWITCH_CATEGORIES),
 		publicize: Joi.boolean(),
 		link: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow(''),
 		iconUrl: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow(''),
@@ -189,7 +201,7 @@ const schemas = {
 		name: Joi.string().max(MAX_SWITCH_NAME_LENGTH).allow(''),
 		description: Joi.string().max(MAX_DESCRIPTION_LENGTH).allow(''),
 		location: Joi.string().max(MAX_LOCATION_LENGTH).allow(''),
-		category: Joi.string().valid('Community', 'Personal', 'Event', 'Test', 'Other'),
+		category: Joi.string().valid(...SWITCH_CATEGORIES),
 		link: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow(''),
 		iconUrl: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow(''),
 		bannerUrl: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow('')
@@ -219,7 +231,7 @@ const schemas = {
 		name: Joi.string().max(MAX_SWITCH_NAME_LENGTH).allow(''),
 		description: Joi.string().max(MAX_DESCRIPTION_LENGTH).allow(''),
 		location: Joi.string().max(MAX_LOCATION_LENGTH).allow(''),
-		category: Joi.string().valid('Community', 'Personal', 'Event', 'Test', 'Other'),
+		category: Joi.string().valid(...SWITCH_CATEGORIES),
 		link: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow(''),
 		iconUrl: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow(''),
 		bannerUrl: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow('')
@@ -341,6 +353,7 @@ const sanitizePrivateSwitchData = (switchData) => {
 };
 
 module.exports = {
+	SWITCH_CATEGORIES,
 	schemas,
 	validateRequest,
 	validateUID,

@@ -659,6 +659,8 @@ describe('API Integration Tests', () => {
 			expect(response.body.data.taxEnabled).toBe(true);
 			expect(response.body.data.maxPublic).toBe(10);
 			expect(response.body.data.maxPrivate).toBe(5);
+			expect(response.body.data.premiumMaxPublic).toBe(25);
+			expect(response.body.data.premiumMaxSwitches).toBe(50);
 		});
 	});
 

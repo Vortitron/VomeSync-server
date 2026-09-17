@@ -14,9 +14,16 @@ const {
 	nextIndex
 } = require('../../../catalogue/lib/validate');
 const { desiredState, lastWeekdayOfMonth } = require('../../../catalogue/lib/refresh');
+const { observationIsStale } = require('../../../catalogue/lib/stale');
 const { artIds, renderIconSvg, renderBannerSvg } = require('../../../catalogue/lib/artwork');
 const { parseArgs, loadDotEnv } = require('../../../catalogue/cli');
 const { metadataDiffers, publicMeta } = require('../../../catalogue/lib/apply');
+const { extraLiveListings } = require('../../../catalogue/lib/live-listings');
+const {
+	DEFAULT_LIVE_DIR,
+	repoCataloguePath,
+	resolveCataloguePath
+} = require('../../../catalogue/lib/paths');
 
 const CATALOGUE_PATH = path.resolve(__dirname, '../../../catalogue/switches.json');
 
@@ -28,13 +35,40 @@ function loadEntries() {
 describe('public switch catalogue', () => {
 	test('switches.json validates and has unique ids and indexes', () => {
 		const entries = validateCatalogue(loadEntries(), artIds());
-		expect(entries.length).toBeGreaterThanOrEqual(20);
+		expect(entries.length).toBe(106);
 		expect(entries.every((entry) => entry.name && entry.description && entry.art)).toBe(true);
 		expect(entries.some((entry) => entry.id === 'yom-kippur')).toBe(true);
 		expect(entries.some((entry) => entry.id === 'tower-bridge')).toBe(true);
 		expect(entries.some((entry) => entry.id === 'sweden-election-2026')).toBe(true);
 		expect(entries.some((entry) => entry.id === 'oresund-bridge')).toBe(true);
 		expect(entries.some((entry) => entry.id === 'great-belt-bridge')).toBe(true);
+		expect(entries.some((entry) => entry.id === 'halloween')).toBe(true);
+		expect(entries.some((entry) => entry.id === 'london-underground')).toBe(true);
+		expect(entries.some((entry) => entry.id === 'significant-earthquake')).toBe(true);
+		expect(entries.some((entry) => entry.id === 'orbital-launch')).toBe(true);
+		expect(entries.some((entry) => entry.id === 'french-president')).toBe(true);
+		expect(entries.some((entry) => entry.id === 'brienenoordbrug')).toBe(true);
+		expect(entries.some((entry) => entry.id === 'aliexpress-choice-day')).toBe(true);
+		const cats = new Set(entries.map((entry) => entry.category));
+		for (const name of ['Transport', 'Government', 'Holiday', 'Weather', 'Event', 'Community']) {
+			expect(cats.has(name)).toBe(true);
+		}
+	});
+
+	test('extra listings are civic feeds plus named AliExpress tentpoles', () => {
+		const extra = extraLiveListings();
+		expect(extra).toHaveLength(62);
+		const observe = extra.filter((entry) => entry.schedule.kind === 'observe');
+		const aliexpress = extra.filter((entry) => entry.id.startsWith('aliexpress-'));
+		expect(observe).toHaveLength(57);
+		expect(aliexpress).toHaveLength(5);
+		expect(observe.every((entry) => entry.schedule.source)).toBe(true);
+		expect(extra.some((entry) => entry.id === 'uk-commons-division' && entry.schedule.observeEveryMinutes === 1)).toBe(true);
+		expect(extra.some((entry) => entry.id === 'aliexpress-choice-day' && entry.schedule.kind === 'month_days')).toBe(true);
+		const have = new Set(loadEntries().map((entry) => entry.id));
+		for (const entry of extra) {
+			expect(have.has(entry.id)).toBe(true);
+		}
 	});
 
 	test('every art key used in the catalogue has a glyph', () => {
@@ -76,6 +110,16 @@ describe('public switch catalogue', () => {
 			art: 'new-year',
 			schedule: { kind: 'manual', state: false }
 		})).toThrow(/kebab-case/);
+		expect(() => addEntry(entries, {
+			id: 'choice-bad',
+			name: 'Choice',
+			description: 'ON on inverted days.',
+			location: 'Worldwide',
+			category: 'Event',
+			link: 'https://www.aliexpress.com/',
+			art: 'parcel',
+			schedule: { kind: 'month_days', startDay: 8, endDay: 1 }
+		})).toThrow(/endDay/);
 	});
 });
 
@@ -153,10 +197,11 @@ describe('catalogue schedule', () => {
 
 	test('live listings observe a source instead of waiting for an operator', () => {
 		const live = [
-			'tower-bridge', 'erasmusbrug', 'uk-commons', 'us-congress',
+			'tower-bridge', 'erasmusbrug', 'uk-commons', 'uk-commons-division', 'us-congress',
 			'uk-government', 'us-government', 'pope', 'papal-conclave',
 			'uk-election', 'geomagnetic-storm', 'sweden-election-2026',
-			'oresund-bridge', 'great-belt-bridge'
+			'oresund-bridge', 'great-belt-bridge',
+			'significant-earthquake', 'london-underground'
 		];
 		for (const id of live) {
 			expect(byId[id].schedule.kind).toBe('observe');
@@ -172,6 +217,48 @@ describe('catalogue schedule', () => {
 		expect(desiredState(byId['oresund-bridge'], now)).toBe(true);
 		expect(desiredState(byId['great-belt-bridge'], now)).toBe(true);
 		expect(desiredState(byId['tower-bridge'], now)).toBe(false);
+	});
+
+	test('Thanksgiving is the fourth Thursday of November UTC', () => {
+		expect(desiredState(byId.thanksgiving, new Date('2026-11-26T12:00:00Z'))).toBe(true);
+		expect(desiredState(byId.thanksgiving, new Date('2026-11-19T12:00:00Z'))).toBe(false);
+		expect(desiredState(byId.nowruz, new Date('2026-03-21T12:00:00Z'))).toBe(true);
+		expect(desiredState(byId.halloween, new Date('2026-10-31T12:00:00Z'))).toBe(true);
+		expect(desiredState(byId.midsummer, new Date('2026-06-19T12:00:00Z'))).toBe(true);
+		expect(desiredState(byId.holi, new Date('2026-03-03T12:00:00Z'))).toBe(true);
+	});
+
+	test('AliExpress tentpoles follow listed UTC windows', () => {
+		expect(desiredState(byId['aliexpress-sale'], new Date('2026-09-17T12:00:00Z'))).toBe(false);
+		expect(desiredState(byId['aliexpress-sale'], new Date('2026-03-20T12:00:00Z'))).toBe(true);
+		expect(desiredState(byId['aliexpress-anniversary'], new Date('2026-03-20T12:00:00Z'))).toBe(true);
+		expect(desiredState(byId['aliexpress-1111'], new Date('2026-03-20T12:00:00Z'))).toBe(false);
+		expect(desiredState(byId['aliexpress-summer'], new Date('2026-06-05T12:00:00Z'))).toBe(true);
+		expect(desiredState(byId['aliexpress-1111'], new Date('2026-11-11T00:00:00Z'))).toBe(true);
+		expect(desiredState(byId['aliexpress-1111'], new Date('2026-11-20T00:00:00Z'))).toBe(false);
+		expect(desiredState(byId['aliexpress-sale'], new Date('2026-12-10T12:00:00Z'))).toBe(true);
+		expect(desiredState(byId['aliexpress-choice-day'], new Date('2026-09-01T00:00:00Z'))).toBe(true);
+		expect(desiredState(byId['aliexpress-choice-day'], new Date('2026-09-07T23:00:00Z'))).toBe(true);
+		expect(desiredState(byId['aliexpress-choice-day'], new Date('2026-09-08T00:00:00Z'))).toBe(false);
+		expect(desiredState(byId['aliexpress-choice-day'], new Date('2026-09-17T12:00:00Z'))).toBe(false);
+		expect(desiredState(byId['aliexpress-choice-day'], new Date('2026-10-01T12:00:00Z'))).toBe(true);
+	});
+
+	test('stale live sources are off until the feed works again', () => {
+		const entry = {
+			id: 'tower-bridge',
+			schedule: {
+				kind: 'observe',
+				source: 'tower-bridge',
+				state: true,
+				observedAt: '2026-09-15T00:00:00Z',
+				staleAfterHours: 2
+			}
+		};
+		expect(observationIsStale(entry.schedule, new Date('2026-09-15T01:59:00Z'))).toBe(false);
+		expect(desiredState(entry, new Date('2026-09-15T01:59:00Z'))).toBe(true);
+		expect(observationIsStale(entry.schedule, new Date('2026-09-15T02:01:00Z'))).toBe(true);
+		expect(desiredState(entry, new Date('2026-09-15T02:01:00Z'))).toBe(false);
 	});
 });
 
@@ -209,6 +296,13 @@ describe('catalogue CLI helpers', () => {
 		expect(args.dryRun).toBe(true);
 		expect(args.only).toEqual(['tower-bridge']);
 	});
+
+	test('live observe path is outside the git tree when the live file exists', () => {
+		const live = `${DEFAULT_LIVE_DIR}/switches.json`;
+		expect(resolveCataloguePath({}, (filePath) => filePath === live)).toBe(live);
+		expect(resolveCataloguePath({}, () => false)).toBe(repoCataloguePath());
+		expect(repoCataloguePath()).toBe(CATALOGUE_PATH);
+	});
 });
 
 const {
@@ -216,14 +310,21 @@ const {
 	storebaeltClosedNow,
 	oresundClosedNow,
 	parseCommonsDayType,
+	commonsDivisionInProgress,
 	parseHouseSchedule,
 	geomagneticFromScales,
+	significantQuakes,
+	disruptedTubeLines,
+	dutchSpanOpenToShips,
+	launchLive,
+	elevatedVolcanoes,
+	gdacsRedEvents,
 	pickOfficeClaim,
 	isWikidataItemId,
 	englishEntityLabel,
 	SOURCE_IDS
 } = require('../../../catalogue/lib/sources');
-const { observeCatalogue } = require('../../../catalogue/lib/observe');
+const { observeCatalogue, isFastObserveSource } = require('../../../catalogue/lib/observe');
 const { isTestDebris } = require('../../../catalogue/lib/apply');
 
 describe('catalogue observers', () => {
@@ -255,6 +356,41 @@ describe('catalogue observers', () => {
 		expect(sitting).toBe(true);
 		expect(geomagneticFromScales({ 0: { G: { Scale: '4' } } })).toBe(4);
 		expect(geomagneticFromScales({ 0: { G: { Scale: '0' } } })).toBe(0);
+		expect(significantQuakes({ features: [] })).toEqual({ count: 0, mag: 0, place: '' });
+		expect(significantQuakes({
+			features: [
+				{ properties: { mag: 5.1, place: 'Crete' } },
+				{ properties: { mag: 6.2, place: 'Papua New Guinea' } }
+			]
+		})).toEqual({ count: 2, mag: 6.2, place: 'Papua New Guinea' });
+		expect(disruptedTubeLines([
+			{ name: 'Central', lineStatuses: [{ statusSeverity: 10 }] },
+			{ name: 'Northern', lineStatuses: [{ statusSeverity: 6 }] }
+		])).toEqual(['Northern']);
+	});
+
+	test('Commons division follows the annunciator bell and Division slide', () => {
+		expect(commonsDivisionInProgress({
+			showCommonsBell: false,
+			slides: [{ type: 'BlankSlide' }]
+		}).on).toBe(false);
+		expect(commonsDivisionInProgress({
+			showCommonsBell: true,
+			slides: [{ type: 'Debate' }],
+			publishTime: '2026-09-17T14:00:00'
+		})).toEqual({
+			on: true,
+			params: { source: 'now-api.parliament.uk', reason: 'bell', publishTime: '2026-09-17T14:00:00' }
+		});
+		expect(commonsDivisionInProgress({
+			showCommonsBell: false,
+			slides: [{ type: 'Division', soundToPlay: 'DivisionBell' }]
+		}).on).toBe(true);
+		expect(commonsDivisionInProgress({
+			showCommonsBell: false,
+			slides: [{ type: 'Debate', lines: [{ style: 'Division', content: 'Division' }] }]
+		}).on).toBe(true);
+		expect(commonsDivisionInProgress(null).on).toBe(false);
 	});
 
 	test('Wikidata preferred office claim wins', () => {
@@ -355,7 +491,7 @@ describe('catalogue observers', () => {
 				art: 'tower-bridge',
 				onMeans: 'up',
 				offMeans: 'down',
-				schedule: { kind: 'observe', source: 'tower-bridge', state: false }
+				schedule: { kind: 'observe', source: 'tower-bridge', state: false, params: { stale: true, lastError: 'down' } }
 			},
 			{
 				id: 'erasmusbrug',
@@ -379,16 +515,145 @@ describe('catalogue observers', () => {
 		expect(results[0].ok).toBe(true);
 		expect(results[0].on).toBe(true);
 		expect(next[0].schedule.state).toBe(true);
+		expect(next[0].schedule.params.stale).toBeUndefined();
+		expect(next[0].schedule.params.lastError).toBeUndefined();
 		expect(results[1].ok).toBe(false);
 		expect(next[1].schedule.state).toBe(true);
+	});
+
+	test('observeCatalogue forces OFF when the last success is older than staleAfterHours', async () => {
+		const fetchImpl = async () => ({ ok: false, status: 503, text: async () => 'down' });
+		const entries = [{
+			id: 'erasmusbrug',
+			index: 1,
+			name: 'Erasmusbrug open',
+			description: 'ON while up.',
+			location: 'Rotterdam',
+			category: 'Transport',
+			link: 'https://www.portofrotterdam.com/',
+			art: 'erasmusbrug',
+			onMeans: 'up',
+			offMeans: 'down',
+			schedule: {
+				kind: 'observe',
+				source: 'erasmusbrug',
+				state: true,
+				staleAfterHours: 2,
+				observedAt: '2026-09-15T08:00:00Z',
+				params: { source: 'isdetunnelopen.nl' }
+			}
+		}];
+		const { results, entries: next } = await observeCatalogue({
+			entries,
+			fetchImpl,
+			now: new Date('2026-09-15T11:05:00Z')
+		});
+		expect(results[0].ok).toBe(false);
+		expect(results[0].staleOff).toBe(true);
+		expect(results[0].on).toBe(false);
+		expect(next[0].schedule.state).toBe(false);
+		expect(next[0].schedule.params.stale).toBe(true);
+		expect(next[0].schedule.observedAt).toBe('2026-09-15T08:00:00Z');
 	});
 
 	test('every observer id is wired', () => {
 		expect(SOURCE_IDS).toEqual(expect.arrayContaining([
 			'tower-bridge', 'erasmusbrug', 'oresund', 'storebaelt',
-			'uk-commons', 'us-congress', 'uk-pm', 'us-president',
-			'pope', 'conclave', 'uk-election', 'geomagnetic', 'sweden-election'
+			'uk-commons', 'uk-commons-division', 'us-congress', 'uk-pm', 'us-president',
+			'pope', 'conclave', 'uk-election', 'geomagnetic', 'sweden-election',
+			'earthquake', 'london-underground',
+			'french-president', 'brienenoordbrug', 'launch', 'volcano', 'gdacs-red'
 		]));
+	});
+
+	test('batch observe skips Commons division so the one-minute timer owns it', async () => {
+		const division = {
+			id: 'uk-commons-division',
+			schedule: {
+				kind: 'observe',
+				source: 'uk-commons-division',
+				state: true,
+				observeEveryMinutes: 1
+			}
+		};
+		expect(isFastObserveSource(division)).toBe(true);
+		const fetchImpl = async () => {
+			throw new Error('batch observe must not fetch the division source');
+		};
+		const skipped = await observeCatalogue({
+			entries: [division],
+			fetchImpl,
+			now: new Date('2026-09-17T12:00:00Z')
+		});
+		expect(skipped.results[0]).toMatchObject({
+			id: 'uk-commons-division',
+			ok: true,
+			deferred: true,
+			fetched: false,
+			on: true
+		});
+		const fetchImplBell = async () => ({
+			ok: true,
+			status: 200,
+			json: async () => ({
+				showCommonsBell: true,
+				slides: [],
+				publishTime: '2026-09-17T12:00:00'
+			})
+		});
+		const forced = await observeCatalogue({
+			entries: [division],
+			onlyIds: ['uk-commons-division'],
+			fetchImpl: fetchImplBell,
+			now: new Date('2026-09-17T12:00:00Z')
+		});
+		expect(forced.results[0]).toMatchObject({
+			deferred: false,
+			fetched: true,
+			on: true
+		});
+		expect(forced.entries[0].schedule.params.reason).toBe('bell');
+	});
+
+	test('Dutch span, launch, volcano and GDACS parsers', () => {
+		expect(dutchSpanOpenToShips({ isOpen: true, hasBridgeEvent: false })).toBe(false);
+		expect(dutchSpanOpenToShips({ isOpen: false, hasBridgeEvent: false })).toBe(true);
+		expect(dutchSpanOpenToShips({ isOpen: true, hasBridgeEvent: true })).toBe(true);
+		expect(() => dutchSpanOpenToShips({})).toThrow(/Dutch span/);
+		const inFlight = launchLive({
+			results: [{ name: 'Falcon 9', status: { abbrev: 'In Flight' }, net: '2026-09-16T12:00:00Z' }]
+		}, new Date('2026-09-16T10:00:00Z'));
+		expect(inFlight.on).toBe(true);
+		const goNow = launchLive({
+			results: [{
+				name: 'Ariane 6',
+				status: { abbrev: 'Go' },
+				window_start: '2026-09-16T12:00:00Z',
+				window_end: '2026-09-16T12:30:00Z',
+				net: '2026-09-16T12:10:00Z'
+			}]
+		}, new Date('2026-09-16T12:05:00Z'));
+		expect(goNow.on).toBe(true);
+		const goLater = launchLive({
+			results: [{
+				name: 'Ariane 6',
+				status: { abbrev: 'Go' },
+				window_start: '2026-09-16T12:00:00Z',
+				window_end: '2026-09-16T12:30:00Z',
+				net: '2026-09-16T12:10:00Z'
+			}]
+		}, new Date('2026-09-16T10:00:00Z'));
+		expect(goLater.on).toBe(false);
+		expect(elevatedVolcanoes([
+			{ volcano_name: 'Kilauea', color_code: 'ORANGE' },
+			{ volcano_name: 'Quiet', color_code: 'YELLOW', alert_level: 'ADVISORY' }
+		]).map((row) => row.volcano_name)).toEqual(['Kilauea']);
+		expect(gdacsRedEvents({
+			features: [
+				{ properties: { alertlevel: 'Red', name: 'Cyclone' } },
+				{ properties: { alertlevel: 'Orange', name: 'Flood' } }
+			]
+		}).length).toBe(1);
 	});
 });
 

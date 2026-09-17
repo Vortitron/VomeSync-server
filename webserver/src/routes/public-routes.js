@@ -148,6 +148,9 @@ router.get('/billing',
 				maxPrivate: Number(limits.freeTierMaxPrivateSwitches) || 5,
 				maxPublic: Number(limits.freeTierMaxPublicSwitches) || 10,
 				maxSwitches: Number(limits.freeTierMaxSwitches) || 15,
+				premiumMaxPrivate: Number(limits.premiumMaxSwitches) || 50,
+				premiumMaxPublic: Number(limits.premiumMaxPublicSwitches) || 25,
+				premiumMaxSwitches: Number(limits.premiumMaxSwitches) || 50,
 				taxEnabled: stripe.taxEnabled !== false
 			}
 		});

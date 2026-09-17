@@ -93,7 +93,7 @@ async function startPremiumCheckoutResponse(res, ownerId, uid) {
 // ── V2: Create switch (deterministic UID derived from switch pubkey, signed by owner + switch) ──
 
 router.post('/v2/switch',
-	authManager.rateLimit('v2_create_switch', 30, 3600000),
+	authManager.rateLimit('v2_create_switch', 120, 3600000),
 	validateRequest(schemas.v2CreateSwitch),
 	async (req, res) => {
 		try {

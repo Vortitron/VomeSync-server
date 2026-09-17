@@ -4,7 +4,10 @@
  * Calendar kinds are UTC unless a window says otherwise. Lunar dates are
  * stored as explicit windows/instants so we do not pretend to sight the moon.
  * Live events use kind `observe`: last fetched state, updated by the timer.
+ * A source silent past `staleAfterHours` is OFF until it fetches again.
  */
+const { observationIsStale } = require('./stale');
+
 function parseInstant(value) {
 	const ms = Date.parse(value);
 	if (Number.isNaN(ms)) {
@@ -73,12 +76,21 @@ function onFullMoonUtcDay(now, instants) {
 	});
 }
 
+function onMonthDays(now, startDay, endDay) {
+	const day = utcYmd(now).day;
+	return day >= startDay && day <= endDay;
+}
+
 function desiredState(entry, now = new Date()) {
 	const schedule = entry.schedule || { kind: 'manual', state: false };
 	switch (schedule.kind) {
 		case 'manual':
 		case 'held':
+			return Boolean(schedule.state);
 		case 'observe':
+			if (observationIsStale(schedule, now)) {
+				return false;
+			}
 			return Boolean(schedule.state);
 		case 'windows':
 			return inWindows(now, schedule.windows);
@@ -86,6 +98,8 @@ function desiredState(entry, now = new Date()) {
 			return onAnnualDay(now, schedule.month, schedule.day);
 		case 'month':
 			return utcYmd(now).month === schedule.month;
+		case 'month_days':
+			return onMonthDays(now, schedule.startDay, schedule.endDay);
 		case 'nth_weekday':
 			return onNthWeekday(now, schedule);
 		case 'full_moon':

@@ -1,0 +1,13 @@
+[Unit]
+Description=Run VomeSync Commons-division observe every minute
+Documentation=file:///var/www/VomeSync-server/catalogue/README.md
+
+[Timer]
+OnBootSec=20s
+OnUnitActiveSec=1min
+AccuracySec=5s
+Persistent=true
+Unit=vomesync-catalogue-observe-division.service
+
+[Install]
+WantedBy=timers.target

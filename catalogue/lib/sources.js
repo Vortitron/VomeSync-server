@@ -2,43 +2,23 @@
  * Live observers for catalogue switches that are not a UTC calendar.
  *
  * Each source returns { on, params?, name?, description?, onMeans?, offMeans? }.
- * Fetch failures must throw so the caller keeps the last good state.
+ * Fetch failures must throw so the caller keeps the last good state
+ * until the observation is stale, then forces OFF.
  */
 const { fetchText, fetchJson } = require('./http');
+const { OFFICES } = require('./offices');
+const { extraDutchBridgeSpecs } = require('./dutch-bridges');
 
 const TOWER_LIFT_MS = 15 * 60 * 1000;
 const SWEDEN_POLLS_CLOSE_MS = Date.parse('2026-09-13T18:00:00Z');
+const COMMONS_ANNUNCIATOR_URL = 'https://now-api.parliament.uk/api/Message/message/CommonsMain/current';
+const LAUNCH_LIVE_BEFORE_MS = 20 * 60 * 1000;
+const LAUNCH_LIVE_AFTER_MS = 20 * 60 * 1000;
+const LAUNCH_ON_STATUS = Object.freeze(['Go', 'Hold', 'In Flight']);
 const MONTHS = Object.freeze([
 	'january', 'february', 'march', 'april', 'may', 'june',
 	'july', 'august', 'september', 'october', 'november', 'december'
 ]);
-
-const OFFICES = Object.freeze({
-	'uk-pm': {
-		officeId: 'Q14211',
-		name: (holder) => `UK Prime Minister: ${holder}`,
-		description: (holder) => `ON while ${holder} is Prime Minister. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata / GOV.UK.`,
-		onMeans: (holder) => `${holder} currently holds the office.`,
-		offMeans: 'Someone else is Prime Minister, or the office is vacant.',
-		link: 'https://www.gov.uk/government/ministers/prime-minister'
-	},
-	'us-president': {
-		officeId: 'Q11696',
-		name: (holder) => `US President: ${holder}`,
-		description: (holder) => `ON while ${holder} is President of the United States. It turns off on a change of office-holder, then the listing is renamed. Source: Wikidata.`,
-		onMeans: (holder) => `${holder} currently holds the office.`,
-		offMeans: 'Someone else is President, or the office is vacant.',
-		link: 'https://www.whitehouse.gov/'
-	},
-	pope: {
-		officeId: 'Q19546',
-		name: (holder) => `Pope: ${holder}`,
-		description: (holder) => `ON while ${holder} is Pope. It turns off during a sede vacante or a new pontificate. Pair with the conclave switch for the gap in between.`,
-		onMeans: (holder) => `${holder} is the reigning Pope.`,
-		offMeans: 'The Holy See is vacant, or another Pope has been elected.',
-		link: 'https://www.vatican.va/'
-	}
-});
 
 function zonedParts(date, timeZone) {
 	const fmt = new Intl.DateTimeFormat('en-GB', {
@@ -154,6 +134,33 @@ function parseCommonsDayType(csv, now) {
 	return line.split(',')[2] || '';
 }
 
+function slideIsCommonsDivision(slide) {
+	if (!slide || typeof slide !== 'object') {
+		return false;
+	}
+	if (slide.type === 'Division' || slide.soundToPlay === 'DivisionBell') {
+		return true;
+	}
+	const lines = Array.isArray(slide.lines) ? slide.lines : [];
+	return lines.some((line) => line && line.style === 'Division');
+}
+
+function commonsDivisionInProgress(message) {
+	const source = 'now-api.parliament.uk';
+	if (!message || typeof message !== 'object') {
+		return { on: false, params: { source, reason: 'empty' } };
+	}
+	const publishTime = String(message.publishTime || '');
+	if (message.showCommonsBell === true) {
+		return { on: true, params: { source, reason: 'bell', publishTime } };
+	}
+	const slides = Array.isArray(message.slides) ? message.slides : [];
+	if (slides.some(slideIsCommonsDivision)) {
+		return { on: true, params: { source, reason: 'slide', publishTime } };
+	}
+	return { on: false, params: { source, reason: 'none', publishTime } };
+}
+
 function parseHouseSchedule(html, now) {
 	const parts = zonedParts(now, 'America/New_York');
 	const meta = String(html || '').match(/property="og:description" content="([^"]+)"/i)
@@ -168,6 +175,105 @@ function geomagneticFromScales(payload) {
 	const current = payload && payload['0'] && payload['0'].G;
 	const scale = Number(current && current.Scale);
 	return Number.isFinite(scale) ? scale : 0;
+}
+
+function significantQuakes(payload) {
+	const features = payload && Array.isArray(payload.features) ? payload.features : [];
+	let mag = 0;
+	let place = '';
+	for (const feature of features) {
+		const nextMag = Number((feature.properties || {}).mag);
+		if (Number.isFinite(nextMag) && nextMag > mag) {
+			mag = nextMag;
+			place = String((feature.properties || {}).place || '');
+		}
+	}
+	return { count: features.length, mag, place };
+}
+
+// TfL statusSeverity: 10 is Good Service. 6 and below is severe delays,
+// closures, or suspension — the kind of disruption worth automating on.
+const TFL_SEVERE_MAX = 6;
+
+function disruptedTubeLines(payload) {
+	const lines = Array.isArray(payload) ? payload : [];
+	const disrupted = [];
+	for (const line of lines) {
+		const statuses = Array.isArray(line.lineStatuses) ? line.lineStatuses : [];
+		const severe = statuses.some((status) => {
+			const severity = Number(status && status.statusSeverity);
+			return Number.isFinite(severity) && severity <= TFL_SEVERE_MAX;
+		});
+		if (severe) {
+			disrupted.push(String(line.name || line.id || 'line'));
+		}
+	}
+	return disrupted;
+}
+
+function dutchSpanOpenToShips(data) {
+	if (!data || (data.isOpen == null && data.hasBridgeEvent == null)) {
+		throw new Error('could not read Dutch span status');
+	}
+	return data.hasBridgeEvent === true || data.isOpen === false;
+}
+
+function dutchBridgeObserver(slug) {
+	return async function dutchBridge(options) {
+		const data = await fetchJson(`https://isdetunnelopen.nl/api/status/${encodeURIComponent(slug)}`, options);
+		const on = dutchSpanOpenToShips(data);
+		return {
+			on,
+			params: {
+				source: 'isdetunnelopen.nl',
+				bridge: data.bridge || slug,
+				hasBridgeEvent: Boolean(data.hasBridgeEvent)
+			}
+		};
+	};
+}
+
+function launchLive(payload, now) {
+	const results = payload && Array.isArray(payload.results) ? payload.results : [];
+	const t = now.getTime();
+	for (const row of results) {
+		const abbrev = String((row.status || {}).abbrev || '');
+		const name = String(row.name || '');
+		if (abbrev === 'In Flight') {
+			return { on: true, name, abbrev };
+		}
+		if (!LAUNCH_ON_STATUS.includes(abbrev)) {
+			continue;
+		}
+		const net = Date.parse(row.net || '');
+		const start = Date.parse(row.window_start || '');
+		const end = Date.parse(row.window_end || '');
+		const from = (Number.isFinite(start) ? start : net) - LAUNCH_LIVE_BEFORE_MS;
+		const to = (Number.isFinite(end) ? end : net) + LAUNCH_LIVE_AFTER_MS;
+		if (Number.isFinite(from) && Number.isFinite(to) && t >= from && t < to) {
+			return { on: true, name, abbrev };
+		}
+	}
+	const next = results[0] || {};
+	return { on: false, name: String(next.name || ''), abbrev: String((next.status || {}).abbrev || '') };
+}
+
+function elevatedVolcanoes(payload) {
+	const rows = Array.isArray(payload) ? payload : [];
+	return rows.filter((row) => {
+		const color = String(row.color_code || '').toUpperCase();
+		const level = String(row.alert_level || '').toUpperCase();
+		return color === 'ORANGE' || color === 'RED' || level === 'WATCH' || level === 'WARNING';
+	});
+}
+
+function gdacsRedEvents(payload) {
+	const features = payload && Array.isArray(payload.features) ? payload.features : [];
+	return features.filter((feature) => {
+		const props = feature.properties || {};
+		const level = String(props.alertlevel || props.episodealertlevel || '').toLowerCase();
+		return level === 'red';
+	});
 }
 
 function storebaeltClosedNow(html) {
@@ -244,18 +350,29 @@ async function observeOffice(source, options) {
 	return officeResult(spec, seen.holder);
 }
 
+function officeObservers() {
+	const observers = {};
+	for (const id of Object.keys(OFFICES)) {
+		observers[id] = (options) => observeOffice(id, options);
+	}
+	return observers;
+}
+
+function dutchBridgeObservers() {
+	const observers = { erasmusbrug: dutchBridgeObserver('erasmusbrug') };
+	for (const spec of extraDutchBridgeSpecs()) {
+		observers[spec.id] = dutchBridgeObserver(spec.id);
+	}
+	return observers;
+}
+
 const OBSERVERS = Object.freeze({
 	async 'tower-bridge'(options) {
 		const html = await fetchText('https://www.towerbridge.org.uk/flat/lift-times', options);
 		const on = towerBridgeOpen(html, options.now);
 		return { on, params: { source: 'towerbridge.org.uk/flat/lift-times' } };
 	},
-	async erasmusbrug(options) {
-		const data = await fetchJson('https://isdetunnelopen.nl/api/status/erasmusbrug', options);
-		// isOpen true = road traffic can cross, so the span is NOT open to ships.
-		const on = data.hasBridgeEvent === true || data.isOpen === false;
-		return { on, params: { source: 'isdetunnelopen.nl', hasBridgeEvent: Boolean(data.hasBridgeEvent) } };
-	},
+	...dutchBridgeObservers(),
 	async oresund(options) {
 		const html = await fetchText('https://www.oresundsbron.com/en/traffic-information', options);
 		const closed = oresundClosedNow(html, options.now);
@@ -277,6 +394,10 @@ const OBSERVERS = Object.freeze({
 		const on = sittingDay && parts.hour >= 9 && parts.hour < 23;
 		return { on, params: { dayType: type || 'unknown' } };
 	},
+	async 'uk-commons-division'(options) {
+		const message = await fetchJson(COMMONS_ANNUNCIATOR_URL, options);
+		return commonsDivisionInProgress(message);
+	},
 	async 'us-congress'(options) {
 		const html = await fetchText('https://www.majorityleader.gov/schedule/', options);
 		const sittingDay = parseHouseSchedule(html, options.now);
@@ -284,9 +405,7 @@ const OBSERVERS = Object.freeze({
 		const on = sittingDay && parts.hour >= 9 && parts.hour < 23;
 		return { on, params: { sittingDay } };
 	},
-	'uk-pm': (options) => observeOffice('uk-pm', options),
-	'us-president': (options) => observeOffice('us-president', options),
-	pope: (options) => observeOffice('pope', options),
+	...officeObservers(),
 	async conclave(options) {
 		const seen = await wikidataOfficeholder(OFFICES.pope.officeId, options);
 		return { on: !seen.holder, params: { vacant: !seen.holder, holder: seen.holder || '' } };
@@ -326,6 +445,73 @@ const OBSERVERS = Object.freeze({
 				pm: office.holder || ''
 			}
 		};
+	},
+	async earthquake(options) {
+		const payload = await fetchJson(
+			'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_day.geojson',
+			options
+		);
+		const seen = significantQuakes(payload);
+		return {
+			on: seen.count > 0,
+			params: {
+				source: 'earthquake.usgs.gov/significant_day',
+				count: seen.count,
+				mag: seen.mag,
+				place: seen.place
+			}
+		};
+	},
+	async 'london-underground'(options) {
+		const payload = await fetchJson('https://api.tfl.gov.uk/Line/Mode/tube/Status', options);
+		const disrupted = disruptedTubeLines(payload);
+		return {
+			on: disrupted.length > 0,
+			params: {
+				source: 'api.tfl.gov.uk/Line/Mode/tube/Status',
+				disrupted: disrupted.slice(0, 8).join(', ')
+			}
+		};
+	},
+	async launch(options) {
+		const payload = await fetchJson('https://ll.thespacedevs.com/2.2.0/launch/upcoming/?limit=8', options);
+		const seen = launchLive(payload, options.now);
+		return {
+			on: seen.on,
+			params: {
+				source: 'll.thespacedevs.com',
+				name: seen.name,
+				status: seen.abbrev
+			}
+		};
+	},
+	async volcano(options) {
+		const payload = await fetchJson('https://volcanoes.usgs.gov/hans-public/api/volcano/getElevatedVolcanoes', options);
+		const hot = elevatedVolcanoes(payload);
+		return {
+			on: hot.length > 0,
+			params: {
+				source: 'volcanoes.usgs.gov',
+				count: hot.length,
+				names: hot.slice(0, 6).map((row) => row.volcano_name).filter(Boolean).join(', ')
+			}
+		};
+	},
+	async 'gdacs-red'(options) {
+		const payload = await fetchJson(
+			'https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=EQ,TC,FL,VO,DR,WF',
+			options
+		);
+		const red = gdacsRedEvents(payload);
+		const first = (red[0] && red[0].properties) || {};
+		return {
+			on: red.length > 0,
+			params: {
+				source: 'gdacs.org',
+				count: red.length,
+				name: String(first.name || first.eventname || '')
+			}
+		};
 	}
 });
 
@@ -344,16 +530,25 @@ async function observeEntry(entry, options = {}) {
 module.exports = {
 	TOWER_LIFT_MS,
 	SWEDEN_POLLS_CLOSE_MS,
+	COMMONS_ANNUNCIATOR_URL,
 	SOURCE_IDS,
 	OFFICES,
 	zonedParts,
 	parseTowerLiftTimes,
 	towerBridgeOpen,
 	parseCommonsDayType,
+	commonsDivisionInProgress,
 	parseHouseSchedule,
 	geomagneticFromScales,
 	oresundClosedNow,
 	storebaeltClosedNow,
+	significantQuakes,
+	disruptedTubeLines,
+	dutchSpanOpenToShips,
+	launchLive,
+	elevatedVolcanoes,
+	gdacsRedEvents,
+	TFL_SEVERE_MAX,
 	pickOfficeClaim,
 	isWikidataItemId,
 	englishEntityLabel,

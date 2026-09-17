@@ -8,7 +8,7 @@
 			"name": "Tower Bridge open",
 			"description": "ON while the bascules are up for river traffic. Flash a lamp or pause the garden when a ship is passing. Lift times: towerbridge.org.uk.",
 			"location": "London",
-			"category": "Event",
+			"category": "Transport",
 			"link": "https://www.towerbridge.org.uk/lift-times",
 			"art": "tower-bridge",
 			"onMeans": "The roadway is open to shipping.",
@@ -20,7 +20,8 @@
 				"params": {
 					"source": "towerbridge.org.uk/flat/lift-times"
 				},
-				"observedAt": "2026-09-16T06:51:38.305Z"
+				"observedAt": "2026-09-16T13:06:40.786Z",
+				"staleAfterHours": 2
 			}
 		},
 		{
@@ -29,7 +30,7 @@
 			"name": "Erasmusbrug open",
 			"description": "ON while Rotterdam's swan bridge is open to shipping. Pair it with a harbour scene or a porch light. Opening times come from the Port of Rotterdam.",
 			"location": "Rotterdam",
-			"category": "Event",
+			"category": "Transport",
 			"link": "https://www.portofrotterdam.com/",
 			"art": "erasmusbrug",
 			"onMeans": "The span is open to ships.",
@@ -40,9 +41,11 @@
 				"state": false,
 				"params": {
 					"source": "isdetunnelopen.nl",
-					"hasBridgeEvent": false
+					"hasBridgeEvent": false,
+					"bridge": "Erasmusbrug"
 				},
-				"observedAt": "2026-09-16T06:51:38.305Z"
+				"observedAt": "2026-09-16T13:06:40.786Z",
+				"staleAfterHours": 2
 			}
 		},
 		{
@@ -51,7 +54,7 @@
 			"name": "UK Commons sitting",
 			"description": "ON while the House of Commons is sitting. Useful for a quiet-house scene or a Westminster lamp. The calendar is on parliament.uk.",
 			"location": "Westminster",
-			"category": "Community",
+			"category": "Government",
 			"link": "https://www.parliament.uk/business/commons/",
 			"art": "commons",
 			"onMeans": "The Commons is in session.",
@@ -63,7 +66,8 @@
 				"params": {
 					"dayType": "Adjournment day (Conference recess)"
 				},
-				"observedAt": "2026-09-16T06:51:38.305Z"
+				"observedAt": "2026-09-16T13:06:40.786Z",
+				"staleAfterHours": 24
 			}
 		},
 		{
@@ -72,7 +76,7 @@
 			"name": "US Congress in session",
 			"description": "ON while the United States Congress is in session. A simple remote for Capitol-watching automations. Schedule: congress.gov.",
 			"location": "Washington, D.C.",
-			"category": "Community",
+			"category": "Government",
 			"link": "https://www.congress.gov/days-in-session",
 			"art": "capitol",
 			"onMeans": "Congress is in session.",
@@ -80,11 +84,12 @@
 			"schedule": {
 				"kind": "observe",
 				"source": "us-congress",
-				"state": false,
+				"state": true,
 				"params": {
 					"sittingDay": true
 				},
-				"observedAt": "2026-09-16T06:51:38.305Z"
+				"observedAt": "2026-09-16T13:06:40.786Z",
+				"staleAfterHours": 24
 			}
 		},
 		{
@@ -93,7 +98,7 @@
 			"name": "UK Prime Minister: Andy Burnham",
 			"description": "ON while Andy Burnham is Prime Minister. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata / GOV.UK.",
 			"location": "United Kingdom",
-			"category": "Community",
+			"category": "Government",
 			"link": "https://www.gov.uk/government/ministers/prime-minister",
 			"art": "uk-pm",
 			"onMeans": "Andy Burnham currently holds the office.",
@@ -107,7 +112,8 @@
 					"holder": "Andy Burnham",
 					"party": "Labour"
 				},
-				"observedAt": "2026-09-16T06:51:38.305Z"
+				"observedAt": "2026-09-16T13:06:40.786Z",
+				"staleAfterHours": 72
 			}
 		},
 		{
@@ -116,7 +122,7 @@
 			"name": "US President: Donald Trump",
 			"description": "ON while Donald Trump is President of the United States. It turns off on a change of office-holder, then the listing is renamed. Source: Wikidata.",
 			"location": "United States",
-			"category": "Community",
+			"category": "Government",
 			"link": "https://www.whitehouse.gov/",
 			"art": "us-president",
 			"onMeans": "Donald Trump currently holds the office.",
@@ -129,7 +135,8 @@
 					"office": "president",
 					"holder": "Donald Trump"
 				},
-				"observedAt": "2026-09-16T06:51:38.305Z"
+				"observedAt": "2026-09-16T13:06:40.786Z",
+				"staleAfterHours": 72
 			}
 		},
 		{
@@ -138,7 +145,7 @@
 			"name": "Pope: Leo XIV",
 			"description": "ON while Leo XIV is Pope. It turns off during a sede vacante or a new pontificate. Pair with the conclave switch for the gap in between.",
 			"location": "Vatican City",
-			"category": "Community",
+			"category": "Government",
 			"link": "https://www.vatican.va/",
 			"art": "pope",
 			"onMeans": "Leo XIV is the reigning Pope.",
@@ -151,7 +158,8 @@
 					"office": "pope",
 					"holder": "Leo XIV"
 				},
-				"observedAt": "2026-09-16T06:51:38.305Z"
+				"observedAt": "2026-09-16T13:06:40.786Z",
+				"staleAfterHours": 72
 			}
 		},
 		{
@@ -173,7 +181,8 @@
 					"vacant": false,
 					"holder": "Leo XIV"
 				},
-				"observedAt": "2026-09-16T06:51:38.305Z"
+				"observedAt": "2026-09-16T13:06:40.786Z",
+				"staleAfterHours": 24
 			}
 		},
 		{
@@ -194,7 +203,8 @@
 				"params": {
 					"dayType": "Adjournment day (Conference recess)"
 				},
-				"observedAt": "2026-09-16T06:51:38.305Z"
+				"observedAt": "2026-09-16T13:06:40.786Z",
+				"staleAfterHours": 24
 			}
 		},
 		{
@@ -203,7 +213,7 @@
 			"name": "Geomagnetic storm G4+",
 			"description": "ON during a severe or extreme geomagnetic storm (G4 or G5). Aurora watchers can light a room; radio users can pause. Based on NOAA space-weather alerts.",
 			"location": "Worldwide",
-			"category": "Event",
+			"category": "Weather",
 			"link": "https://www.swpc.noaa.gov/",
 			"art": "aurora",
 			"onMeans": "A G4 or G5 geomagnetic storm is in progress.",
@@ -215,7 +225,8 @@
 				"params": {
 					"gScale": 0
 				},
-				"observedAt": "2026-09-16T06:51:38.305Z"
+				"observedAt": "2026-09-16T13:06:40.786Z",
+				"staleAfterHours": 2
 			}
 		},
 		{
@@ -224,7 +235,7 @@
 			"name": "Christmas Day",
 			"description": "ON on 25 December UTC. A community switch for Christmas lights that should agree with everyone else's. Local midnight will differ; this is the UTC civil day.",
 			"location": "Worldwide",
-			"category": "Event",
+			"category": "Holiday",
 			"link": "https://en.wikipedia.org/wiki/Christmas",
 			"art": "christmas",
 			"onMeans": "It is 25 December, UTC.",
@@ -241,7 +252,7 @@
 			"name": "Easter Sunday (Western)",
 			"description": "ON on Western Easter Sunday, UTC. 2026 is 5 April; 2027 is 28 March. Use it for a dawn scene or to rest an automation for the day.",
 			"location": "Worldwide",
-			"category": "Event",
+			"category": "Holiday",
 			"link": "https://en.wikipedia.org/wiki/Easter",
 			"art": "easter",
 			"onMeans": "It is Western Easter Sunday, UTC.",
@@ -270,7 +281,7 @@
 			"name": "Ramadan",
 			"description": "ON for the month of Ramadan, using calculated UTC dates (local moon-sighting can differ by a day). 2026: 18 February to 19 March. A community switch for iftar lamps.",
 			"location": "Worldwide",
-			"category": "Event",
+			"category": "Holiday",
 			"link": "https://en.wikipedia.org/wiki/Ramadan",
 			"art": "ramadan",
 			"onMeans": "The calculated month of Ramadan is under way.",
@@ -295,7 +306,7 @@
 			"name": "Eid al-Fitr",
 			"description": "ON on Eid al-Fitr, using calculated UTC dates. 2026 is 20–21 March. Local moon-sighting can move it by a day. A feast-day switch for lights and greetings.",
 			"location": "Worldwide",
-			"category": "Event",
+			"category": "Holiday",
 			"link": "https://en.wikipedia.org/wiki/Eid_al-Fitr",
 			"art": "eid",
 			"onMeans": "It is Eid al-Fitr on the calculated calendar.",
@@ -320,7 +331,7 @@
 			"name": "Diwali",
 			"description": "ON on Diwali (Lakshmi Puja), UTC. 2026 is 8 November; 2027 is 29 October. The natural switch for a house of lamps.",
 			"location": "Worldwide",
-			"category": "Event",
+			"category": "Holiday",
 			"link": "https://en.wikipedia.org/wiki/Diwali",
 			"art": "diwali",
 			"onMeans": "It is Diwali, UTC.",
@@ -345,7 +356,7 @@
 			"name": "Hanukkah",
 			"description": "ON for the eight days of Hanukkah. 2026 begins at sundown on 4 December. A menorah automation that stays in step with the calendar.",
 			"location": "Worldwide",
-			"category": "Event",
+			"category": "Holiday",
 			"link": "https://www.hebcal.com/holidays/chanukah",
 			"art": "hanukkah",
 			"onMeans": "Hanukkah is being observed.",
@@ -370,7 +381,7 @@
 			"name": "Yom Kippur",
 			"description": "ON for Yom Kippur, from sundown on the eve through the following day. 2026 is 20–21 September. A pause switch: rest noisy automations for the fast.",
 			"location": "Worldwide",
-			"category": "Event",
+			"category": "Holiday",
 			"link": "https://www.hebcal.com/holidays/yom-kippur-2026",
 			"art": "yom-kippur",
 			"onMeans": "Yom Kippur is being observed.",
@@ -395,7 +406,7 @@
 			"name": "Lunar New Year",
 			"description": "ON on Lunar New Year's Day, UTC. 2026 is 17 February (Year of the Horse); 2027 is 6 February. Red lanterns, optional firecrackers, optional restraint.",
 			"location": "Worldwide",
-			"category": "Event",
+			"category": "Holiday",
 			"link": "https://en.wikipedia.org/wiki/Lunar_New_Year",
 			"art": "lunar-new-year",
 			"onMeans": "It is Lunar New Year's Day, UTC.",
@@ -438,7 +449,7 @@
 			"name": "New Year (UTC)",
 			"description": "ON from 21:00 UTC on 31 December until 06:00 UTC on 1 January. A worldwide midnight switch. Local new year will not match; that is the point of the UTC version.",
 			"location": "Worldwide",
-			"category": "Event",
+			"category": "Holiday",
 			"link": "https://en.wikipedia.org/wiki/New_Year",
 			"art": "new-year",
 			"onMeans": "UTC new year is in the window.",
@@ -535,7 +546,8 @@
 					"phase": "formation",
 					"pm": "Ulf Kristersson"
 				},
-				"observedAt": "2026-09-16T06:51:38.305Z"
+				"observedAt": "2026-09-16T13:06:40.786Z",
+				"staleAfterHours": 24
 			}
 		},
 		{
@@ -544,7 +556,7 @@
 			"name": "Øresund Bridge open",
 			"description": "ON while Øresundsbron is open to road traffic between Malmö and Copenhagen. A crossing lamp for weather, incidents or maintenance. Traffic: oresundsbron.com.",
 			"location": "Malmö / Copenhagen",
-			"category": "Event",
+			"category": "Transport",
 			"link": "https://www.oresundsbron.com/",
 			"art": "oresund",
 			"onMeans": "The bridge is open to road traffic.",
@@ -556,7 +568,8 @@
 				"params": {
 					"source": "oresundsbron.com/traffic-information"
 				},
-				"observedAt": "2026-09-16T06:51:38.305Z"
+				"observedAt": "2026-09-16T13:06:40.786Z",
+				"staleAfterHours": 2
 			}
 		},
 		{
@@ -565,7 +578,7 @@
 			"name": "Great Belt Bridge open",
 			"description": "ON while Storebæltsbroen is open to road traffic across Denmark's Great Belt. Pair it with Øresund for the two main Danish straits. Traffic: sundogbaelt.dk.",
 			"location": "Denmark",
-			"category": "Event",
+			"category": "Transport",
 			"link": "https://sundogbaelt.dk/en/storebaelt/",
 			"art": "storebaelt",
 			"onMeans": "The Great Belt Bridge is open to road traffic.",
@@ -577,8 +590,1791 @@
 				"params": {
 					"source": "storebaelt.dk/trafik-vejr"
 				},
-				"observedAt": "2026-09-16T06:51:38.305Z"
+				"observedAt": "2026-09-16T13:06:40.786Z",
+				"staleAfterHours": 2
 			}
+		},
+		{
+			"id": "nowruz",
+			"index": 25,
+			"name": "Nowruz",
+			"description": "ON on 21 March UTC, the spring new year. A light-the-house switch for the equinox. Local observance can spill into 20 or 22 March.",
+			"location": "Worldwide",
+			"category": "Holiday",
+			"link": "https://en.wikipedia.org/wiki/Nowruz",
+			"art": "new-year",
+			"onMeans": "It is 21 March, UTC.",
+			"offMeans": "It is any other UTC day.",
+			"schedule": {
+				"kind": "annual",
+				"month": 3,
+				"day": 21
+			}
+		},
+		{
+			"id": "halloween",
+			"index": 26,
+			"name": "Halloween",
+			"description": "ON on 31 October UTC. Porch lights, a pumpkin scene, or a doorbell chime. Local All Hallows evening is the night before in some places.",
+			"location": "Worldwide",
+			"category": "Holiday",
+			"link": "https://en.wikipedia.org/wiki/Halloween",
+			"art": "halloween",
+			"onMeans": "It is 31 October, UTC.",
+			"offMeans": "It is any other UTC day.",
+			"schedule": {
+				"kind": "annual",
+				"month": 10,
+				"day": 31
+			}
+		},
+		{
+			"id": "thanksgiving",
+			"index": 27,
+			"name": "US Thanksgiving",
+			"description": "ON on the fourth Thursday of November, UTC. A dining-room or guest-room scene for the US holiday. Local dinner is still Thursday in US time zones.",
+			"location": "United States",
+			"category": "Holiday",
+			"link": "https://en.wikipedia.org/wiki/Thanksgiving_(United_States)",
+			"art": "harvest",
+			"onMeans": "It is the fourth Thursday of November, UTC.",
+			"offMeans": "It is any other UTC day.",
+			"schedule": {
+				"kind": "nth_weekday",
+				"month": 11,
+				"weekday": 4,
+				"nth": 4
+			}
+		},
+		{
+			"id": "swedish-national-day",
+			"index": 28,
+			"name": "Swedish National Day",
+			"description": "ON on 6 June UTC, Sveriges nationaldag. A flag-day lamp or a Sweden scene. Source: the Swedish calendar.",
+			"location": "Sweden",
+			"category": "Holiday",
+			"link": "https://en.wikipedia.org/wiki/National_Day_of_Sweden",
+			"art": "sweden-election",
+			"onMeans": "It is 6 June, UTC.",
+			"offMeans": "It is any other UTC day.",
+			"schedule": {
+				"kind": "annual",
+				"month": 6,
+				"day": 6
+			}
+		},
+		{
+			"id": "summer-solstice",
+			"index": 29,
+			"name": "Summer solstice",
+			"description": "ON on 21 June UTC, the northern summer solstice. A long-evening lamp. The exact astronomical instant moves by a few hours each year.",
+			"location": "Worldwide",
+			"category": "Holiday",
+			"link": "https://en.wikipedia.org/wiki/June_solstice",
+			"art": "solstice",
+			"onMeans": "It is 21 June, UTC.",
+			"offMeans": "It is any other UTC day.",
+			"schedule": {
+				"kind": "annual",
+				"month": 6,
+				"day": 21
+			}
+		},
+		{
+			"id": "winter-solstice",
+			"index": 30,
+			"name": "Winter solstice",
+			"description": "ON on 21 December UTC, the northern winter solstice. The shortest-day lamp. The exact instant can fall on 21 or 22 December.",
+			"location": "Worldwide",
+			"category": "Holiday",
+			"link": "https://en.wikipedia.org/wiki/December_solstice",
+			"art": "solstice",
+			"onMeans": "It is 21 December, UTC.",
+			"offMeans": "It is any other UTC day.",
+			"schedule": {
+				"kind": "annual",
+				"month": 12,
+				"day": 21
+			}
+		},
+		{
+			"id": "independence-day",
+			"index": 31,
+			"name": "US Independence Day",
+			"description": "ON on 4 July UTC. A fireworks or porch-flag scene for the US public holiday.",
+			"location": "United States",
+			"category": "Holiday",
+			"link": "https://en.wikipedia.org/wiki/Independence_Day_(United_States)",
+			"art": "us-president",
+			"onMeans": "It is 4 July, UTC.",
+			"offMeans": "It is any other UTC day.",
+			"schedule": {
+				"kind": "annual",
+				"month": 7,
+				"day": 4
+			}
+		},
+		{
+			"id": "boxing-day",
+			"index": 32,
+			"name": "Boxing Day",
+			"description": "ON on 26 December UTC. The day-after-Christmas lamp in the UK, Commonwealth, and Nordics. Pair it with the Christmas switch.",
+			"location": "Worldwide",
+			"category": "Holiday",
+			"link": "https://en.wikipedia.org/wiki/Boxing_Day",
+			"art": "christmas",
+			"onMeans": "It is 26 December, UTC.",
+			"offMeans": "It is any other UTC day.",
+			"schedule": {
+				"kind": "annual",
+				"month": 12,
+				"day": 26
+			}
+		},
+		{
+			"id": "st-lucia",
+			"index": 33,
+			"name": "Saint Lucy's Day",
+			"description": "ON on 13 December UTC, Lucia in Sweden and the Nordic countries. A candle-crown breakfast scene. Local processions start before dawn.",
+			"location": "Sweden",
+			"category": "Holiday",
+			"link": "https://en.wikipedia.org/wiki/Saint_Lucy%27s_Day",
+			"art": "lucia",
+			"onMeans": "It is 13 December, UTC.",
+			"offMeans": "It is any other UTC day.",
+			"schedule": {
+				"kind": "annual",
+				"month": 12,
+				"day": 13
+			}
+		},
+		{
+			"id": "walpurgis",
+			"index": 34,
+			"name": "Walpurgis Night",
+			"description": "ON on 30 April UTC, Valborg in Sweden and Walpurgisnacht in Germany. Bonfire or student-song lighting.",
+			"location": "Northern Europe",
+			"category": "Holiday",
+			"link": "https://en.wikipedia.org/wiki/Walpurgis_Night",
+			"art": "halloween",
+			"onMeans": "It is 30 April, UTC.",
+			"offMeans": "It is any other UTC day.",
+			"schedule": {
+				"kind": "annual",
+				"month": 4,
+				"day": 30
+			}
+		},
+		{
+			"id": "may-day",
+			"index": 35,
+			"name": "May Day",
+			"description": "ON on 1 May UTC, International Workers' Day and a public holiday in much of Europe. A morning lamp or a labour-day scene.",
+			"location": "Worldwide",
+			"category": "Holiday",
+			"link": "https://en.wikipedia.org/wiki/International_Workers%27_Day",
+			"art": "harvest",
+			"onMeans": "It is 1 May, UTC.",
+			"offMeans": "It is any other UTC day.",
+			"schedule": {
+				"kind": "annual",
+				"month": 5,
+				"day": 1
+			}
+		},
+		{
+			"id": "holi",
+			"index": 36,
+			"name": "Holi",
+			"description": "ON on the listed UTC days of Holi. A colour-festival scene. Dates follow the Hindu lunisolar calendar, stored here as explicit windows, not computed.",
+			"location": "Worldwide",
+			"category": "Holiday",
+			"link": "https://en.wikipedia.org/wiki/Holi",
+			"art": "holi",
+			"onMeans": "It is a listed Holi UTC day.",
+			"offMeans": "It is outside the listed Holi windows.",
+			"schedule": {
+				"kind": "windows",
+				"windows": [
+					{
+						"start": "2026-03-03T00:00:00Z",
+						"end": "2026-03-04T00:00:00Z"
+					},
+					{
+						"start": "2027-03-22T00:00:00Z",
+						"end": "2027-03-23T00:00:00Z"
+					}
+				]
+			}
+		},
+		{
+			"id": "good-friday",
+			"index": 37,
+			"name": "Good Friday",
+			"description": "ON on the listed UTC days of Good Friday. A quiet-house or church-hour scene. Dates are from the Western computus and stored as windows.",
+			"location": "Worldwide",
+			"category": "Holiday",
+			"link": "https://en.wikipedia.org/wiki/Good_Friday",
+			"art": "easter",
+			"onMeans": "It is a listed Good Friday, UTC.",
+			"offMeans": "It is any other UTC day.",
+			"schedule": {
+				"kind": "windows",
+				"windows": [
+					{
+						"start": "2026-04-03T00:00:00Z",
+						"end": "2026-04-04T00:00:00Z"
+					},
+					{
+						"start": "2027-03-26T00:00:00Z",
+						"end": "2027-03-27T00:00:00Z"
+					},
+					{
+						"start": "2028-04-14T00:00:00Z",
+						"end": "2028-04-15T00:00:00Z"
+					}
+				]
+			}
+		},
+		{
+			"id": "passover",
+			"index": 38,
+			"name": "Passover",
+			"description": "ON during the listed UTC windows for Pesach. A seder-table scene. Dates follow the Hebrew calendar and are stored here, not computed.",
+			"location": "Worldwide",
+			"category": "Holiday",
+			"link": "https://www.hebcal.com/holidays/pesach",
+			"art": "yom-kippur",
+			"onMeans": "It is inside a listed Passover window.",
+			"offMeans": "It is outside the listed Passover windows.",
+			"schedule": {
+				"kind": "windows",
+				"windows": [
+					{
+						"start": "2026-04-01T16:00:00Z",
+						"end": "2026-04-09T20:00:00Z"
+					},
+					{
+						"start": "2027-04-21T16:00:00Z",
+						"end": "2027-04-29T20:00:00Z"
+					}
+				]
+			}
+		},
+		{
+			"id": "burns-night",
+			"index": 39,
+			"name": "Burns Night",
+			"description": "ON on 25 January UTC, Robert Burns's supper. A whisky or poetry-reading lamp. Source: the Scottish calendar.",
+			"location": "Scotland",
+			"category": "Holiday",
+			"link": "https://en.wikipedia.org/wiki/Burns_supper",
+			"art": "new-year",
+			"onMeans": "It is 25 January, UTC.",
+			"offMeans": "It is any other UTC day.",
+			"schedule": {
+				"kind": "annual",
+				"month": 1,
+				"day": 25
+			}
+		},
+		{
+			"id": "st-patricks-day",
+			"index": 40,
+			"name": "Saint Patrick's Day",
+			"description": "ON on 17 March UTC. A green-house or parade scene for Ireland and the diaspora.",
+			"location": "Worldwide",
+			"category": "Holiday",
+			"link": "https://en.wikipedia.org/wiki/Saint_Patrick%27s_Day",
+			"art": "shamrock",
+			"onMeans": "It is 17 March, UTC.",
+			"offMeans": "It is any other UTC day.",
+			"schedule": {
+				"kind": "annual",
+				"month": 3,
+				"day": 17
+			}
+		},
+		{
+			"id": "midsummer",
+			"index": 41,
+			"name": "Swedish Midsummer Eve",
+			"description": "ON on the listed UTC days of Swedish Midsummer Eve, the Friday between 19 and 25 June. A maypole or dinner-outdoors scene. Dates are stored, not computed.",
+			"location": "Sweden",
+			"category": "Holiday",
+			"link": "https://en.wikipedia.org/wiki/Midsummer",
+			"art": "solstice",
+			"onMeans": "It is a listed Midsummer Eve, UTC.",
+			"offMeans": "It is any other UTC day.",
+			"schedule": {
+				"kind": "windows",
+				"windows": [
+					{
+						"start": "2026-06-19T00:00:00Z",
+						"end": "2026-06-20T00:00:00Z"
+					},
+					{
+						"start": "2027-06-25T00:00:00Z",
+						"end": "2027-06-26T00:00:00Z"
+					}
+				]
+			}
+		},
+		{
+			"id": "significant-earthquake",
+			"index": 42,
+			"name": "Significant earthquake",
+			"description": "ON while USGS lists a significant earthquake in the past day. A low lamp for distant rumble automations. Feed: earthquake.usgs.gov. Turns off if the feed is silent for more than six hours.",
+			"location": "Worldwide",
+			"category": "Weather",
+			"link": "https://earthquake.usgs.gov/earthquakes/map/",
+			"art": "quake",
+			"onMeans": "USGS has at least one significant earthquake in the last 24 hours.",
+			"offMeans": "No significant earthquake in the last day, or the feed has gone silent.",
+			"schedule": {
+				"kind": "observe",
+				"source": "earthquake",
+				"state": false,
+				"staleAfterHours": 6,
+				"params": {
+					"source": "earthquake.usgs.gov/significant_day",
+					"count": 0,
+					"mag": 0,
+					"place": ""
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			}
+		},
+		{
+			"id": "london-underground",
+			"index": 43,
+			"name": "London Underground disruption",
+			"description": "ON while any Underground line is on severe delays, suspended, or closed. Delay the commute scene. Status: TfL Unified API. Turns off if the feed is silent for more than two hours.",
+			"location": "London",
+			"category": "Transport",
+			"link": "https://tfl.gov.uk/tube-dlr-overground/status/",
+			"art": "underground",
+			"onMeans": "At least one Tube line has severe delays or worse.",
+			"offMeans": "Good service or minor delays only, or the feed has gone silent.",
+			"schedule": {
+				"kind": "observe",
+				"source": "london-underground",
+				"state": true,
+				"staleAfterHours": 2,
+				"params": {
+					"source": "api.tfl.gov.uk/Line/Mode/tube/Status",
+					"disrupted": "Metropolitan, Victoria"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			}
+		},
+		{
+			"id": "brienenoordbrug",
+			"name": "Van Brienenoordbrug open",
+			"description": "ON while Rotterdam's Van Brienenoordbrug is open to shipping on the Nieuwe Maas. Pause a commute scene or light the river. Openings: isdetunnelopen.nl.",
+			"location": "Rotterdam",
+			"category": "Transport",
+			"link": "https://isdetunnelopen.nl/brienenoordbrug",
+			"art": "erasmusbrug",
+			"onMeans": "The span is open to ships.",
+			"offMeans": "The span is closed for road traffic.",
+			"schedule": {
+				"kind": "observe",
+				"source": "brienenoordbrug",
+				"state": false,
+				"staleAfterHours": 2,
+				"params": {
+					"source": "isdetunnelopen.nl",
+					"bridge": "Brienenoordbrug",
+					"hasBridgeEvent": false
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 44
+		},
+		{
+			"id": "botlekbrug",
+			"name": "Botlekbrug open",
+			"description": "ON while the Botlekbrug in Rotterdam harbour is open to ships. A dockside lamp for A15 river traffic. Openings: isdetunnelopen.nl.",
+			"location": "Rotterdam",
+			"category": "Transport",
+			"link": "https://isdetunnelopen.nl/botlekbrug",
+			"art": "erasmusbrug",
+			"onMeans": "The span is open to ships.",
+			"offMeans": "The span is closed for road traffic.",
+			"schedule": {
+				"kind": "observe",
+				"source": "botlekbrug",
+				"state": true,
+				"staleAfterHours": 2,
+				"params": {
+					"source": "isdetunnelopen.nl",
+					"bridge": "Botlekbrug",
+					"hasBridgeEvent": true
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 45
+		},
+		{
+			"id": "spijkenisserbrug",
+			"name": "Spijkenisserbrug open",
+			"description": "ON while the Spijkenisserbrug over the Oude Maas is open to shipping. Pair it with a harbour scene. Openings: isdetunnelopen.nl.",
+			"location": "Spijkenisse",
+			"category": "Transport",
+			"link": "https://isdetunnelopen.nl/spijkenisserbrug",
+			"art": "erasmusbrug",
+			"onMeans": "The span is open to ships.",
+			"offMeans": "The span is closed for road traffic.",
+			"schedule": {
+				"kind": "observe",
+				"source": "spijkenisserbrug",
+				"state": true,
+				"staleAfterHours": 2,
+				"params": {
+					"source": "isdetunnelopen.nl",
+					"bridge": "Spijkenisserbrug",
+					"hasBridgeEvent": true
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 46
+		},
+		{
+			"id": "ketelbrug",
+			"name": "Ketelbrug open",
+			"description": "ON while the Ketelbrug on the A6 is open to ships on the Ketelmeer. A lakeside light for a rare lift. Openings: isdetunnelopen.nl.",
+			"location": "Ketelmeer",
+			"category": "Transport",
+			"link": "https://isdetunnelopen.nl/ketelbrug",
+			"art": "erasmusbrug",
+			"onMeans": "The span is open to ships.",
+			"offMeans": "The span is closed for road traffic.",
+			"schedule": {
+				"kind": "observe",
+				"source": "ketelbrug",
+				"state": false,
+				"staleAfterHours": 2,
+				"params": {
+					"source": "isdetunnelopen.nl",
+					"bridge": "Ketelbrug",
+					"hasBridgeEvent": false
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 47
+		},
+		{
+			"id": "merwedebrug",
+			"name": "Merwedebrug open",
+			"description": "ON while the Merwedebrug near Gorinchem is open to shipping. Flash a porch for A27 river traffic. Openings: isdetunnelopen.nl.",
+			"location": "Gorinchem",
+			"category": "Transport",
+			"link": "https://isdetunnelopen.nl/merwedebrug",
+			"art": "erasmusbrug",
+			"onMeans": "The span is open to ships.",
+			"offMeans": "The span is closed for road traffic.",
+			"schedule": {
+				"kind": "observe",
+				"source": "merwedebrug",
+				"state": false,
+				"staleAfterHours": 2,
+				"params": {
+					"source": "isdetunnelopen.nl",
+					"bridge": "Merwedebrug",
+					"hasBridgeEvent": false
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 48
+		},
+		{
+			"id": "haringvlietbrug",
+			"name": "Haringvlietbrug open",
+			"description": "ON while the Haringvlietbrug is open to ships. A coastal lamp for the Haringvliet crossing. Openings: isdetunnelopen.nl.",
+			"location": "Haringvliet",
+			"category": "Transport",
+			"link": "https://isdetunnelopen.nl/haringvlietbrug",
+			"art": "erasmusbrug",
+			"onMeans": "The span is open to ships.",
+			"offMeans": "The span is closed for road traffic.",
+			"schedule": {
+				"kind": "observe",
+				"source": "haringvlietbrug",
+				"state": false,
+				"staleAfterHours": 2,
+				"params": {
+					"source": "isdetunnelopen.nl",
+					"bridge": "Haringvlietbrug",
+					"hasBridgeEvent": false
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 49
+		},
+		{
+			"id": "zeelandbrug",
+			"name": "Zeelandbrug open",
+			"description": "ON while the Zeelandbrug over the Oosterschelde is open to shipping. A long-span light for Zeeland. Openings: isdetunnelopen.nl.",
+			"location": "Zeeland",
+			"category": "Transport",
+			"link": "https://isdetunnelopen.nl/zeelandbrug",
+			"art": "erasmusbrug",
+			"onMeans": "The span is open to ships.",
+			"offMeans": "The span is closed for road traffic.",
+			"schedule": {
+				"kind": "observe",
+				"source": "zeelandbrug",
+				"state": true,
+				"staleAfterHours": 2,
+				"params": {
+					"source": "isdetunnelopen.nl",
+					"bridge": "Zeelandbrug",
+					"hasBridgeEvent": true
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 50
+		},
+		{
+			"id": "kaagbrug",
+			"name": "Kaagbrug open",
+			"description": "ON while the Kaagbrug on the A44 is open to ships. Pause a Leiden-bound scene when the span lifts. Openings: isdetunnelopen.nl.",
+			"location": "Kaag",
+			"category": "Transport",
+			"link": "https://isdetunnelopen.nl/kaagbrug",
+			"art": "erasmusbrug",
+			"onMeans": "The span is open to ships.",
+			"offMeans": "The span is closed for road traffic.",
+			"schedule": {
+				"kind": "observe",
+				"source": "kaagbrug",
+				"state": false,
+				"staleAfterHours": 2,
+				"params": {
+					"source": "isdetunnelopen.nl",
+					"bridge": "Kaagbrug",
+					"hasBridgeEvent": false
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 51
+		},
+		{
+			"id": "algerabrug",
+			"name": "Algerabrug open",
+			"description": "ON while the Algerabrug at Krimpen is open to shipping. A river lamp for the Hollandse IJssel. Openings: isdetunnelopen.nl.",
+			"location": "Krimpen aan den IJssel",
+			"category": "Transport",
+			"link": "https://isdetunnelopen.nl/algerabrug",
+			"art": "erasmusbrug",
+			"onMeans": "The span is open to ships.",
+			"offMeans": "The span is closed for road traffic.",
+			"schedule": {
+				"kind": "observe",
+				"source": "algerabrug",
+				"state": true,
+				"staleAfterHours": 2,
+				"params": {
+					"source": "isdetunnelopen.nl",
+					"bridge": "Algerabrug",
+					"hasBridgeEvent": true
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 52
+		},
+		{
+			"id": "prinsclausbrug",
+			"name": "Prins Clausbrug open",
+			"description": "ON while Dordrecht's Prins Clausbrug is open to ships. Pair it with a harbour scene. Openings: isdetunnelopen.nl.",
+			"location": "Dordrecht",
+			"category": "Transport",
+			"link": "https://isdetunnelopen.nl/prinsclausbrug",
+			"art": "erasmusbrug",
+			"onMeans": "The span is open to ships.",
+			"offMeans": "The span is closed for road traffic.",
+			"schedule": {
+				"kind": "observe",
+				"source": "prinsclausbrug",
+				"state": false,
+				"staleAfterHours": 2,
+				"params": {
+					"source": "isdetunnelopen.nl",
+					"bridge": "Prins Clausbrug",
+					"hasBridgeEvent": false
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 53
+		},
+		{
+			"id": "cruquiusbrug",
+			"name": "Cruquiusbrug open",
+			"description": "ON while the Cruquiusbrug is open to shipping. A polder lamp for a Haarlem-bound lift. Openings: isdetunnelopen.nl.",
+			"location": "Haarlemmermeer",
+			"category": "Transport",
+			"link": "https://isdetunnelopen.nl/cruquiusbrug",
+			"art": "erasmusbrug",
+			"onMeans": "The span is open to ships.",
+			"offMeans": "The span is closed for road traffic.",
+			"schedule": {
+				"kind": "observe",
+				"source": "cruquiusbrug",
+				"state": false,
+				"staleAfterHours": 2,
+				"params": {
+					"source": "isdetunnelopen.nl",
+					"bridge": "Cruquiusbrug",
+					"hasBridgeEvent": false
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 54
+		},
+		{
+			"id": "kooybrug",
+			"name": "Kooybrug open",
+			"description": "ON while the Kooybrug near Den Helder is open to ships. A North Holland harbour light. Openings: isdetunnelopen.nl.",
+			"location": "Den Helder",
+			"category": "Transport",
+			"link": "https://isdetunnelopen.nl/kooybrug",
+			"art": "erasmusbrug",
+			"onMeans": "The span is open to ships.",
+			"offMeans": "The span is closed for road traffic.",
+			"schedule": {
+				"kind": "observe",
+				"source": "kooybrug",
+				"state": false,
+				"staleAfterHours": 2,
+				"params": {
+					"source": "isdetunnelopen.nl",
+					"bridge": "Kooybrug",
+					"hasBridgeEvent": false
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 55
+		},
+		{
+			"id": "leimuiderbrug",
+			"name": "Leimuiderbrug open",
+			"description": "ON while the Leimuiderbrug on the A4 is open to shipping. Pause a Schiphol-bound scene when the span lifts. Openings: isdetunnelopen.nl.",
+			"location": "Leimuiden",
+			"category": "Transport",
+			"link": "https://isdetunnelopen.nl/leimuiderbrug",
+			"art": "erasmusbrug",
+			"onMeans": "The span is open to ships.",
+			"offMeans": "The span is closed for road traffic.",
+			"schedule": {
+				"kind": "observe",
+				"source": "leimuiderbrug",
+				"state": false,
+				"staleAfterHours": 2,
+				"params": {
+					"source": "isdetunnelopen.nl",
+					"bridge": "Leimuiderbrug",
+					"hasBridgeEvent": false
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 56
+		},
+		{
+			"id": "french-president",
+			"name": "French President: Emmanuel Macron",
+			"description": "ON while Emmanuel Macron is President of France. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "France",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/President_of_France",
+			"art": "capitol",
+			"onMeans": "Emmanuel Macron currently holds the office.",
+			"offMeans": "Someone else is President of France, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "french-president",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Emmanuel Macron"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 57
+		},
+		{
+			"id": "german-chancellor",
+			"name": "German Chancellor: Friedrich Merz",
+			"description": "ON while Friedrich Merz is Chancellor of Germany. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Germany",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Chancellor_of_Germany",
+			"art": "uk-pm",
+			"onMeans": "Friedrich Merz currently holds the office.",
+			"offMeans": "Someone else is Chancellor of Germany, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "german-chancellor",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Friedrich Merz"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 58
+		},
+		{
+			"id": "german-president",
+			"name": "German President: Frank-Walter Steinmeier",
+			"description": "ON while Frank-Walter Steinmeier is President of Germany. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Germany",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/President_of_Germany",
+			"art": "capitol",
+			"onMeans": "Frank-Walter Steinmeier currently holds the office.",
+			"offMeans": "Someone else is President of Germany, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "german-president",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Frank-Walter Steinmeier"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 59
+		},
+		{
+			"id": "taoiseach",
+			"name": "Taoiseach: Micheál Martin",
+			"description": "ON while Micheál Martin is Taoiseach. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Ireland",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Taoiseach",
+			"art": "uk-pm",
+			"onMeans": "Micheál Martin currently holds the office.",
+			"offMeans": "Someone else is Taoiseach, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "taoiseach",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Micheál Martin"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 60
+		},
+		{
+			"id": "irish-president",
+			"name": "Irish President: Catherine Connolly",
+			"description": "ON while Catherine Connolly is President of Ireland. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Ireland",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/President_of_Ireland",
+			"art": "capitol",
+			"onMeans": "Catherine Connolly currently holds the office.",
+			"offMeans": "Someone else is President of Ireland, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "irish-president",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Catherine Connolly"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 61
+		},
+		{
+			"id": "canadian-pm",
+			"name": "Canadian Prime Minister: Mark Carney",
+			"description": "ON while Mark Carney is Prime Minister of Canada. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Canada",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Prime_Minister_of_Canada",
+			"art": "uk-pm",
+			"onMeans": "Mark Carney currently holds the office.",
+			"offMeans": "Someone else is Prime Minister of Canada, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "canadian-pm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Mark Carney"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 62
+		},
+		{
+			"id": "australian-pm",
+			"name": "Australian Prime Minister: Anthony Albanese",
+			"description": "ON while Anthony Albanese is Prime Minister of Australia. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Australia",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Prime_Minister_of_Australia",
+			"art": "uk-pm",
+			"onMeans": "Anthony Albanese currently holds the office.",
+			"offMeans": "Someone else is Prime Minister of Australia, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "australian-pm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Anthony Albanese"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 63
+		},
+		{
+			"id": "nz-pm",
+			"name": "New Zealand Prime Minister: Christopher Luxon",
+			"description": "ON while Christopher Luxon is Prime Minister of New Zealand. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "New Zealand",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Prime_Minister_of_New_Zealand",
+			"art": "uk-pm",
+			"onMeans": "Christopher Luxon currently holds the office.",
+			"offMeans": "Someone else is Prime Minister of New Zealand, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "nz-pm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Christopher Luxon"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 64
+		},
+		{
+			"id": "italian-pm",
+			"name": "Italian Prime Minister: Giorgia Meloni",
+			"description": "ON while Giorgia Meloni is Prime Minister of Italy. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Italy",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Prime_Minister_of_Italy",
+			"art": "uk-pm",
+			"onMeans": "Giorgia Meloni currently holds the office.",
+			"offMeans": "Someone else is Prime Minister of Italy, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "italian-pm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Giorgia Meloni"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 65
+		},
+		{
+			"id": "spanish-pm",
+			"name": "Spanish Prime Minister: Pedro Sánchez",
+			"description": "ON while Pedro Sánchez is Prime Minister of Spain. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Spain",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Prime_Minister_of_Spain",
+			"art": "uk-pm",
+			"onMeans": "Pedro Sánchez currently holds the office.",
+			"offMeans": "Someone else is Prime Minister of Spain, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "spanish-pm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Pedro Sánchez"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 66
+		},
+		{
+			"id": "dutch-pm",
+			"name": "Dutch Prime Minister: Rob Jetten",
+			"description": "ON while Rob Jetten is Prime Minister of the Netherlands. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Netherlands",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Prime_Minister_of_the_Netherlands",
+			"art": "uk-pm",
+			"onMeans": "Rob Jetten currently holds the office.",
+			"offMeans": "Someone else is Prime Minister of the Netherlands, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "dutch-pm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Rob Jetten"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 67
+		},
+		{
+			"id": "japanese-pm",
+			"name": "Japanese Prime Minister: Sanae Takaichi",
+			"description": "ON while Sanae Takaichi is Prime Minister of Japan. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Japan",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Prime_Minister_of_Japan",
+			"art": "uk-pm",
+			"onMeans": "Sanae Takaichi currently holds the office.",
+			"offMeans": "Someone else is Prime Minister of Japan, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "japanese-pm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Sanae Takaichi"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 68
+		},
+		{
+			"id": "indian-pm",
+			"name": "Indian Prime Minister: Narendra Modi",
+			"description": "ON while Narendra Modi is Prime Minister of India. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "India",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Prime_Minister_of_India",
+			"art": "uk-pm",
+			"onMeans": "Narendra Modi currently holds the office.",
+			"offMeans": "Someone else is Prime Minister of India, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "indian-pm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Narendra Modi"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 69
+		},
+		{
+			"id": "brazilian-president",
+			"name": "Brazilian President: Luiz Inácio Lula da Silva",
+			"description": "ON while Luiz Inácio Lula da Silva is President of Brazil. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Brazil",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/President_of_Brazil",
+			"art": "capitol",
+			"onMeans": "Luiz Inácio Lula da Silva currently holds the office.",
+			"offMeans": "Someone else is President of Brazil, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "brazilian-president",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Luiz Inácio Lula da Silva"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 70
+		},
+		{
+			"id": "mexican-president",
+			"name": "Mexican President: Claudia Sheinbaum",
+			"description": "ON while Claudia Sheinbaum is President of Mexico. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Mexico",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/President_of_Mexico",
+			"art": "capitol",
+			"onMeans": "Claudia Sheinbaum currently holds the office.",
+			"offMeans": "Someone else is President of Mexico, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "mexican-president",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Claudia Sheinbaum"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 71
+		},
+		{
+			"id": "eu-commission",
+			"name": "European Commission President: Ursula von der Leyen",
+			"description": "ON while Ursula von der Leyen is President of the European Commission. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Brussels",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/President_of_the_European_Commission",
+			"art": "capitol",
+			"onMeans": "Ursula von der Leyen currently holds the office.",
+			"offMeans": "Someone else is President of the European Commission, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "eu-commission",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Ursula von der Leyen"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 72
+		},
+		{
+			"id": "un-sg",
+			"name": "UN Secretary-General: António Guterres",
+			"description": "ON while António Guterres is Secretary-General of the United Nations. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "New York",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Secretary-General_of_the_United_Nations",
+			"art": "capitol",
+			"onMeans": "António Guterres currently holds the office.",
+			"offMeans": "Someone else is Secretary-General of the United Nations, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "un-sg",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "António Guterres"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 73
+		},
+		{
+			"id": "nato-sg",
+			"name": "NATO Secretary General: Mark Rutte",
+			"description": "ON while Mark Rutte is Secretary General of NATO. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Brussels",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Secretary_General_of_NATO",
+			"art": "capitol",
+			"onMeans": "Mark Rutte currently holds the office.",
+			"offMeans": "Someone else is Secretary General of NATO, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "nato-sg",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Mark Rutte"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 74
+		},
+		{
+			"id": "mayor-london",
+			"name": "Mayor of London: Sadiq Khan",
+			"description": "ON while Sadiq Khan is Mayor of London. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "London",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Mayor_of_London",
+			"art": "commons",
+			"onMeans": "Sadiq Khan currently holds the office.",
+			"offMeans": "Someone else is Mayor of London, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "mayor-london",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Sadiq Khan"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 75
+		},
+		{
+			"id": "mayor-nyc",
+			"name": "Mayor of New York City: Zohran Mamdani",
+			"description": "ON while Zohran Mamdani is Mayor of New York City. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "New York",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Mayor_of_New_York_City",
+			"art": "capitol",
+			"onMeans": "Zohran Mamdani currently holds the office.",
+			"offMeans": "Someone else is Mayor of New York City, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "mayor-nyc",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Zohran Mamdani"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 76
+		},
+		{
+			"id": "finnish-president",
+			"name": "Finnish President: Alexander Stubb",
+			"description": "ON while Alexander Stubb is President of Finland. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Finland",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/President_of_Finland",
+			"art": "capitol",
+			"onMeans": "Alexander Stubb currently holds the office.",
+			"offMeans": "Someone else is President of Finland, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "finnish-president",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Alexander Stubb"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 77
+		},
+		{
+			"id": "finnish-pm",
+			"name": "Finnish Prime Minister: Petteri Orpo",
+			"description": "ON while Petteri Orpo is Prime Minister of Finland. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Finland",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Prime_Minister_of_Finland",
+			"art": "uk-pm",
+			"onMeans": "Petteri Orpo currently holds the office.",
+			"offMeans": "Someone else is Prime Minister of Finland, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "finnish-pm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Petteri Orpo"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 78
+		},
+		{
+			"id": "norwegian-pm",
+			"name": "Norwegian Prime Minister: Jonas Gahr Støre",
+			"description": "ON while Jonas Gahr Støre is Prime Minister of Norway. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Norway",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Prime_Minister_of_Norway",
+			"art": "uk-pm",
+			"onMeans": "Jonas Gahr Støre currently holds the office.",
+			"offMeans": "Someone else is Prime Minister of Norway, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "norwegian-pm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Jonas Gahr Støre"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 79
+		},
+		{
+			"id": "danish-pm",
+			"name": "Danish Prime Minister: Mette Frederiksen",
+			"description": "ON while Mette Frederiksen is Prime Minister of Denmark. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Denmark",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Prime_Minister_of_Denmark",
+			"art": "uk-pm",
+			"onMeans": "Mette Frederiksen currently holds the office.",
+			"offMeans": "Someone else is Prime Minister of Denmark, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "danish-pm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Mette Frederiksen"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 80
+		},
+		{
+			"id": "swedish-pm",
+			"name": "Swedish Prime Minister: Ulf Kristersson",
+			"description": "ON while Ulf Kristersson is Prime Minister of Sweden. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Sweden",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Prime_Minister_of_Sweden",
+			"art": "uk-pm",
+			"onMeans": "Ulf Kristersson currently holds the office.",
+			"offMeans": "Someone else is Prime Minister of Sweden, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "swedish-pm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Ulf Kristersson"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 81
+		},
+		{
+			"id": "swedish-monarch",
+			"name": "Swedish monarch: Carl XVI Gustaf of Sweden",
+			"description": "ON while Carl XVI Gustaf of Sweden is Monarch of Sweden. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Sweden",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Monarchy_of_Sweden",
+			"art": "crown",
+			"onMeans": "Carl XVI Gustaf of Sweden currently holds the office.",
+			"offMeans": "Someone else is Monarch of Sweden, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "swedish-monarch",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Carl XVI Gustaf of Sweden"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 82
+		},
+		{
+			"id": "uk-monarch",
+			"name": "British monarch: Charles III",
+			"description": "ON while Charles III is Monarch of the United Kingdom. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "United Kingdom",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Monarchy_of_the_United_Kingdom",
+			"art": "crown",
+			"onMeans": "Charles III currently holds the office.",
+			"offMeans": "Someone else is Monarch of the United Kingdom, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "uk-monarch",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Charles III"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 83
+		},
+		{
+			"id": "scotland-fm",
+			"name": "First Minister of Scotland: John Swinney",
+			"description": "ON while John Swinney is First Minister of Scotland. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Scotland",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/First_Minister_of_Scotland",
+			"art": "uk-pm",
+			"onMeans": "John Swinney currently holds the office.",
+			"offMeans": "Someone else is First Minister of Scotland, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "scotland-fm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "John Swinney"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 84
+		},
+		{
+			"id": "wales-fm",
+			"name": "First Minister of Wales: Rhun ap Iorwerth",
+			"description": "ON while Rhun ap Iorwerth is First Minister of Wales. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Wales",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/First_Minister_of_Wales",
+			"art": "uk-pm",
+			"onMeans": "Rhun ap Iorwerth currently holds the office.",
+			"offMeans": "Someone else is First Minister of Wales, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "wales-fm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Rhun ap Iorwerth"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 85
+		},
+		{
+			"id": "south-africa-president",
+			"name": "South African President: Cyril Ramaphosa",
+			"description": "ON while Cyril Ramaphosa is President of South Africa. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "South Africa",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/President_of_South_Africa",
+			"art": "capitol",
+			"onMeans": "Cyril Ramaphosa currently holds the office.",
+			"offMeans": "Someone else is President of South Africa, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "south-africa-president",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Cyril Ramaphosa"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 86
+		},
+		{
+			"id": "argentina-president",
+			"name": "Argentine President: Javier Milei",
+			"description": "ON while Javier Milei is President of Argentina. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Argentina",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/President_of_Argentina",
+			"art": "capitol",
+			"onMeans": "Javier Milei currently holds the office.",
+			"offMeans": "Someone else is President of Argentina, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "argentina-president",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Javier Milei"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 87
+		},
+		{
+			"id": "south-korea-president",
+			"name": "South Korean President: Lee Jae Myung",
+			"description": "ON while Lee Jae Myung is President of South Korea. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "South Korea",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/President_of_South_Korea",
+			"art": "capitol",
+			"onMeans": "Lee Jae Myung currently holds the office.",
+			"offMeans": "Someone else is President of South Korea, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "south-korea-president",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Lee Jae Myung"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 88
+		},
+		{
+			"id": "portugal-pm",
+			"name": "Portuguese Prime Minister: Luís Montenegro",
+			"description": "ON while Luís Montenegro is Prime Minister of Portugal. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Portugal",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Prime_Minister_of_Portugal",
+			"art": "uk-pm",
+			"onMeans": "Luís Montenegro currently holds the office.",
+			"offMeans": "Someone else is Prime Minister of Portugal, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "portugal-pm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Luís Montenegro"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 89
+		},
+		{
+			"id": "poland-pm",
+			"name": "Polish Prime Minister: Donald Tusk",
+			"description": "ON while Donald Tusk is Prime Minister of Poland. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Poland",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Prime_Minister_of_Poland",
+			"art": "uk-pm",
+			"onMeans": "Donald Tusk currently holds the office.",
+			"offMeans": "Someone else is Prime Minister of Poland, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "poland-pm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Donald Tusk"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 90
+		},
+		{
+			"id": "greece-pm",
+			"name": "Greek Prime Minister: Kyriakos Mitsotakis",
+			"description": "ON while Kyriakos Mitsotakis is Prime Minister of Greece. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Greece",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Prime_Minister_of_Greece",
+			"art": "uk-pm",
+			"onMeans": "Kyriakos Mitsotakis currently holds the office.",
+			"offMeans": "Someone else is Prime Minister of Greece, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "greece-pm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Kyriakos Mitsotakis"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 91
+		},
+		{
+			"id": "austria-chancellor",
+			"name": "Austrian Chancellor: Christian Stocker",
+			"description": "ON while Christian Stocker is Chancellor of Austria. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Austria",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Chancellor_of_Austria",
+			"art": "uk-pm",
+			"onMeans": "Christian Stocker currently holds the office.",
+			"offMeans": "Someone else is Chancellor of Austria, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "austria-chancellor",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Christian Stocker"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 92
+		},
+		{
+			"id": "israel-pm",
+			"name": "Israeli Prime Minister: Benjamin Netanyahu",
+			"description": "ON while Benjamin Netanyahu is Prime Minister of Israel. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Israel",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Prime_Minister_of_Israel",
+			"art": "uk-pm",
+			"onMeans": "Benjamin Netanyahu currently holds the office.",
+			"offMeans": "Someone else is Prime Minister of Israel, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "israel-pm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Benjamin Netanyahu"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 93
+		},
+		{
+			"id": "singapore-pm",
+			"name": "Singapore Prime Minister: Lawrence Wong",
+			"description": "ON while Lawrence Wong is Prime Minister of Singapore. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Singapore",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Prime_Minister_of_Singapore",
+			"art": "uk-pm",
+			"onMeans": "Lawrence Wong currently holds the office.",
+			"offMeans": "Someone else is Prime Minister of Singapore, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "singapore-pm",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Lawrence Wong"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 94
+		},
+		{
+			"id": "california-governor",
+			"name": "Governor of California: Gavin Newsom",
+			"description": "ON while Gavin Newsom is Governor of California. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "California",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/Governor_of_California",
+			"art": "capitol",
+			"onMeans": "Gavin Newsom currently holds the office.",
+			"offMeans": "Someone else is Governor of California, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "california-governor",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Gavin Newsom"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 95
+		},
+		{
+			"id": "swiss-president",
+			"name": "Swiss President: Guy Parmelin",
+			"description": "ON while Guy Parmelin is President of the Swiss Confederation. It turns off when the office-holder changes, then the listing is renamed. Source: Wikidata.",
+			"location": "Switzerland",
+			"category": "Government",
+			"link": "https://en.wikipedia.org/wiki/President_of_the_Swiss_Confederation",
+			"art": "capitol",
+			"onMeans": "Guy Parmelin currently holds the office.",
+			"offMeans": "Someone else is President of the Swiss Confederation, or the office is vacant.",
+			"schedule": {
+				"kind": "observe",
+				"source": "swiss-president",
+				"state": true,
+				"staleAfterHours": 72,
+				"params": {
+					"holder": "Guy Parmelin"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 96
+		},
+		{
+			"id": "orbital-launch",
+			"name": "Orbital launch window",
+			"description": "ON while an orbital launch is in flight, or Go/Hold inside the launch window. Light a shed or hush the house for a countdown. Source: Launch Library 2.",
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://ll.thespacedevs.com/",
+			"art": "rocket",
+			"onMeans": "A listed launch is in flight, or Go/Hold inside the window.",
+			"offMeans": "No launch is in flight or inside the live window.",
+			"schedule": {
+				"kind": "observe",
+				"source": "launch",
+				"state": false,
+				"staleAfterHours": 2,
+				"params": {
+					"source": "ll.thespacedevs.com",
+					"name": "Gravity-1 | SpaceSail Polar Group #16",
+					"status": "Success"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 97
+		},
+		{
+			"id": "us-volcano-alert",
+			"name": "US volcano watch or warning",
+			"description": "ON while a US volcano is at orange/red, or aviation watch/warning. A rare hazard lamp. Source: USGS volcano elevations.",
+			"location": "United States",
+			"category": "Weather",
+			"link": "https://volcanoes.usgs.gov/hans-public/",
+			"art": "volcano",
+			"onMeans": "At least one US volcano is orange, red, watch, or warning.",
+			"offMeans": "No listed volcano is at those levels.",
+			"schedule": {
+				"kind": "observe",
+				"source": "volcano",
+				"state": true,
+				"staleAfterHours": 6,
+				"params": {
+					"source": "volcanoes.usgs.gov",
+					"count": 2,
+					"names": "Great Sitkin, Kilauea"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 98
+		},
+		{
+			"id": "gdacs-red",
+			"name": "GDACS red alert",
+			"description": "ON while GDACS lists a red alert (quake, cyclone, flood, volcano, drought, or wildfire). A global disaster lamp. Source: GDACS.",
+			"location": "Worldwide",
+			"category": "Weather",
+			"link": "https://www.gdacs.org/",
+			"art": "disaster",
+			"onMeans": "At least one GDACS event is at red alert.",
+			"offMeans": "No listed event is at red alert.",
+			"schedule": {
+				"kind": "observe",
+				"source": "gdacs-red",
+				"state": true,
+				"staleAfterHours": 6,
+				"params": {
+					"source": "gdacs.org",
+					"count": 20,
+					"name": "Flood in Nepal"
+				},
+				"observedAt": "2026-09-16T13:06:40.786Z"
+			},
+			"index": 99
+		},
+		{
+			"id": "uk-commons-division",
+			"name": "UK Commons division",
+			"description": "ON while a Commons division is in progress — MPs have a few minutes to reach the lobbies. Useful as a remote switch if you are away from the estate. Source: UK Parliament annunciator.",
+			"location": "Westminster",
+			"category": "Government",
+			"link": "https://now.parliament.uk/",
+			"art": "commons-bell",
+			"onMeans": "A Commons division is under way; the lobbies are open.",
+			"offMeans": "No Commons division is in progress.",
+			"schedule": {
+				"kind": "observe",
+				"source": "uk-commons-division",
+				"state": false,
+				"staleAfterHours": 1,
+				"observeEveryMinutes": 1
+			},
+			"index": 100
+		},
+		{
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://www.aliexpress.com/",
+			"art": "parcel",
+			"id": "aliexpress-sale",
+			"name": "AliExpress sale",
+			"description": "ON during a listed AliExpress tentpole (Anniversary, Summer, 11.11, or 12.12). A shopping lamp or a pause on the checkout. UTC windows from AliExpress announcements — their site blocks bots, so this is not a live scrape.",
+			"onMeans": "A listed AliExpress tentpole sale is under way.",
+			"offMeans": "It is outside the listed sale windows.",
+			"schedule": {
+				"kind": "windows",
+				"windows": [
+					{
+						"start": "2026-03-16T00:00:00Z",
+						"end": "2026-03-26T00:00:00Z"
+					},
+					{
+						"start": "2026-06-01T00:00:00Z",
+						"end": "2026-06-11T00:00:00Z"
+					},
+					{
+						"start": "2026-11-11T00:00:00Z",
+						"end": "2026-11-20T00:00:00Z"
+					},
+					{
+						"start": "2027-11-11T00:00:00Z",
+						"end": "2027-11-20T00:00:00Z"
+					},
+					{
+						"start": "2026-12-07T00:00:00Z",
+						"end": "2026-12-13T00:00:00Z"
+					},
+					{
+						"start": "2027-12-07T00:00:00Z",
+						"end": "2027-12-13T00:00:00Z"
+					}
+				]
+			},
+			"index": 101
+		},
+		{
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://www.aliexpress.com/",
+			"art": "parcel",
+			"id": "aliexpress-1111",
+			"name": "AliExpress 11.11",
+			"description": "ON during the AliExpress Global Shopping Festival. A reminder to order, or to hide the basket. 2026 is 11–19 November UTC.",
+			"onMeans": "The listed 11.11 window is under way.",
+			"offMeans": "It is outside the listed 11.11 windows.",
+			"schedule": {
+				"kind": "windows",
+				"windows": [
+					{
+						"start": "2026-11-11T00:00:00Z",
+						"end": "2026-11-20T00:00:00Z"
+					},
+					{
+						"start": "2027-11-11T00:00:00Z",
+						"end": "2027-11-20T00:00:00Z"
+					}
+				]
+			},
+			"index": 102
+		},
+		{
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://www.aliexpress.com/",
+			"art": "parcel",
+			"id": "aliexpress-summer",
+			"name": "AliExpress Summer sale",
+			"description": "ON during the AliExpress Summer / 6.18 sale. A mid-year shopping lamp. 2026 is 1–10 June UTC, from the AliExpress press release.",
+			"onMeans": "The listed Summer sale window is under way.",
+			"offMeans": "It is outside the listed Summer sale windows.",
+			"schedule": {
+				"kind": "windows",
+				"windows": [
+					{
+						"start": "2026-06-01T00:00:00Z",
+						"end": "2026-06-11T00:00:00Z"
+					}
+				]
+			},
+			"index": 103
+		},
+		{
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://www.aliexpress.com/",
+			"art": "parcel",
+			"id": "aliexpress-anniversary",
+			"name": "AliExpress Anniversary sale",
+			"description": "ON during the AliExpress Anniversary sale. A spring shopping lamp. 2026 is 16–25 March UTC, from the AliExpress press release.",
+			"onMeans": "The listed Anniversary sale window is under way.",
+			"offMeans": "It is outside the listed Anniversary sale windows.",
+			"schedule": {
+				"kind": "windows",
+				"windows": [
+					{
+						"start": "2026-03-16T00:00:00Z",
+						"end": "2026-03-26T00:00:00Z"
+					}
+				]
+			},
+			"index": 104
+		},
+		{
+			"location": "Worldwide",
+			"category": "Event",
+			"link": "https://www.aliexpress.com/",
+			"art": "parcel",
+			"id": "aliexpress-choice-day",
+			"name": "AliExpress Choice Day",
+			"description": "ON for the first seven UTC days of each month, when AliExpress Choice Day usually runs. A monthly shopping lamp for Choice items. They publish no public calendar — Open Platform wants a business account and the storefront blocks bots.",
+			"onMeans": "It is the 1st to the 7th of the month, UTC.",
+			"offMeans": "It is the 8th or later of the UTC month.",
+			"schedule": {
+				"kind": "month_days",
+				"startDay": 1,
+				"endDay": 7
+			},
+			"index": 105
 		}
 	]
 }

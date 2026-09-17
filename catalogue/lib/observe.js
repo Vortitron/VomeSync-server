@@ -1,8 +1,13 @@
 /**
  * Pull live sources into catalogue entries, then the CLI writes JSON and
- * pushes ON/OFF. A fetch error leaves that switch's last state alone.
+ * pushes ON/OFF. A short fetch error leaves that switch's last state
+ * alone. Once `observedAt` is older than `staleAfterHours` (default 24),
+ * the listing is forced OFF until the feed works again.
  */
 const { observeEntry } = require('./sources');
+const { observationIsStale } = require('./stale');
+
+const BATCH_OBSERVE_MINUTES = 5;
 
 function cloneEntry(entry) {
 	return {
@@ -21,9 +26,13 @@ function applyObservation(entry, seen, now) {
 	const previousOn = Boolean(next.schedule.state);
 	next.schedule.state = Boolean(seen.on);
 	next.schedule.observedAt = now.toISOString();
-	if (seen.params && typeof seen.params === 'object') {
-		next.schedule.params = { ...(next.schedule.params || {}), ...seen.params };
-	}
+	const params = {
+		...(next.schedule.params || {}),
+		...((seen.params && typeof seen.params === 'object') ? seen.params : {})
+	};
+	delete params.stale;
+	delete params.lastError;
+	next.schedule.params = Object.keys(params).length ? params : undefined;
 	let metaChanged = false;
 	for (const field of ['name', 'description', 'onMeans', 'offMeans', 'link']) {
 		if (typeof seen[field] === 'string' && seen[field] && seen[field] !== next[field]) {
@@ -36,6 +45,45 @@ function applyObservation(entry, seen, now) {
 		changed: previousOn !== Boolean(seen.on) || metaChanged,
 		metaChanged,
 		on: Boolean(seen.on)
+	};
+}
+
+function forceStaleOff(entry, error) {
+	const next = cloneEntry(entry);
+	const previousOn = Boolean(next.schedule.state);
+	next.schedule.state = false;
+	next.schedule.params = {
+		...(next.schedule.params || {}),
+		stale: true,
+		lastError: error
+	};
+	return {
+		entry: next,
+		changed: previousOn !== false,
+		on: false
+	};
+}
+
+function isFastObserveSource(entry) {
+	const minutes = Number(entry && entry.schedule && entry.schedule.observeEveryMinutes);
+	return Number.isInteger(minutes) && minutes > 0 && minutes < BATCH_OBSERVE_MINUTES;
+}
+
+function resultFlags(result, extra = {}) {
+	const skipped = Boolean(result.skipped);
+	const staleOff = Boolean(result.staleOff);
+	const fetched = staleOff || (result.ok && !skipped);
+	return {
+		id: result.id,
+		ok: result.ok,
+		skipped,
+		deferred: Boolean(extra.deferred),
+		fetched,
+		staleOff,
+		on: result.on,
+		changed: result.changed,
+		metaChanged: result.metaChanged,
+		error: result.error || null
 	};
 }
 
@@ -68,6 +116,21 @@ async function observeOne(entry, options) {
 			entry: applied.entry
 		};
 	} catch (error) {
+		const message = error.message;
+		if (observationIsStale(entry.schedule, now)) {
+			const forced = forceStaleOff(entry, message);
+			return {
+				id: entry.id,
+				ok: false,
+				skipped: false,
+				staleOff: true,
+				on: forced.on,
+				changed: forced.changed,
+				metaChanged: false,
+				error: message,
+				entry: forced.entry
+			};
+		}
 		return {
 			id: entry.id,
 			ok: false,
@@ -75,7 +138,7 @@ async function observeOne(entry, options) {
 			on: Boolean(entry.schedule && entry.schedule.state),
 			changed: false,
 			metaChanged: false,
-			error: error.message,
+			error: message,
 			entry
 		};
 	}
@@ -94,22 +157,28 @@ async function observeCatalogue(options) {
 		throw new Error(`unknown switch id(s): ${missing.join(', ')}`);
 	}
 
+	const force = Boolean(options.onlyIds && options.onlyIds.length);
 	const replacements = new Map();
 	const results = [];
 	for (const entry of selected) {
+		if (!force && isFastObserveSource(entry)) {
+			results.push(resultFlags({
+				id: entry.id,
+				ok: true,
+				skipped: true,
+				on: Boolean(entry.schedule && entry.schedule.state),
+				changed: false,
+				metaChanged: false
+			}, { deferred: true }));
+			continue;
+		}
 		log(`observe ${entry.id}`);
 		const result = await observeOne(entry, { ...options, now });
 		replacements.set(entry.id, result.entry);
-		results.push({
-			id: result.id,
-			ok: result.ok,
-			skipped: Boolean(result.skipped),
-			on: result.on,
-			changed: result.changed,
-			metaChanged: result.metaChanged,
-			error: result.error || null
-		});
-		if (!result.ok) {
+		results.push(resultFlags(result));
+		if (!result.ok && result.staleOff) {
+			log(`${entry.id}: stale — forced OFF (${result.error})`);
+		} else if (!result.ok) {
 			log(`${entry.id}: keep last state (${result.error})`);
 		} else if (result.skipped) {
 			log(`${entry.id}: not a live source`);
@@ -126,8 +195,11 @@ async function observeCatalogue(options) {
 }
 
 module.exports = {
+	BATCH_OBSERVE_MINUTES,
 	cloneEntry,
 	applyObservation,
+	forceStaleOff,
+	isFastObserveSource,
 	observeOne,
 	observeCatalogue
 };

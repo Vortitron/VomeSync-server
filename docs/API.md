@@ -489,7 +489,7 @@ Create a new virtual switch.
 **Parameters:**
 - `description` (string, optional): Human-readable description
 - `location` (string, optional): City-level location for privacy
-- `category` (string, optional): One of `Community`, `Personal`, `Event`, `Test`, `Other`
+- `category` (string, optional): One of `Community`, `Personal`, `Event`, `Transport`, `Government`, `Holiday`, `Weather`, `Test`, `Other`
 - `publicize` (boolean, optional): Whether to list publicly
 
 **Response:**
@@ -629,6 +629,10 @@ List category counts for the public directory.
     "Community": 12,
     "Personal": 4,
     "Event": 2,
+    "Transport": 5,
+    "Government": 3,
+    "Holiday": 12,
+    "Weather": 2,
     "Test": 1,
     "Other": 3
   }
@@ -654,6 +658,9 @@ Whether paid promotion and premium are live. No secrets. The website uses this t
     "maxPrivate": 5,
     "maxPublic": 10,
     "maxSwitches": 15,
+    "premiumMaxPrivate": 50,
+    "premiumMaxPublic": 25,
+    "premiumMaxSwitches": 50,
     "taxEnabled": true
   }
 }

@@ -241,6 +241,9 @@ async function applyCatalogue(options) {
 		const { result, stored } = await applyOne(ctx, entry, previous);
 		state.switches[entry.id] = stored;
 		results.push(result);
+		if (typeof options.onState === 'function') {
+			options.onState(state);
+		}
 	}
 
 	return { ownerId: owner, results, state };

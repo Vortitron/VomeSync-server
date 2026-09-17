@@ -1,10 +1,21 @@
-const CATEGORIES = Object.freeze(['Community', 'Personal', 'Event', 'Test', 'Other']);
+const CATEGORIES = Object.freeze([
+	'Community',
+	'Personal',
+	'Event',
+	'Transport',
+	'Government',
+	'Holiday',
+	'Weather',
+	'Test',
+	'Other'
+]);
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_NAME_LENGTH = 80;
 const MAX_DESCRIPTION_LENGTH = 500;
 const MAX_LOCATION_LENGTH = 100;
 const MAX_URL_LENGTH = 500;
 const { SOURCE_IDS } = require('./sources');
+const { MIN_STALE_AFTER_HOURS, MAX_STALE_AFTER_HOURS } = require('./stale');
 
 const SCHEDULE_KINDS = Object.freeze([
 	'manual',
@@ -13,6 +24,7 @@ const SCHEDULE_KINDS = Object.freeze([
 	'windows',
 	'annual',
 	'month',
+	'month_days',
 	'nth_weekday',
 	'full_moon'
 ]);
@@ -58,6 +70,18 @@ function validateSchedule(schedule, id) {
 		if (typeof schedule.source !== 'string' || !SOURCE_IDS.includes(schedule.source)) {
 			throw new Error(`${id}: observe schedule needs a known source`);
 		}
+		if (Object.prototype.hasOwnProperty.call(schedule, 'staleAfterHours')) {
+			const hours = Number(schedule.staleAfterHours);
+			if (!Number.isFinite(hours) || hours < MIN_STALE_AFTER_HOURS || hours > MAX_STALE_AFTER_HOURS) {
+				throw new Error(`${id}: staleAfterHours must be ${MIN_STALE_AFTER_HOURS}-${MAX_STALE_AFTER_HOURS}`);
+			}
+		}
+		if (Object.prototype.hasOwnProperty.call(schedule, 'observeEveryMinutes')) {
+			const minutes = Number(schedule.observeEveryMinutes);
+			if (!Number.isInteger(minutes) || minutes < 1 || minutes > 60) {
+				throw new Error(`${id}: observeEveryMinutes must be an integer 1-60`);
+			}
+		}
 	}
 	if (schedule.kind === 'windows') {
 		if (!Array.isArray(schedule.windows) || schedule.windows.length === 0) {
@@ -83,6 +107,19 @@ function validateSchedule(schedule, id) {
 	if (schedule.kind === 'month') {
 		if (!Number.isInteger(schedule.month) || schedule.month < 1 || schedule.month > 12) {
 			throw new Error(`${id}: month schedule needs month 1-12`);
+		}
+	}
+	if (schedule.kind === 'month_days') {
+		const startDay = schedule.startDay;
+		const endDay = schedule.endDay;
+		if (!Number.isInteger(startDay) || startDay < 1 || startDay > 31) {
+			throw new Error(`${id}: month_days needs startDay 1-31`);
+		}
+		if (!Number.isInteger(endDay) || endDay < 1 || endDay > 31) {
+			throw new Error(`${id}: month_days needs endDay 1-31`);
+		}
+		if (endDay < startDay) {
+			throw new Error(`${id}: month_days endDay must be >= startDay`);
 		}
 	}
 	if (schedule.kind === 'nth_weekday') {

@@ -29,12 +29,18 @@ const {
 	grantPremium
 } = require('./lib/apply');
 const { observeCatalogue } = require('./lib/observe');
+const {
+	DEFAULT_LIVE_DIR,
+	repoCataloguePath,
+	resolveCataloguePath,
+	resolveStatePath,
+	installLiveCatalogue,
+	syncRepoIntoLive
+} = require('./lib/paths');
 
 const ROOT = __dirname;
 const DEFAULT_API = 'https://sync.vome.io/api';
-const CATALOGUE_PATH = path.join(ROOT, 'switches.json');
 const SEED_PATH = path.join(ROOT, '.seed');
-const STATE_PATH = path.join(ROOT, '.local-state.json');
 const DOCKER_ENV_PATH = path.join(ROOT, '..', 'docker', '.env');
 
 function usage() {
@@ -49,11 +55,15 @@ Usage:
   node catalogue/cli.js delist-tests [--dry-run]
   node catalogue/cli.js purge-debris [--dry-run]
   node catalogue/cli.js grant-premium
+  node catalogue/cli.js install-live
+  node catalogue/cli.js sync-live
 
 Environment:
   VOMESYNC_API_BASE          default ${DEFAULT_API}
   VOMESYNC_CATALOGUE_SEED    32-byte master seed (base64url)
   VOMESYNC_CATALOGUE_SEED_FILE
+  VOMESYNC_CATALOGUE_DIR     live JSON dir (default ${DEFAULT_LIVE_DIR})
+  VOMESYNC_CATALOGUE_PATH    live switches.json (overrides dir)
   ADMIN_API_KEY              for premium grant and delist
   HCAPTCHA_BYPASS_TOKEN      if live captcha is enabled
 `;
@@ -162,7 +172,8 @@ function loadOrCreateSeed(allowCreate) {
 }
 
 function loadCatalogue() {
-	const doc = JSON.parse(fs.readFileSync(CATALOGUE_PATH, 'utf8'));
+	const cataloguePath = resolveCataloguePath();
+	const doc = JSON.parse(fs.readFileSync(cataloguePath, 'utf8'));
 	const switches = Array.isArray(doc) ? doc : doc.switches;
 	return validateCatalogue(switches, artIds());
 }
@@ -187,6 +198,7 @@ async function commandUids(seed, entries) {
 }
 
 async function commandApply(args, seed, entries) {
+	const statePath = resolveStatePath();
 	const result = await applyCatalogue({
 		apiBase: args.apiBase,
 		seed,
@@ -196,12 +208,13 @@ async function commandApply(args, seed, entries) {
 		skipImages: args.skipImages,
 		adminKey: resolveAdminKey(),
 		captchaToken: resolveCaptchaToken(),
-		state: loadJsonFile(STATE_PATH, { switches: {} }),
+		state: loadJsonFile(statePath, { switches: {} }),
 		sharp: args.skipImages || args.dryRun ? null : resolveSharp(),
-		log
+		log,
+		onState: args.dryRun ? undefined : (state) => saveJsonFile(statePath, state)
 	});
 	if (!args.dryRun) {
-		saveJsonFile(STATE_PATH, result.state);
+		saveJsonFile(statePath, result.state);
 	}
 	console.log(JSON.stringify({ ownerId: result.ownerId, results: result.results }, null, '\t'));
 }
@@ -218,8 +231,30 @@ async function commandRefresh(args, seed, entries) {
 	console.log(JSON.stringify(results, null, '\t'));
 }
 
-function loadCatalogueDocument() {
-	return JSON.parse(fs.readFileSync(CATALOGUE_PATH, 'utf8'));
+function loadCatalogueDocument(filePath = resolveCataloguePath()) {
+	return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+}
+
+function saveLiveEntries(entries, fetchedIds) {
+	const cataloguePath = resolveCataloguePath();
+	const doc = loadCatalogueDocument(cataloguePath);
+	const patchIds = fetchedIds && fetchedIds.length
+		? new Set(fetchedIds)
+		: new Set(entries.map((entry) => entry.id));
+	const byId = new Map(
+		entries.filter((entry) => patchIds.has(entry.id)).map((entry) => [entry.id, entry])
+	);
+	const seen = new Set();
+	doc.switches = (doc.switches || []).map((entry) => {
+		seen.add(entry.id);
+		return byId.get(entry.id) || entry;
+	});
+	for (const entry of byId.values()) {
+		if (!seen.has(entry.id)) {
+			doc.switches.push(entry);
+		}
+	}
+	saveJsonFile(cataloguePath, doc);
 }
 
 async function commandObserve(args, seed, entries) {
@@ -232,9 +267,10 @@ async function commandObserve(args, seed, entries) {
 	});
 	validateCatalogue(observed.entries, artIds());
 	if (!args.dryRun) {
-		const doc = loadCatalogueDocument();
-		doc.switches = observed.entries;
-		saveJsonFile(CATALOGUE_PATH, doc);
+		const fetchedIds = observed.results.filter((row) => row.fetched).map((row) => row.id);
+		if (fetchedIds.length) {
+			saveLiveEntries(observed.entries, fetchedIds);
+		}
 		const metaIds = observed.results
 			.filter((row) => row.ok && row.metaChanged)
 			.map((row) => row.id);
@@ -246,11 +282,14 @@ async function commandObserve(args, seed, entries) {
 				dryRun: false
 			}, seed, observed.entries);
 		}
+		const refreshIds = args.only.length
+			? args.only
+			: observed.results.filter((row) => !row.deferred).map((row) => row.id);
 		await refreshStates({
 			apiBase: args.apiBase,
 			seed,
 			entries: observed.entries,
-			onlyIds: args.only,
+			onlyIds: refreshIds,
 			dryRun: false,
 			log
 		});
@@ -278,11 +317,21 @@ async function commandAdd(args, seed, entries) {
 	if (!spec.schedule) {
 		spec.schedule = { kind: 'manual', state: false };
 	}
-	const doc = JSON.parse(fs.readFileSync(CATALOGUE_PATH, 'utf8'));
+	const cataloguePath = resolveCataloguePath();
+	const doc = loadCatalogueDocument(cataloguePath);
 	const next = addEntry(entries, spec);
 	validateCatalogue(next, artIds());
 	doc.switches = next;
-	saveJsonFile(CATALOGUE_PATH, doc);
+	saveJsonFile(cataloguePath, doc);
+	const repoPath = repoCataloguePath();
+	if (cataloguePath !== repoPath && fs.existsSync(repoPath)) {
+		const repoDoc = loadCatalogueDocument(repoPath);
+		const have = new Set((repoDoc.switches || []).map((entry) => entry.id));
+		if (!have.has(spec.id)) {
+			repoDoc.switches = addEntry(repoDoc.switches || [], { ...spec, index: next[next.length - 1].index });
+			saveJsonFile(repoPath, repoDoc);
+		}
+	}
 	const added = next[next.length - 1];
 	console.error(`Added ${added.id} at index ${added.index}`);
 	if (args.applyAfterAdd) {
@@ -347,6 +396,19 @@ async function commandGrantPremium(args, seed) {
 	console.log(JSON.stringify({ ownerId: owner, tier: 'premium' }, null, '\t'));
 }
 
+function commandInstallLive() {
+	const result = installLiveCatalogue();
+	console.log(JSON.stringify(result, null, '\t'));
+}
+
+function commandSyncLive() {
+	const result = syncRepoIntoLive({
+		loadJson: loadJsonFile,
+		saveJson: saveJsonFile
+	});
+	console.log(JSON.stringify(result, null, '\t'));
+}
+
 async function main(argv) {
 	const args = parseArgs(argv);
 	if (!args.command || args.command === 'help') {
@@ -357,7 +419,7 @@ async function main(argv) {
 	const seed = ['uids', 'apply', 'refresh', 'observe', 'add', 'grant-premium', 'purge-debris'].includes(args.command)
 		? loadOrCreateSeed(allowCreateSeed)
 		: '';
-	const entries = ['delist-tests', 'grant-premium', 'help'].includes(args.command)
+	const entries = ['delist-tests', 'grant-premium', 'help', 'install-live', 'sync-live'].includes(args.command)
 		? []
 		: loadCatalogue();
 
@@ -386,6 +448,12 @@ async function main(argv) {
 		case 'grant-premium':
 			await commandGrantPremium(args, seed);
 			return 0;
+		case 'install-live':
+			commandInstallLive();
+			return 0;
+		case 'sync-live':
+			commandSyncLive();
+			return 0;
 		default:
 			throw new Error(`unknown command: ${args.command}`);
 	}
@@ -404,5 +472,6 @@ module.exports = {
 	parseArgs,
 	loadDotEnv,
 	usage,
+	saveLiveEntries,
 	main
 };

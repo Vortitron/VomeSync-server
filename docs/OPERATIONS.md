@@ -37,10 +37,11 @@ This document is a practical checklist/runbook for operating VomeSync safely, es
 	- Customer Portal: `POST /api/v2/switch/:uid/billing-portal` (access key) and `POST /api/v2/owner/billing-portal` (signed). Needs a `stripeCustomerId` from a paid Checkout — promo grants have nothing to manage. Live default configuration is on (`bpc_1UGCjw3LQGzeVJDWHxWjf5nR`: cancel at period end, card update, invoices, tax id).
 	- Leave keys empty to keep Promote / Upgrade hidden. Do not put live keys in git.
 - **Public directory catalogue** (staff-owned illustrated switches):
-	- Source: `catalogue/switches.json`. CLI: `node catalogue/cli.js apply` then `observe`.
+	- Source: git `catalogue/switches.json` (definitions, tests). Live observe writes `/var/lib/vomesync-catalogue/switches.json`, not the Develop working tree. Install with `node catalogue/cli.js install-live`. CLI: `apply` then `observe`.
 	- Keep `catalogue/.seed` off git. Losing it mints new UIDs and abandons subscribers.
-	- `apply` grants that owner premium via the admin API so the ten-public-switch cap does not apply.
-	- `vomesync-catalogue-observe.timer` runs `node catalogue/cli.js observe` every five minutes. Live sources (bridges, sittings, Wikidata offices, NOAA, val.se) update themselves; a failed fetch keeps the last good state. Calendar holidays are computed in the same pass.
+	- `apply` grants that owner premium via the admin API. Create/publicize caps skip `CATALOGUE_OWNER_ID`, so the directory can grow without raising the paid 50/25 cap.
+	- `vomesync-catalogue-observe.timer` runs `node catalogue/cli.js observe` every five minutes. Live sources (bridges, sittings, Wikidata offices, NOAA, USGS, TfL, Launch Library, GDACS, val.se) update themselves; a short fetch failure keeps the last good state, then `staleAfterHours` (default 24, shorter on bridges, Tube, launches and Commons divisions) forces OFF. Calendar holidays are computed in the same pass.
+	- `vomesync-catalogue-observe-division.timer` observes `uk-commons-division` every minute from the Parliament Now annunciator (the lobby window is about eight minutes). The five-minute job skips that listing.
 	- `node catalogue/cli.js purge-debris` deletes leftover CI/e2e switches. It will not touch catalogue UIDs or a listing named GamlaBio.
 
 ### Network exposure

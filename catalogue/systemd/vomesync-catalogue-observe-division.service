@@ -1,5 +1,5 @@
 [Unit]
-Description=VomeSync catalogue observe (pull live sources, push ON/OFF)
+Description=VomeSync catalogue observe (Commons division bell, every minute)
 Documentation=file:///var/www/VomeSync-server/catalogue/README.md
 After=network-online.target docker.service
 Wants=network-online.target
@@ -12,8 +12,8 @@ WorkingDirectory=/var/www/VomeSync-server
 Environment=NODE_ENV=production
 EnvironmentFile=-/var/www/VomeSync-server/docker/.env
 Environment=VOMESYNC_CATALOGUE_DIR=/var/lib/vomesync-catalogue
-ExecStart=/var/www/VomeSync-server/catalogue/observe.sh
+ExecStart=/var/www/VomeSync-server/catalogue/observe.sh --only uk-commons-division
 Environment=NVM_DIR=/home/vortitron/.nvm
 Environment=PATH=/home/vortitron/.nvm/versions/node/v22.23.0/bin:/usr/local/bin:/usr/bin:/bin
 Nice=10
-TimeoutStartSec=120
+TimeoutStartSec=60
