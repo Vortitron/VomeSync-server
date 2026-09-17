@@ -62,7 +62,8 @@ function artIds() {
 		'rocket',
 		'volcano',
 		'crown',
-		'disaster'
+		'disaster',
+		'parcel'
 	]);
 }
 
@@ -356,6 +357,12 @@ function glyph(artId, color) {
 				<polygon points="128,40 216,196 40,196" fill="${PALETTE.crimson}"/>
 				<rect x="118" y="92" width="20" height="60" rx="6" fill="${PALETTE.bg}"/>
 				<circle cx="128" cy="172" r="12" fill="${PALETTE.bg}"/>`;
+		case 'parcel':
+			return `
+				<rect x="56" y="92" width="144" height="108" rx="10" fill="${color}"/>
+				<rect x="56" y="92" width="144" height="28" fill="${PALETTE.gold}"/>
+				<rect x="118" y="64" width="20" height="56" rx="4" fill="${PALETTE.gold}"/>
+				<rect x="56" y="140" width="144" height="10" fill="${PALETTE.bg}" opacity="0.45"/>`;
 		default:
 			return `
 				<circle cx="128" cy="128" r="48" fill="${color}"/>

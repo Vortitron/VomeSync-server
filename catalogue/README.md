@@ -54,7 +54,8 @@ node catalogue/cli.js purge-debris
 | `lib/sources.js` | Live observers (bridges, sittings, Commons division, offices, storms, elections, USGS, TfL, Launch Library, GDACS). |
 | `lib/offices.js` | Wikidata P1308 office-holders. |
 | `lib/dutch-bridges.js` | Extra isdetunnelopen.nl movable spans. |
-| `lib/live-listings.js` | Extra offices, bridges and event specs (not calendars). |
+| `lib/live-listings.js` | Extra offices, bridges, live events, and AliExpress tentpole windows. |
+| `lib/aliexpress-sales.js` | UTC windows for Anniversary, Summer, 11.11 and 12.12. Not a live scrape. |
 | `append-live-listings.js` | Idempotent merge of those extras into `switches.json`. |
 | `lib/observe.js` | Fetch each source; short outages keep last state, then force OFF. |
 | `lib/stale.js` | `staleAfterHours` clock from last successful `observedAt`. |
@@ -105,6 +106,8 @@ Swedish election 2026 is **one** switch on purpose: ON after polls close while t
 Øresund and the Great Belt: ON means open to road traffic — the opposite of Tower Bridge / Erasmusbrug, where ON means open to ships.
 
 Government listings keep a stable UID. The observer renames the listing when Wikidata’s office-holder (P1308) changes. If Wikidata omits an English label, keep the last good name — never publish a Q-id.
+
+AliExpress tentpoles are UTC `windows`, not a scrape: their storefront returns a punish page to anonymous clients. **AliExpress sale** is ON during any listed tentpole; 11.11, Summer and Anniversary are the named ones. Extend the windows when they publish the next year.
 
 ## Tests
 

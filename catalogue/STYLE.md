@@ -100,4 +100,4 @@ Reuse an existing `art` key if the glyph is close enough. Add a new glyph when i
 
 If the public listing is already at the premium cap, grant premium to the catalogue owner (`grant-premium`) and set `CATALOGUE_OWNER_ID` so that owner is exempt. Do not raise `PREMIUM_MAX_PUBLIC_SWITCHES` for paying customers.
 
-Do not pad the directory with more holidays, sports, stocks, weather, sun/moon, extra Tube lines, or extra USGS quakes. Those already have Home Assistant integrations, or they are calendar events. Add live civic feeds (offices, movable bridges, launches, volcanoes, disaster alerts) instead.
+Do not pad the directory with more holidays, sports, stocks, weather, sun/moon, extra Tube lines, or extra USGS quakes. Those already have Home Assistant integrations, or they are calendar events. Add live civic feeds (offices, movable bridges, launches, volcanoes, disaster alerts) instead. Named shop tentpoles (AliExpress) are UTC `windows` from published dates — their storefronts bot-wall a live scrape.

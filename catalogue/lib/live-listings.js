@@ -1,9 +1,10 @@
 /**
- * Extra public listings that are live civic feeds, not calendars and not
- * things Home Assistant already covers (weather, sun, Tube duplicates, quakes).
+ * Extra public listings: live civic feeds plus a few named commercial
+ * tentpoles (AliExpress). Not HA weather/sun/Tube duplicates.
  */
 const { extraOfficeSwitchSpecs } = require('./offices');
 const { extraDutchBridgeSpecs } = require('./dutch-bridges');
+const { extraAliExpressSaleSpecs } = require('./aliexpress-sales');
 
 function extraEventSpecs() {
 	return [
@@ -80,9 +81,13 @@ function extraEventSpecs() {
 }
 
 function extraLiveListings() {
-	const listings = extraDutchBridgeSpecs().concat(extraOfficeSwitchSpecs(), extraEventSpecs());
-	if (listings.length !== 57) {
-		throw new Error(`expected 57 extra listings, got ${listings.length}`);
+	const listings = extraDutchBridgeSpecs().concat(
+		extraOfficeSwitchSpecs(),
+		extraEventSpecs(),
+		extraAliExpressSaleSpecs()
+	);
+	if (listings.length !== 61) {
+		throw new Error(`expected 61 extra listings, got ${listings.length}`);
 	}
 	return listings;
 }
