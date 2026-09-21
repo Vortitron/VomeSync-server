@@ -284,7 +284,7 @@ async function commandObserve(args, seed, entries) {
 		}
 		const refreshIds = args.only.length
 			? args.only
-			: observed.results.filter((row) => !row.deferred).map((row) => row.id);
+			: observed.results.filter((row) => !row.deferred && !row.waiting).map((row) => row.id);
 		await refreshStates({
 			apiBase: args.apiBase,
 			seed,

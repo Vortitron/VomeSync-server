@@ -8,10 +8,12 @@
  */
 function aliexpressWindows(which) {
 	const anniversary = [
-		{ start: '2026-03-16T00:00:00Z', end: '2026-03-26T00:00:00Z' }
+		{ start: '2026-03-16T00:00:00Z', end: '2026-03-26T00:00:00Z' },
+		{ start: '2027-03-16T00:00:00Z', end: '2027-03-26T00:00:00Z' }
 	];
 	const summer = [
-		{ start: '2026-06-01T00:00:00Z', end: '2026-06-11T00:00:00Z' }
+		{ start: '2026-06-01T00:00:00Z', end: '2026-06-11T00:00:00Z' },
+		{ start: '2027-06-01T00:00:00Z', end: '2027-06-11T00:00:00Z' }
 	];
 	const festival = [
 		{ start: '2026-11-11T00:00:00Z', end: '2026-11-20T00:00:00Z' },
@@ -71,7 +73,7 @@ function extraAliExpressSaleSpecs() {
 		saleListing({
 			id: 'aliexpress-summer',
 			name: 'AliExpress Summer sale',
-			description: 'ON during the AliExpress Summer / 6.18 sale. A mid-year shopping lamp. 2026 is 1–10 June UTC, from the AliExpress press release.',
+			description: 'ON during the AliExpress Summer / 6.18 sale. A mid-year shopping lamp. 2026 and 2027 are 1–10 June UTC. 2027 repeats the 2026 week until they publish different dates.',
 			onMeans: 'The listed Summer sale window is under way.',
 			offMeans: 'It is outside the listed Summer sale windows.',
 			windows: aliexpressWindows('summer')
@@ -79,7 +81,7 @@ function extraAliExpressSaleSpecs() {
 		saleListing({
 			id: 'aliexpress-anniversary',
 			name: 'AliExpress Anniversary sale',
-			description: 'ON during the AliExpress Anniversary sale. A spring shopping lamp. 2026 is 16–25 March UTC, from the AliExpress press release.',
+			description: 'ON during the AliExpress Anniversary sale. A spring shopping lamp. 2026 and 2027 are 16–25 March UTC. 2027 repeats the 2026 week until they publish different dates.',
 			onMeans: 'The listed Anniversary sale window is under way.',
 			offMeans: 'It is outside the listed Anniversary sale windows.',
 			windows: aliexpressWindows('anniversary')

@@ -69,6 +69,18 @@ function isFastObserveSource(entry) {
 	return Number.isInteger(minutes) && minutes > 0 && minutes < BATCH_OBSERVE_MINUTES;
 }
 
+function isSlowObserveWaiting(entry, now) {
+	const minutes = Number(entry && entry.schedule && entry.schedule.observeEveryMinutes);
+	if (!Number.isInteger(minutes) || minutes <= BATCH_OBSERVE_MINUTES) {
+		return false;
+	}
+	const observedAt = Date.parse(entry.schedule.observedAt || '');
+	if (!Number.isFinite(observedAt)) {
+		return false;
+	}
+	return now.getTime() - observedAt < minutes * 60 * 1000;
+}
+
 function resultFlags(result, extra = {}) {
 	const skipped = Boolean(result.skipped);
 	const staleOff = Boolean(result.staleOff);
@@ -78,6 +90,7 @@ function resultFlags(result, extra = {}) {
 		ok: result.ok,
 		skipped,
 		deferred: Boolean(extra.deferred),
+		waiting: Boolean(extra.waiting),
 		fetched,
 		staleOff,
 		on: result.on,
@@ -172,6 +185,18 @@ async function observeCatalogue(options) {
 			}, { deferred: true }));
 			continue;
 		}
+		if (!force && isSlowObserveWaiting(entry, now)) {
+			log(`${entry.id}: waiting for observeEveryMinutes`);
+			results.push(resultFlags({
+				id: entry.id,
+				ok: true,
+				skipped: true,
+				on: Boolean(entry.schedule && entry.schedule.state),
+				changed: false,
+				metaChanged: false
+			}, { waiting: true }));
+			continue;
+		}
 		log(`observe ${entry.id}`);
 		const result = await observeOne(entry, { ...options, now });
 		replacements.set(entry.id, result.entry);
@@ -200,6 +225,7 @@ module.exports = {
 	applyObservation,
 	forceStaleOff,
 	isFastObserveSource,
+	isSlowObserveWaiting,
 	observeOne,
 	observeCatalogue
 };

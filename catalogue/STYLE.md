@@ -76,7 +76,7 @@ Calendar switches are UTC on purpose. Local midnight is not something a global d
 
 When an office-holder changes, the observer updates `name` / description / `schedule.params` and keeps the same `id` / `index`. A missing English label must not fall back to the Wikidata Q-id.
 
-IsUp listings read the vendor’s status JSON, not the product homepage. Statuspage `indicator` must be `none` for ON; `minor` / `major` / `critical` is OFF. Slack is ON only for `status=ok` with no `active_incidents`. Google Workspace / Gemini use the incidents list (a row with no `end` is an open incident). Do not use third-party logos in the art — the wifi arcs and three-node graph are generic.
+IsUp listings read the vendor’s status JSON, not the product homepage. Statuspage `minor` stays ON — Cloudflare and Twilio are almost always minor because one city or one product is degraded. OFF is `major` or `critical` only. Slack is ON only for `status=ok` with no `active_incidents`. Google Workspace / Gemini use the incidents list (a row with no `end` is an open incident). Do not use third-party logos in the art — the wifi arcs and three-node graph are generic.
 
 ## Adding quickly
 

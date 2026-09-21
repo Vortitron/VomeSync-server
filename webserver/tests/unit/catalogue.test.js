@@ -324,6 +324,9 @@ const {
 	launchLive,
 	elevatedVolcanoes,
 	gdacsRedEvents,
+	swedenElectionLive,
+	SWEDEN_POLLS_CLOSE_MS,
+	SWEDEN_FORMATION_UNTIL_MS,
 	pickOfficeClaim,
 	isWikidataItemId,
 	englishEntityLabel,
@@ -335,7 +338,7 @@ const {
 	slackIsUp,
 	googleOpenIncidents
 } = require('../../../catalogue/lib/uptime');
-const { observeCatalogue, isFastObserveSource } = require('../../../catalogue/lib/observe');
+const { observeCatalogue, isFastObserveSource, isSlowObserveWaiting } = require('../../../catalogue/lib/observe');
 const { isTestDebris } = require('../../../catalogue/lib/apply');
 
 describe('catalogue observers', () => {
@@ -627,6 +630,50 @@ describe('catalogue observers', () => {
 		expect(forced.entries[0].schedule.params.reason).toBe('bell');
 	});
 
+	test('orbital launch waits 30 minutes between fetches', async () => {
+		const launch = {
+			id: 'orbital-launch',
+			schedule: {
+				kind: 'observe',
+				source: 'launch',
+				state: false,
+				observeEveryMinutes: 30,
+				observedAt: '2026-09-21T18:20:00Z'
+			}
+		};
+		const now = new Date('2026-09-21T18:40:00Z');
+		expect(isSlowObserveWaiting(launch, now)).toBe(true);
+		const fetchImpl = async () => {
+			throw new Error('launch must not be fetched inside the interval');
+		};
+		const waited = await observeCatalogue({
+			entries: [launch],
+			fetchImpl,
+			now
+		});
+		expect(waited.results[0]).toMatchObject({
+			id: 'orbital-launch',
+			ok: true,
+			skipped: true,
+			waiting: true,
+			fetched: false,
+			on: false
+		});
+		const due = await observeCatalogue({
+			entries: [{
+				...launch,
+				schedule: { ...launch.schedule, observedAt: '2026-09-21T18:00:00Z' }
+			}],
+			fetchImpl: async () => ({
+				ok: true,
+				json: async () => ({ results: [] })
+			}),
+			now
+		});
+		expect(due.results[0].fetched).toBe(true);
+		expect(due.results[0].waiting).toBeFalsy();
+	});
+
 	test('Dutch span, launch, volcano and GDACS parsers', () => {
 		expect(dutchSpanOpenToShips({ isOpen: true, hasBridgeEvent: false })).toBe(false);
 		expect(dutchSpanOpenToShips({ isOpen: false, hasBridgeEvent: false })).toBe(true);
@@ -662,15 +709,52 @@ describe('catalogue observers', () => {
 		]).map((row) => row.volcano_name)).toEqual(['Kilauea']);
 		expect(gdacsRedEvents({
 			features: [
-				{ properties: { alertlevel: 'Red', name: 'Cyclone' } },
-				{ properties: { alertlevel: 'Orange', name: 'Flood' } }
+				{
+					properties: {
+						alertlevel: 'Red',
+						episodealertlevel: 'Red',
+						todate: '2026-09-16T18:00:00',
+						name: 'Cyclone'
+					}
+				},
+				{ properties: { alertlevel: 'Red', episodealertlevel: 'Green', todate: '2026-09-16T18:00:00', name: 'Old cyclone' } },
+				{ properties: { alertlevel: 'Red', episodealertlevel: 'Red', todate: '2026-08-01T00:00:00', name: 'Finished flood' } }
 			]
-		}).length).toBe(1);
+		}, new Date('2026-09-16T12:00:00Z')).map((row) => row.properties.name)).toEqual(['Cyclone']);
 	});
 
-	test('IsUp parsers treat only a clean status as ON', () => {
+	test('Swedish election formation closes six weeks after polls', () => {
+		const polls = new Date(SWEDEN_POLLS_CLOSE_MS);
+		const before = new Date(polls.getTime() - 60 * 1000);
+		const during = new Date('2026-09-21T12:00:00Z');
+		const after = new Date(SWEDEN_FORMATION_UNTIL_MS);
+		const md5 = 'Val_2026_preliminar_00_RD.zip\nVal_2026_slutlig_00_RD.zip\n';
+		const oldStart = Date.parse('2022-10-18T00:00:00Z');
+		const newStart = Date.parse('2026-10-01T00:00:00Z');
+		expect(swedenElectionLive(before, md5, oldStart).phase).toBe('before-polls');
+		expect(swedenElectionLive(during, 'Val_2026_preliminar_00_RD.zip', oldStart)).toMatchObject({
+			on: true,
+			phase: 'count'
+		});
+		expect(swedenElectionLive(during, md5, oldStart)).toMatchObject({
+			on: true,
+			phase: 'formation'
+		});
+		expect(swedenElectionLive(during, md5, newStart)).toMatchObject({
+			on: false,
+			phase: 'government-formed'
+		});
+		expect(swedenElectionLive(after, md5, oldStart)).toMatchObject({
+			on: false,
+			phase: 'formation-closed'
+		});
+		expect(swedenElectionLive(after, 'Val_2026_preliminar_00_RD.zip', oldStart).on).toBe(true);
+	});
+
+	test('IsUp stays on through a minor status and turns off for a major one', () => {
 		expect(statuspageIsUp({ status: { indicator: 'none' } })).toBe(true);
-		expect(statuspageIsUp({ status: { indicator: 'minor' } })).toBe(false);
+		expect(statuspageIsUp({ status: { indicator: 'minor' } })).toBe(true);
+		expect(statuspageIsUp({ status: { indicator: 'maintenance' } })).toBe(true);
 		expect(statuspageIsUp({ status: { indicator: 'major' } })).toBe(false);
 		expect(statuspageIsUp({ status: { indicator: 'critical' } })).toBe(false);
 		expect(() => statuspageIsUp({})).toThrow(/indicator/);
@@ -706,7 +790,17 @@ describe('catalogue observers', () => {
 				})
 			}
 		);
-		expect(cloudflareDown.on).toBe(false);
+		expect(cloudflareDown.on).toBe(true);
+		const major = await observeEntry(
+			{ id: 'cloudflare-up', schedule: { source: 'cloudflare-up' } },
+			{
+				fetchImpl: async () => ({
+					ok: true,
+					json: async () => ({ status: { indicator: 'major', description: 'Major Service Outage' } })
+				})
+			}
+		);
+		expect(major.on).toBe(false);
 		const slack = await observeEntry(
 			{ id: 'slack-up', schedule: { source: 'slack-up' } },
 			{
