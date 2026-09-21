@@ -78,6 +78,40 @@ function extraEventSpecs() {
 				state: false,
 				staleAfterHours: 6
 			}
+		},
+		{
+			id: 'atlantic-pacific-hurricane',
+			name: 'Atlantic or Pacific hurricane',
+			description: 'ON while the National Hurricane Center lists a hurricane in the Atlantic or the eastern or central Pacific. A storm lamp; a tropical storm does not count. Source: nhc.noaa.gov.',
+			location: 'Atlantic and Pacific',
+			category: 'Weather',
+			link: 'https://www.nhc.noaa.gov/',
+			art: 'hurricane',
+			onMeans: 'At least one storm in those basins is classified as a hurricane.',
+			offMeans: 'No listed storm in those basins is a hurricane.',
+			schedule: {
+				kind: 'observe',
+				source: 'nhc-hurricane',
+				state: false,
+				staleAfterHours: 6
+			}
+		},
+		{
+			id: 'england-severe-flood',
+			name: 'England severe flood warning',
+			description: 'ON while the Environment Agency has a severe flood warning in force in England. Danger to life; a flood alert or flood warning does not count. Source: flood-monitoring.',
+			location: 'England',
+			category: 'Weather',
+			link: 'https://check-for-flooding.service.gov.uk/',
+			art: 'flood',
+			onMeans: 'At least one severe flood warning is in force.',
+			offMeans: 'No severe flood warning is in force.',
+			schedule: {
+				kind: 'observe',
+				source: 'england-severe-flood',
+				state: false,
+				staleAfterHours: 6
+			}
 		}
 	];
 }
@@ -89,8 +123,8 @@ function extraLiveListings() {
 		extraAliExpressSaleSpecs(),
 		extraUptimeSpecs()
 	);
-	if (listings.length !== 77) {
-		throw new Error(`expected 77 extra listings, got ${listings.length}`);
+	if (listings.length !== 84) {
+		throw new Error(`expected 84 extra listings, got ${listings.length}`);
 	}
 	return listings;
 }

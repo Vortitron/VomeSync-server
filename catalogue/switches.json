@@ -2662,6 +2662,132 @@
 				"staleAfterHours": 2
 			},
 			"index": 120
+		},
+		{
+			"id": "atlantic-pacific-hurricane",
+			"name": "Atlantic or Pacific hurricane",
+			"description": "ON while the National Hurricane Center lists a hurricane in the Atlantic or the eastern or central Pacific. A storm lamp; a tropical storm does not count. Source: nhc.noaa.gov.",
+			"location": "Atlantic and Pacific",
+			"category": "Weather",
+			"link": "https://www.nhc.noaa.gov/",
+			"art": "hurricane",
+			"onMeans": "At least one storm in those basins is classified as a hurricane.",
+			"offMeans": "No listed storm in those basins is a hurricane.",
+			"schedule": {
+				"kind": "observe",
+				"source": "nhc-hurricane",
+				"state": false,
+				"staleAfterHours": 6
+			},
+			"index": 121
+		},
+		{
+			"id": "england-severe-flood",
+			"name": "England severe flood warning",
+			"description": "ON while the Environment Agency has a severe flood warning in force in England. Danger to life; a flood alert or flood warning does not count. Source: flood-monitoring.",
+			"location": "England",
+			"category": "Weather",
+			"link": "https://check-for-flooding.service.gov.uk/",
+			"art": "flood",
+			"onMeans": "At least one severe flood warning is in force.",
+			"offMeans": "No severe flood warning is in force.",
+			"schedule": {
+				"kind": "observe",
+				"source": "england-severe-flood",
+				"state": false,
+				"staleAfterHours": 6
+			},
+			"index": 122
+		},
+		{
+			"id": "sonos-up",
+			"name": "Sonos is up",
+			"description": "ON unless Sonos reports a major or critical outage. A minor incident leaves this on. Pause announce or playback that needs the Sonos cloud. Source: status.sonos.com.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://status.sonos.com/",
+			"art": "uptime",
+			"onMeans": "Sonos is up, or only a minor incident is listed.",
+			"offMeans": "Sonos reports a major or critical outage, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "sonos-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 123
+		},
+		{
+			"id": "plex-up",
+			"name": "Plex is up",
+			"description": "ON unless Plex reports a major or critical outage. A minor incident leaves this on. Pause remote playback that needs Plex. Source: status.plex.tv.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://status.plex.tv/",
+			"art": "uptime",
+			"onMeans": "Plex is up, or only a minor incident is listed.",
+			"offMeans": "Plex reports a major or critical outage, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "plex-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 124
+		},
+		{
+			"id": "smartthings-up",
+			"name": "SmartThings is up",
+			"description": "ON unless SmartThings reports a major or critical outage. A minor incident leaves this on. Pause routines that call the SmartThings cloud. Source: status.smartthings.com.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://status.smartthings.com/",
+			"art": "uptime",
+			"onMeans": "SmartThings is up, or only a minor incident is listed.",
+			"offMeans": "SmartThings reports a major or critical outage, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "smartthings-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 125
+		},
+		{
+			"id": "ecobee-up",
+			"name": "Ecobee is up",
+			"description": "ON unless Ecobee reports a major or critical outage. A minor incident leaves this on. Pause climate calls that need the Ecobee cloud. Source: status.ecobee.com.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://status.ecobee.com/",
+			"art": "uptime",
+			"onMeans": "Ecobee is up, or only a minor incident is listed.",
+			"offMeans": "Ecobee reports a major or critical outage, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "ecobee-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 126
+		},
+		{
+			"id": "ring-up",
+			"name": "Ring is up",
+			"description": "ON unless Ring reports a major or critical outage. A minor incident leaves this on. Pause doorbell or camera alerts that need the Ring cloud. Source: status.ring.com.",
+			"location": "Worldwide",
+			"category": "IsUp",
+			"link": "https://status.ring.com/",
+			"art": "uptime",
+			"onMeans": "Ring is up, or only a minor incident is listed.",
+			"offMeans": "Ring reports a major or critical outage, or the status feed is stale.",
+			"schedule": {
+				"kind": "observe",
+				"source": "ring-up",
+				"state": false,
+				"staleAfterHours": 2
+			},
+			"index": 127
 		}
 	]
 }
