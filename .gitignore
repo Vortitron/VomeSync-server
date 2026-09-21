@@ -17,3 +17,5 @@ backups/*
 catalogue/.seed
 catalogue/.local-state.json
 catalogue/.env
+website/sitemap.xml
+website/switch/

@@ -30,4 +30,9 @@ if [ ! -f "$VOMESYNC_CATALOGUE_DIR/switches.json" ]; then
 	exit 1
 fi
 
-exec "$NODE" catalogue/cli.js observe "$@"
+"$NODE" catalogue/cli.js observe "$@"
+status=$?
+if [ "$#" -eq 0 ]; then
+	"$NODE" catalogue/cli.js seo || echo "seo refresh failed" >&2
+fi
+exit "$status"

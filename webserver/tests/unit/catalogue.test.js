@@ -860,3 +860,43 @@ describe('catalogue debris filter', () => {
 		expect(isTestDebris({ uid: 'vs_z', name: 'E2E WebSocket Test' })).toBe(true);
 	});
 });
+
+const {
+	publicSwitches,
+	switchPageTitle,
+	sitemapXml,
+	renderSwitchHtml,
+	writeSeoSite
+} = require('../../../catalogue/lib/seo');
+
+describe('public directory seo pages', () => {
+	const github = {
+		uid: 'vs_c338g6fgwjv70p8qs6ngs9eckr',
+		name: 'GitHub is up',
+		description: 'ON unless GitHub reports a major or critical outage.',
+		location: 'Worldwide',
+		category: 'IsUp'
+	};
+
+	test('sitemap and switch pages name the switch', () => {
+		expect(publicSwitches({ data: { switches: [github, { uid: 'not-a-uid' }] } })).toEqual([github]);
+		expect(() => publicSwitches({})).toThrow(/switches/);
+		expect(switchPageTitle(github)).toBe('GitHub is up — VomeSync');
+		const xml = sitemapXml([github]);
+		expect(xml).toContain('https://sync.vome.io/switch/vs_c338g6fgwjv70p8qs6ngs9eckr');
+		expect(xml).toContain('<loc>https://sync.vome.io/</loc>');
+		const page = renderSwitchHtml('<html><head><title>Old</title><meta name="description" content="old"></head><body></body></html>', github);
+		expect(page).toContain('<title>GitHub is up — VomeSync</title>');
+		expect(page).toContain('rel="canonical" href="https://sync.vome.io/switch/vs_c338g6fgwjv70p8qs6ngs9eckr"');
+		expect(page).toContain('major or critical');
+		const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'vome-seo-'));
+		const written = writeSeoSite({
+			switches: [github],
+			websiteDir: dir,
+			templateHtml: '<html><head><title>Old</title><meta name="description" content="old"></head></html>'
+		});
+		expect(written.pages).toBe(1);
+		expect(fs.readFileSync(path.join(dir, 'sitemap.xml'), 'utf8')).toContain(github.uid);
+		expect(fs.existsSync(path.join(dir, 'switch', github.uid, 'index.html'))).toBe(true);
+	});
+});
