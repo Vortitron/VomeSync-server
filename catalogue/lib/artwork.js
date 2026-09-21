@@ -65,7 +65,9 @@ function artIds() {
 		'disaster',
 		'parcel',
 		'uptime',
-		'uptime-ai'
+		'uptime-ai',
+		'hurricane',
+		'flood'
 	]);
 }
 
@@ -379,6 +381,17 @@ function glyph(artId, color) {
 				<rect x="98" y="92" width="60" height="12" rx="6" fill="${color}" transform="rotate(38 128 128)"/>
 				<rect x="98" y="92" width="60" height="12" rx="6" fill="${color}" transform="rotate(-38 128 128)"/>
 				<rect x="98" y="78" width="60" height="12" rx="6" fill="${color}"/>`;
+		case 'hurricane':
+			return `
+				<circle cx="128" cy="128" r="18" fill="${color}"/>
+				<path d="M128 40 A88 88 0 0 1 200 150" fill="none" stroke="${color}" stroke-width="16" stroke-linecap="round"/>
+				<path d="M128 216 A88 88 0 0 1 56 106" fill="none" stroke="${color}" stroke-width="16" stroke-linecap="round"/>`;
+		case 'flood':
+			return `
+				<path d="M36 150 Q68 118 100 150 T164 150 T228 150" fill="none" stroke="${color}" stroke-width="16" stroke-linecap="round"/>
+				<path d="M36 186 Q68 154 100 186 T164 186 T228 186" fill="none" stroke="${color}" stroke-width="16" stroke-linecap="round"/>
+				<rect x="108" y="48" width="40" height="78" rx="8" fill="${color}"/>
+				<polygon points="128,28 156,56 100,56" fill="${color}"/>`;
 		default:
 			return `
 				<circle cx="128" cy="128" r="48" fill="${color}"/>
@@ -407,7 +420,10 @@ function accentFor(artId) {
 		case 'quake':
 		case 'volcano':
 		case 'disaster':
+		case 'hurricane':
 			return PALETTE.crimson;
+		case 'flood':
+			return PALETTE.sky;
 		case 'harvest':
 		case 'solstice':
 		case 'lucia':

@@ -116,6 +116,8 @@ GDACS is ON only while the current episode is red and its end time has not passe
 
 Orbital launch is observed every 30 minutes. Launch Library answers a five-minute poll with HTTP 429.
 
+Atlantic and Pacific hurricanes come from the National Hurricane Center current-storms feed. Only classification `HU` in basins `al`, `ep`, and `cp` is ON. England severe flood warnings are Environment Agency severity level 1. Sonos, Plex, SmartThings, Ecobee, and Ring use the same Statuspage rule as the other IsUp lamps.
+
 ## Tests
 
 From `webserver/`:

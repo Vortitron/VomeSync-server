@@ -159,6 +159,51 @@ function uptimeObserveSpecs() {
 			statusUrl: 'https://status.python.org/api/v2/status.json'
 		},
 		{
+			id: 'sonos-up',
+			name: 'Sonos is up',
+			...statuspageContract('Sonos', 'Pause announce or playback that needs the Sonos cloud.', 'status.sonos.com'),
+			link: 'https://status.sonos.com/',
+			art: 'uptime',
+			kind: 'statuspage',
+			statusUrl: 'https://status.sonos.com/api/v2/status.json'
+		},
+		{
+			id: 'plex-up',
+			name: 'Plex is up',
+			...statuspageContract('Plex', 'Pause remote playback that needs Plex.', 'status.plex.tv'),
+			link: 'https://status.plex.tv/',
+			art: 'uptime',
+			kind: 'statuspage',
+			statusUrl: 'https://status.plex.tv/api/v2/status.json'
+		},
+		{
+			id: 'smartthings-up',
+			name: 'SmartThings is up',
+			...statuspageContract('SmartThings', 'Pause routines that call the SmartThings cloud.', 'status.smartthings.com'),
+			link: 'https://status.smartthings.com/',
+			art: 'uptime',
+			kind: 'statuspage',
+			statusUrl: 'https://status.smartthings.com/api/v2/status.json'
+		},
+		{
+			id: 'ecobee-up',
+			name: 'Ecobee is up',
+			...statuspageContract('Ecobee', 'Pause climate calls that need the Ecobee cloud.', 'status.ecobee.com'),
+			link: 'https://status.ecobee.com/',
+			art: 'uptime',
+			kind: 'statuspage',
+			statusUrl: 'https://status.ecobee.com/api/v2/status.json'
+		},
+		{
+			id: 'ring-up',
+			name: 'Ring is up',
+			...statuspageContract('Ring', 'Pause doorbell or camera alerts that need the Ring cloud.', 'status.ring.com'),
+			link: 'https://status.ring.com/',
+			art: 'uptime',
+			kind: 'statuspage',
+			statusUrl: 'https://status.ring.com/api/v2/status.json'
+		},
+		{
 			id: 'google-up',
 			name: 'Google Workspace is up',
 			description: 'ON while Google Workspace lists no open incident (Gmail, Drive, Meet, Gemini in Workspace). Search and YouTube are not this feed. Source: Google Workspace Status Dashboard.',

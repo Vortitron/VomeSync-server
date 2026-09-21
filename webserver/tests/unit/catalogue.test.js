@@ -35,7 +35,7 @@ function loadEntries() {
 describe('public switch catalogue', () => {
 	test('switches.json validates and has unique ids and indexes', () => {
 		const entries = validateCatalogue(loadEntries(), artIds());
-		expect(entries.length).toBe(121);
+		expect(entries.length).toBe(128);
 		expect(entries.every((entry) => entry.name && entry.description && entry.art)).toBe(true);
 		expect(entries.some((entry) => entry.id === 'yom-kippur')).toBe(true);
 		expect(entries.some((entry) => entry.id === 'tower-bridge')).toBe(true);
@@ -58,13 +58,13 @@ describe('public switch catalogue', () => {
 
 	test('extra listings are civic feeds, AliExpress tentpoles and IsUp lamps', () => {
 		const extra = extraLiveListings();
-		expect(extra).toHaveLength(77);
+		expect(extra).toHaveLength(84);
 		const observe = extra.filter((entry) => entry.schedule.kind === 'observe');
 		const aliexpress = extra.filter((entry) => entry.id.startsWith('aliexpress-'));
 		const isUp = extra.filter((entry) => entry.category === 'IsUp');
-		expect(observe).toHaveLength(72);
+		expect(observe).toHaveLength(79);
 		expect(aliexpress).toHaveLength(5);
-		expect(isUp).toHaveLength(15);
+		expect(isUp).toHaveLength(20);
 		expect(observe.every((entry) => entry.schedule.source)).toBe(true);
 		expect(isUp.every((entry) => entry.schedule.kind === 'observe' && entry.schedule.staleAfterHours === 2)).toBe(true);
 		expect(extra.some((entry) => entry.id === 'uk-commons-division' && entry.schedule.observeEveryMinutes === 1)).toBe(true);
@@ -330,6 +330,8 @@ const {
 	pickOfficeClaim,
 	isWikidataItemId,
 	englishEntityLabel,
+	activeHurricanes,
+	severeFloodWarnings,
 	SOURCE_IDS,
 	observeEntry
 } = require('../../../catalogue/lib/sources');
@@ -577,7 +579,8 @@ describe('catalogue observers', () => {
 			'pope', 'conclave', 'uk-election', 'geomagnetic', 'sweden-election',
 			'earthquake', 'london-underground',
 			'french-president', 'brienenoordbrug', 'launch', 'volcano', 'gdacs-red',
-			'github-up', 'openai-up', 'anthropic-up', 'gemini-up', 'home-assistant-up'
+			'github-up', 'openai-up', 'anthropic-up', 'gemini-up', 'home-assistant-up',
+			'nhc-hurricane', 'england-severe-flood', 'sonos-up', 'ring-up'
 		]));
 	});
 
@@ -749,6 +752,26 @@ describe('catalogue observers', () => {
 			phase: 'formation-closed'
 		});
 		expect(swedenElectionLive(after, 'Val_2026_preliminar_00_RD.zip', oldStart).on).toBe(true);
+	});
+
+	test('hurricane and severe flood parsers ignore weaker events', () => {
+		expect(activeHurricanes({
+			activeStorms: [
+				{ id: 'ep172026', name: 'Polo', classification: 'HU' },
+				{ id: 'al062026', name: 'Fay', classification: 'TS' },
+				{ id: 'wp012026', name: 'West', classification: 'HU' }
+			]
+		}).map((storm) => storm.name)).toEqual(['Polo']);
+		expect(() => activeHurricanes({})).toThrow(/activeStorms/);
+		expect(severeFloodWarnings({
+			items: [
+				{ severityLevel: 1, description: 'River Thames' },
+				{ severityLevel: 2, description: 'Flood warning' },
+				{ severityLevel: '1', description: 'Coast' }
+			]
+		}).map((item) => item.description)).toEqual(['River Thames', 'Coast']);
+		expect(severeFloodWarnings({ items: [] })).toEqual([]);
+		expect(() => severeFloodWarnings({ floods: [] })).toThrow(/items/);
 	});
 
 	test('IsUp stays on through a minor status and turns off for a major one', () => {

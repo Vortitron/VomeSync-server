@@ -15,6 +15,10 @@ const SWEDEN_POLLS_CLOSE_MS = Date.parse('2026-09-13T18:00:00Z');
 // Six weeks after polls close. A continuing prime minister does not get a new
 // Wikidata start date, so formation must end on the clock or the lamp stays ON.
 const SWEDEN_FORMATION_UNTIL_MS = Date.parse('2026-10-25T18:00:00Z');
+const NHC_STORMS_URL = 'https://www.nhc.noaa.gov/CurrentStorms.json';
+const ENGLAND_SEVERE_FLOOD_URL = 'https://environment.data.gov.uk/flood-monitoring/id/floods?min-severity=1';
+const HURRICANE_BASINS = Object.freeze(['al', 'ep', 'cp']);
+const SEVERE_FLOOD_LEVEL = 1;
 const GDACS_CURRENT_GRACE_MS = 12 * 60 * 60 * 1000;
 const COMMONS_ANNUNCIATOR_URL = 'https://now-api.parliament.uk/api/Message/message/CommonsMain/current';
 const LAUNCH_LIVE_BEFORE_MS = 20 * 60 * 1000;
@@ -324,6 +328,25 @@ function swedenElectionLive(now, md5, officeStartMs) {
 	};
 }
 
+function activeHurricanes(payload) {
+	const storms = payload && Array.isArray(payload.activeStorms) ? payload.activeStorms : null;
+	if (!storms) {
+		throw new Error('NHC storms payload has no activeStorms list');
+	}
+	return storms.filter((storm) => {
+		const basin = String(storm.id || '').toLowerCase().slice(0, 2);
+		const classification = String(storm.classification || '').toUpperCase();
+		return HURRICANE_BASINS.includes(basin) && classification === 'HU';
+	});
+}
+
+function severeFloodWarnings(payload) {
+	if (!payload || !Array.isArray(payload.items)) {
+		throw new Error('flood warnings payload has no items list');
+	}
+	return payload.items.filter((item) => Number(item.severityLevel) === SEVERE_FLOOD_LEVEL);
+}
+
 function storebaeltClosedNow(html) {
 	const text = decodeEntities(stripTags(html)).toLowerCase();
 	if (/lukket for biltrafik/.test(text) || /broen er lukket/.test(text) || /broen er spærret/.test(text) || /closed to (?:road|car) traffic/.test(text)) {
@@ -565,6 +588,31 @@ const OBSERVERS = Object.freeze({
 			}
 		};
 	},
+	async 'nhc-hurricane'(options) {
+		const payload = await fetchJson(NHC_STORMS_URL, options);
+		const hurricanes = activeHurricanes(payload);
+		return {
+			on: hurricanes.length > 0,
+			params: {
+				source: 'nhc.noaa.gov',
+				count: hurricanes.length,
+				names: hurricanes.slice(0, 6).map((storm) => String(storm.name || '')).filter(Boolean).join(', ')
+			}
+		};
+	},
+	async 'england-severe-flood'(options) {
+		const payload = await fetchJson(ENGLAND_SEVERE_FLOOD_URL, options);
+		const severe = severeFloodWarnings(payload);
+		const first = severe[0] || {};
+		return {
+			on: severe.length > 0,
+			params: {
+				source: 'environment.data.gov.uk/flood-monitoring',
+				count: severe.length,
+				name: String(first.description || first.eaAreaName || '')
+			}
+		};
+	},
 	...uptimeObservers()
 });
 
@@ -604,6 +652,8 @@ module.exports = {
 	elevatedVolcanoes,
 	gdacsRedEvents,
 	swedenElectionLive,
+	activeHurricanes,
+	severeFloodWarnings,
 	TFL_SEVERE_MAX,
 	pickOfficeClaim,
 	isWikidataItemId,
