@@ -1,6 +1,7 @@
 /**
- * Public IsUp lamps. ON while the official status feed says operational,
- * OFF for any incident (minor, major, or critical) or a stale fetch.
+ * Public IsUp lamps. Statuspage listings stay ON through a minor rollup
+ * and go OFF only for major or critical. Slack still requires a clean
+ * status. A stale fetch forces OFF.
  *
  * Statuspage JSON only — hitting the product homepage false-positives on
  * bot walls and partial outages. xAI (status.x.ai), Groq, Mistral and
@@ -14,14 +15,20 @@ const SLACK_STATUS_URL = 'https://status.slack.com/api/v2.0.0/current';
 const GEMINI_NAME = /gemini/i;
 const STALE_AFTER_HOURS = 2;
 
+function statuspageContract(service, pause, sourceHost) {
+	return {
+		description: `ON unless ${service} reports a major or critical outage. A minor incident leaves this on. ${pause} Source: ${sourceHost}.`,
+		onMeans: `${service} is up, or only a minor incident is listed.`,
+		offMeans: `${service} reports a major or critical outage, or the status feed is stale.`
+	};
+}
+
 function uptimeObserveSpecs() {
 	return [
 		{
 			id: 'github-up',
 			name: 'GitHub is up',
-			description: 'ON while GitHub reports all systems operational. Pause HACS, ESPHome, or git pulls when it drops. Source: githubstatus.com.',
-			onMeans: 'GitHub reports all systems operational.',
-			offMeans: 'GitHub reports an incident, or the status feed is stale.',
+			...statuspageContract('GitHub', 'Pause HACS, ESPHome, or git pulls when it drops.', 'githubstatus.com'),
 			link: 'https://www.githubstatus.com/',
 			art: 'uptime',
 			kind: 'statuspage',
@@ -30,9 +37,7 @@ function uptimeObserveSpecs() {
 		{
 			id: 'openai-up',
 			name: 'OpenAI is up',
-			description: 'ON while OpenAI reports all systems operational. Skip conversation agents or image jobs that need their API. Source: status.openai.com.',
-			onMeans: 'OpenAI reports all systems operational.',
-			offMeans: 'OpenAI reports an incident, or the status feed is stale.',
+			...statuspageContract('OpenAI', 'Skip conversation agents or image jobs that need their API.', 'status.openai.com'),
 			link: 'https://status.openai.com/',
 			art: 'uptime-ai',
 			kind: 'statuspage',
@@ -41,9 +46,7 @@ function uptimeObserveSpecs() {
 		{
 			id: 'anthropic-up',
 			name: 'Claude is up',
-			description: 'ON while Anthropic reports Claude as operational. Skip HA conversation that talks to Claude. Source: status.claude.com.',
-			onMeans: 'Anthropic reports all systems operational.',
-			offMeans: 'Anthropic reports an incident, or the status feed is stale.',
+			...statuspageContract('Claude', 'Skip HA conversation that talks to Claude.', 'status.claude.com'),
 			link: 'https://status.claude.com/',
 			art: 'uptime-ai',
 			kind: 'statuspage',
@@ -62,9 +65,11 @@ function uptimeObserveSpecs() {
 		{
 			id: 'home-assistant-up',
 			name: 'Home Assistant is up',
-			description: 'ON while Home Assistant\'s official status page reports all systems operational (alerts, version, analytics — not your own box). Source: status.home-assistant.io.',
-			onMeans: 'Home Assistant reports all systems operational.',
-			offMeans: 'Home Assistant reports an incident, or the status feed is stale.',
+			...statuspageContract(
+				'Home Assistant',
+				'That covers alerts, version and analytics, not your own box.',
+				'status.home-assistant.io'
+			),
 			link: 'https://status.home-assistant.io/',
 			art: 'uptime',
 			kind: 'statuspage',
@@ -73,9 +78,7 @@ function uptimeObserveSpecs() {
 		{
 			id: 'nabucasa-up',
 			name: 'Home Assistant Cloud is up',
-			description: 'ON while Nabu Casa reports Home Assistant Cloud as operational. Pause remote UI or cloud TTS when it drops. Source: status.nabucasa.com.',
-			onMeans: 'Nabu Casa reports all systems operational.',
-			offMeans: 'Nabu Casa reports an incident, or the status feed is stale.',
+			...statuspageContract('Home Assistant Cloud', 'Pause remote UI or cloud TTS when it drops.', 'status.nabucasa.com'),
 			link: 'https://status.nabucasa.com/',
 			art: 'uptime',
 			kind: 'statuspage',
@@ -84,9 +87,7 @@ function uptimeObserveSpecs() {
 		{
 			id: 'cloudflare-up',
 			name: 'Cloudflare is up',
-			description: 'ON while Cloudflare reports all systems operational. Tunnels, DNS, and a lot of the public web sit behind this. Source: cloudflarestatus.com.',
-			onMeans: 'Cloudflare reports all systems operational.',
-			offMeans: 'Cloudflare reports an incident, or the status feed is stale.',
+			...statuspageContract('Cloudflare', 'Tunnels, DNS, and a lot of the public web sit behind this.', 'cloudflarestatus.com'),
 			link: 'https://www.cloudflarestatus.com/',
 			art: 'uptime',
 			kind: 'statuspage',
@@ -95,9 +96,7 @@ function uptimeObserveSpecs() {
 		{
 			id: 'discord-up',
 			name: 'Discord is up',
-			description: 'ON while Discord reports all systems operational. Pause notify.discord automations when it drops. Source: discordstatus.com.',
-			onMeans: 'Discord reports all systems operational.',
-			offMeans: 'Discord reports an incident, or the status feed is stale.',
+			...statuspageContract('Discord', 'Pause notify.discord automations when it drops.', 'discordstatus.com'),
 			link: 'https://discordstatus.com/',
 			art: 'uptime',
 			kind: 'statuspage',
@@ -117,9 +116,7 @@ function uptimeObserveSpecs() {
 		{
 			id: 'twilio-up',
 			name: 'Twilio is up',
-			description: 'ON while Twilio reports all systems operational. Pause SMS and voice notify when it drops. Source: status.twilio.com.',
-			onMeans: 'Twilio reports all systems operational.',
-			offMeans: 'Twilio reports an incident, or the status feed is stale.',
+			...statuspageContract('Twilio', 'Pause SMS and voice notify when it drops.', 'status.twilio.com'),
 			link: 'https://status.twilio.com/',
 			art: 'uptime',
 			kind: 'statuspage',
@@ -128,9 +125,7 @@ function uptimeObserveSpecs() {
 		{
 			id: 'reddit-up',
 			name: 'Reddit is up',
-			description: 'ON while Reddit reports all systems operational. A community lamp for when the front page is actually down. Source: redditstatus.com.',
-			onMeans: 'Reddit reports all systems operational.',
-			offMeans: 'Reddit reports an incident, or the status feed is stale.',
+			...statuspageContract('Reddit', 'A community lamp for when the front page is actually down.', 'redditstatus.com'),
 			link: 'https://www.redditstatus.com/',
 			art: 'uptime',
 			kind: 'statuspage',
@@ -139,9 +134,7 @@ function uptimeObserveSpecs() {
 		{
 			id: 'wikipedia-up',
 			name: 'Wikipedia is up',
-			description: 'ON while Wikimedia reports all systems operational. Pause automations that fetch Wikipedia. Source: wikimediastatus.net.',
-			onMeans: 'Wikimedia reports all systems operational.',
-			offMeans: 'Wikimedia reports an incident, or the status feed is stale.',
+			...statuspageContract('Wikimedia', 'Pause automations that fetch Wikipedia.', 'wikimediastatus.net'),
 			link: 'https://www.wikimediastatus.net/',
 			art: 'uptime',
 			kind: 'statuspage',
@@ -150,9 +143,7 @@ function uptimeObserveSpecs() {
 		{
 			id: 'npm-up',
 			name: 'npm is up',
-			description: 'ON while npm reports all systems operational. Pause HACS or frontend builds that pull packages. Source: status.npmjs.org.',
-			onMeans: 'npm reports all systems operational.',
-			offMeans: 'npm reports an incident, or the status feed is stale.',
+			...statuspageContract('npm', 'Pause HACS or frontend builds that pull packages.', 'status.npmjs.org'),
 			link: 'https://status.npmjs.org/',
 			art: 'uptime',
 			kind: 'statuspage',
@@ -161,9 +152,7 @@ function uptimeObserveSpecs() {
 		{
 			id: 'pypi-up',
 			name: 'PyPI is up',
-			description: 'ON while the Python package index reports all systems operational. Pause custom-component installs that hit PyPI. Source: status.python.org.',
-			onMeans: 'PyPI reports all systems operational.',
-			offMeans: 'PyPI reports an incident, or the status feed is stale.',
+			...statuspageContract('PyPI', 'Pause custom-component installs that hit PyPI.', 'status.python.org'),
 			link: 'https://status.python.org/',
 			art: 'uptime',
 			kind: 'statuspage',
@@ -214,8 +203,12 @@ function statuspageIndicator(payload) {
 	return indicator.trim().toLowerCase();
 }
 
+const STATUSPAGE_DOWN = Object.freeze(['major', 'critical']);
+
 function statuspageIsUp(payload) {
-	return statuspageIndicator(payload) === 'none';
+	// A minor rollup is normal for Cloudflare and Twilio (one city, one
+	// product). Only a major or critical outage is worth an OFF lamp.
+	return !STATUSPAGE_DOWN.includes(statuspageIndicator(payload));
 }
 
 function slackIsUp(payload) {
@@ -255,7 +248,7 @@ function statuspageResult(spec, payload) {
 	const indicator = statuspageIndicator(payload);
 	const description = String(((payload.status) || {}).description || '');
 	return {
-		on: indicator === 'none',
+		on: !STATUSPAGE_DOWN.includes(indicator),
 		params: {
 			source: spec.statusUrl,
 			indicator,
@@ -327,6 +320,7 @@ async function observeUptime(sourceId, options) {
 module.exports = {
 	extraUptimeSpecs,
 	observeUptime,
+	STATUSPAGE_DOWN,
 	statuspageIsUp,
 	slackIsUp,
 	googleOpenIncidents

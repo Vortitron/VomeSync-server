@@ -41,7 +41,8 @@ function extraEventSpecs() {
 				kind: 'observe',
 				source: 'launch',
 				state: false,
-				staleAfterHours: 2
+				staleAfterHours: 2,
+				observeEveryMinutes: 30
 			}
 		},
 		{
@@ -64,13 +65,13 @@ function extraEventSpecs() {
 		{
 			id: 'gdacs-red',
 			name: 'GDACS red alert',
-			description: 'ON while GDACS lists a red alert (quake, cyclone, flood, volcano, drought, or wildfire). A global disaster lamp. Source: GDACS.',
+			description: 'ON while a GDACS episode is still at red. The event record stays red after it ends, so a finished flood does not keep this on. Source: GDACS.',
 			location: 'Worldwide',
 			category: 'Weather',
 			link: 'https://www.gdacs.org/',
 			art: 'disaster',
-			onMeans: 'At least one GDACS event is at red alert.',
-			offMeans: 'No listed event is at red alert.',
+			onMeans: 'A GDACS episode is at red and has not finished.',
+			offMeans: 'No GDACS episode is currently at red.',
 			schedule: {
 				kind: 'observe',
 				source: 'gdacs-red',

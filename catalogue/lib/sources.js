@@ -12,6 +12,10 @@ const { extraUptimeSpecs, observeUptime } = require('./uptime');
 
 const TOWER_LIFT_MS = 15 * 60 * 1000;
 const SWEDEN_POLLS_CLOSE_MS = Date.parse('2026-09-13T18:00:00Z');
+// Six weeks after polls close. A continuing prime minister does not get a new
+// Wikidata start date, so formation must end on the clock or the lamp stays ON.
+const SWEDEN_FORMATION_UNTIL_MS = Date.parse('2026-10-25T18:00:00Z');
+const GDACS_CURRENT_GRACE_MS = 12 * 60 * 60 * 1000;
 const COMMONS_ANNUNCIATOR_URL = 'https://now-api.parliament.uk/api/Message/message/CommonsMain/current';
 const LAUNCH_LIVE_BEFORE_MS = 20 * 60 * 1000;
 const LAUNCH_LIVE_AFTER_MS = 20 * 60 * 1000;
@@ -268,13 +272,56 @@ function elevatedVolcanoes(payload) {
 	});
 }
 
-function gdacsRedEvents(payload) {
+function gdacsInstant(value) {
+	const raw = String(value || '').trim();
+	if (!raw) {
+		return NaN;
+	}
+	const withZone = /[zZ]|[+-]\d{2}:?\d{2}$/.test(raw) ? raw : `${raw}Z`;
+	return Date.parse(withZone);
+}
+
+function gdacsRedEvents(payload, now = new Date()) {
 	const features = payload && Array.isArray(payload.features) ? payload.features : [];
+	const t = now.getTime();
 	return features.filter((feature) => {
 		const props = feature.properties || {};
-		const level = String(props.alertlevel || props.episodealertlevel || '').toLowerCase();
-		return level === 'red';
+		// alertlevel stays Red on the event after it is over. The live
+		// signal is the current episode, and only while that episode has
+		// not finished (plus a short grace for a late close).
+		const episode = String(props.episodealertlevel || '').toLowerCase();
+		if (episode !== 'red') {
+			return false;
+		}
+		const to = gdacsInstant(props.todate);
+		if (!Number.isFinite(to)) {
+			return false;
+		}
+		return t < to + GDACS_CURRENT_GRACE_MS;
 	});
+}
+
+function swedenElectionLive(now, md5, officeStartMs) {
+	if (now.getTime() < SWEDEN_POLLS_CLOSE_MS) {
+		return { on: false, phase: 'before-polls' };
+	}
+	const hasPrelim = /Val_2026_preliminar_00_RD\.zip/i.test(md5);
+	const hasFinal = /Val_2026_slutlig_00_RD\.zip/i.test(md5);
+	const counting = hasPrelim && !hasFinal;
+	const governmentRenewed = Boolean(officeStartMs && officeStartMs >= SWEDEN_POLLS_CLOSE_MS);
+	const formationOpen = now.getTime() < SWEDEN_FORMATION_UNTIL_MS;
+	let phase = 'formation';
+	if (counting) {
+		phase = 'count';
+	} else if (governmentRenewed) {
+		phase = 'government-formed';
+	} else if (!formationOpen) {
+		phase = 'formation-closed';
+	}
+	return {
+		on: counting || (formationOpen && !governmentRenewed),
+		phase
+	};
 }
 
 function storebaeltClosedNow(html) {
@@ -436,22 +483,17 @@ const OBSERVERS = Object.freeze({
 		return { on: scale >= 4, params: { gScale: scale } };
 	},
 	async 'sweden-election'(options) {
-		if (options.now.getTime() < SWEDEN_POLLS_CLOSE_MS) {
-			return { on: false, params: { phase: 'before-polls' } };
-		}
-		const [md5, office] = await Promise.all([
-			fetchText('https://resultat.val.se/resultatfiler/val2026/index.md5', options),
-			wikidataOfficeholder('Q687075', options)
-		]);
-		const hasPrelim = /Val_2026_preliminar_00_RD\.zip/i.test(md5);
-		const hasFinal = /Val_2026_slutlig_00_RD\.zip/i.test(md5);
-		const counting = hasPrelim && !hasFinal;
-		const governmentRenewed = Boolean(office.startMs && office.startMs >= SWEDEN_POLLS_CLOSE_MS);
-		const on = counting || !governmentRenewed;
+		const [md5, office] = options.now.getTime() < SWEDEN_POLLS_CLOSE_MS
+			? ['', { holder: '', startMs: null }]
+			: await Promise.all([
+				fetchText('https://resultat.val.se/resultatfiler/val2026/index.md5', options),
+				wikidataOfficeholder('Q687075', options)
+			]);
+		const seen = swedenElectionLive(options.now, md5, office.startMs);
 		return {
-			on,
+			on: seen.on,
 			params: {
-				phase: counting ? 'count' : (governmentRenewed ? 'government-formed' : 'formation'),
+				phase: seen.phase,
 				pm: office.holder || ''
 			}
 		};
@@ -512,7 +554,7 @@ const OBSERVERS = Object.freeze({
 			'https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=EQ,TC,FL,VO,DR,WF',
 			options
 		);
-		const red = gdacsRedEvents(payload);
+		const red = gdacsRedEvents(payload, options.now);
 		const first = (red[0] && red[0].properties) || {};
 		return {
 			on: red.length > 0,
@@ -541,6 +583,8 @@ async function observeEntry(entry, options = {}) {
 module.exports = {
 	TOWER_LIFT_MS,
 	SWEDEN_POLLS_CLOSE_MS,
+	SWEDEN_FORMATION_UNTIL_MS,
+	GDACS_CURRENT_GRACE_MS,
 	COMMONS_ANNUNCIATOR_URL,
 	SOURCE_IDS,
 	OFFICES,
@@ -559,6 +603,7 @@ module.exports = {
 	launchLive,
 	elevatedVolcanoes,
 	gdacsRedEvents,
+	swedenElectionLive,
 	TFL_SEVERE_MAX,
 	pickOfficeClaim,
 	isWikidataItemId,

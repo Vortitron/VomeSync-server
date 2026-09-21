@@ -102,15 +102,19 @@ sudo systemctl enable --now vomesync-catalogue-observe-division.timer
 
 The main timer fires every five minutes (Tower Bridge lifts are treated as a 15-minute window). Commons divisions only last about eight minutes, so a second timer observes `uk-commons-division` every minute from the Parliament annunciator. The five-minute pass skips that listing so the two writers do not clobber each other. On this host the services run `catalogue/observe.sh`, which uses nvm’s Node 22 — Ubuntu’s `/usr/bin/node` is v12 and has no `fetch`.
 
-Swedish election 2026 is **one** switch on purpose: ON after polls close while the preliminary count zip is still the latest file, or until Wikidata shows a prime minister appointed after election night.
+Swedish election 2026 is **one** switch on purpose: ON after polls close while the preliminary count zip is still the latest file, then through formation until 25 October 2026 UTC. It also goes OFF earlier if Wikidata records a prime minister appointed after election night. An incumbent who stays does not keep it on past that date.
 
 Øresund and the Great Belt: ON means open to road traffic — the opposite of Tower Bridge / Erasmusbrug, where ON means open to ships.
 
 Government listings keep a stable UID. The observer renames the listing when Wikidata’s office-holder (P1308) changes. If Wikidata omits an English label, keep the last good name — never publish a Q-id.
 
-AliExpress tentpoles are UTC `windows`, not a scrape: their storefront returns a punish page to anonymous clients, and Open Platform signup asks for a full business account. **AliExpress sale** is ON during any listed tentpole; 11.11, Summer and Anniversary are the named ones. **AliExpress Choice Day** is the first seven UTC days of each month — that is the usual pattern, not a live campaign feed. Extend tentpole windows when they publish the next year.
+AliExpress tentpoles are UTC `windows`, not a scrape: their storefront returns a punish page to anonymous clients, and Open Platform signup asks for a full business account. **AliExpress sale** is ON during any listed tentpole; 11.11, Summer and Anniversary are the named ones. **AliExpress Choice Day** is the first seven UTC days of each month — that is the usual pattern, not a live campaign feed. Anniversary and Summer repeat the 2026 week in 2027 until they publish different dates.
 
-IsUp listings are official status feeds, not a ping of the homepage. GitHub, OpenAI, Claude, Home Assistant, Nabu Casa, Cloudflare, Discord, Twilio, Reddit, Wikipedia, npm and PyPI use Statuspage `indicator=none`. Slack uses `status=ok` with no active incidents. Google Workspace and Gemini use Google’s incidents JSON (a row without `end` is open). xAI/Grok, Groq, Mistral and Perplexity are omitted: they 403 or return HTML to anonymous clients. Amazon Associates is not a status API — disclosed hardware links on a card are a later shopping path, not an IsUp lamp.
+IsUp listings are official status feeds, not a ping of the homepage. GitHub, OpenAI, Claude, Home Assistant, Nabu Casa, Cloudflare, Discord, Twilio, Reddit, Wikipedia, npm and PyPI use Statuspage and stay ON unless the indicator is `major` or `critical`. Slack uses `status=ok` with no active incidents. Google Workspace and Gemini use Google’s incidents JSON (a row without `end` is open). xAI/Grok, Groq, Mistral and Perplexity are omitted: they 403 or return HTML to anonymous clients. Amazon Associates is not a status API — disclosed hardware links on a card are a later shopping path, not an IsUp lamp.
+
+GDACS is ON only while the current episode is red and its end time has not passed. The event-level alert stays red for months after a flood, which left the lamp stuck on.
+
+Orbital launch is observed every 30 minutes. Launch Library answers a five-minute poll with HTTP 429.
 
 ## Tests
 
