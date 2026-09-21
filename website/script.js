@@ -359,6 +359,21 @@ function setHeroText(title, subtitle) {
 	if (heroSubtitleEl) heroSubtitleEl.textContent = subtitle || '';
 }
 
+function setDocumentMeta(title, description, canonicalPath) {
+	document.title = title || 'VomeSync — public switches for Home Assistant';
+	const meta = document.querySelector('meta[name="description"]');
+	if (meta && description) {
+		meta.setAttribute('content', description);
+	}
+	let canonical = document.querySelector('link[rel="canonical"]');
+	if (!canonical) {
+		canonical = document.createElement('link');
+		canonical.rel = 'canonical';
+		document.head.appendChild(canonical);
+	}
+	canonical.href = `${window.location.origin}${canonicalPath || '/'}`;
+}
+
 function updateHeroStatusButton(detail) {
 	if (!heroStatusButton) return;
 	const stateKnown = typeof detail?.state === 'boolean';
@@ -452,6 +467,7 @@ function restoreHeroText() {
 	if (!heroTitleEl || !heroSubtitleEl) return;
 	heroTitleEl.innerHTML = DEFAULT_HERO_TITLE_HTML;
 	heroSubtitleEl.textContent = DEFAULT_HERO_SUBTITLE_TEXT;
+	setDocumentMeta('VomeSync — public switches for Home Assistant', 'Public on/off switches for Home Assistant. Tower Bridge, GitHub, hurricanes, flood warnings, and other shared signals you can automate.', '/');
 	updateHeroStatusButton(null);
 	if (heroHaLink) {
 		heroHaLink.href = HOME_ASSISTANT_CONFIG_FLOW_URL;
@@ -479,6 +495,10 @@ function setHeroForSwitch(detail) {
 	}
 
 	setHeroText(title, subtitleBits.join('  ·  ') || DEFAULT_HERO_SUBTITLE_TEXT);
+	const metaDescription = description
+		? description.replace(/\s+/g, ' ').trim().slice(0, 160)
+		: `${title} is a public on/off switch for Home Assistant.`;
+	setDocumentMeta(`${title} — VomeSync`, metaDescription, `/switch/${encodeURIComponent(detail.uid || '')}`);
 	updateHeroStatusButton(detail);
 	if (heroHaLink) {
 		heroHaLink.href = HOME_ASSISTANT_CONFIG_FLOW_URL;
@@ -2739,7 +2759,7 @@ function createSwitchCard(switchData) {
 					${iconHtml}
 					<div class="switch-title-text">
 						<div class="switch-name-row">
-							<div class="switch-name" data-field="name">${escapeHtml(displayName)}</div>
+							<a class="switch-name" data-field="name" href="${escapeAttr(buildSwitchPath(uid))}">${escapeHtml(displayName)}</a>
 							<span class="promoted-badge ${isListingPromoted(switchData) ? '' : 'hidden'}" data-field="promotedBadge">Promoted</span>
 						</div>
 						<div class="switch-description ${displayDescription ? '' : 'hidden'}" data-field="description">${escapeHtml(displayDescription)}</div>

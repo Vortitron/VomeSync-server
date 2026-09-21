@@ -18,6 +18,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { generateMasterSeedB64Url, ownerId, switchUid } = require('./lib/crypto');
 const { validateCatalogue, addEntry } = require('./lib/validate');
+const { writeSeoSite, publicSwitches } = require('./lib/seo');
 const { artIds } = require('./lib/artwork');
 const {
 	loadJsonFile,
@@ -57,6 +58,7 @@ Usage:
   node catalogue/cli.js grant-premium
   node catalogue/cli.js install-live
   node catalogue/cli.js sync-live
+  node catalogue/cli.js seo
 
 Environment:
   VOMESYNC_API_BASE          default ${DEFAULT_API}
@@ -409,6 +411,22 @@ function commandSyncLive() {
 	console.log(JSON.stringify(result, null, '\t'));
 }
 
+async function commandSeo(args) {
+	const response = await fetch(`${args.apiBase}/public-switches`);
+	const payload = await response.json();
+	if (!response.ok || payload.success === false) {
+		throw new Error(payload.error || `public switches HTTP ${response.status}`);
+	}
+	const websiteDir = path.join(__dirname, '..', 'website');
+	const templateHtml = fs.readFileSync(path.join(websiteDir, 'index.html'), 'utf8');
+	const result = writeSeoSite({
+		switches: publicSwitches(payload),
+		websiteDir,
+		templateHtml
+	});
+	console.log(JSON.stringify(result));
+}
+
 async function main(argv) {
 	const args = parseArgs(argv);
 	if (!args.command || args.command === 'help') {
@@ -419,7 +437,7 @@ async function main(argv) {
 	const seed = ['uids', 'apply', 'refresh', 'observe', 'add', 'grant-premium', 'purge-debris'].includes(args.command)
 		? loadOrCreateSeed(allowCreateSeed)
 		: '';
-	const entries = ['delist-tests', 'grant-premium', 'help', 'install-live', 'sync-live'].includes(args.command)
+	const entries = ['delist-tests', 'grant-premium', 'help', 'install-live', 'sync-live', 'seo'].includes(args.command)
 		? []
 		: loadCatalogue();
 
@@ -453,6 +471,9 @@ async function main(argv) {
 			return 0;
 		case 'sync-live':
 			commandSyncLive();
+			return 0;
+		case 'seo':
+			await commandSeo(args);
 			return 0;
 		default:
 			throw new Error(`unknown command: ${args.command}`);
