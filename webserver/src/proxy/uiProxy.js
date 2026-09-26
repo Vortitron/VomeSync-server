@@ -341,10 +341,13 @@ function createUiProxy(deps = {}) {
 				&& policy.upstream.kind === 'direct' && policy.upstream.target) {
 				return policy.upstream;
 			}
+			if (policy && policy.upstream && policy.upstream.routeId) {
+				return { kind: 'relay', target: null, routeId: policy.upstream.routeId };
+			}
 		} catch (err) {
 			logger.error('Upstream lookup failed:', err.message || err);
 		}
-		return { kind: 'relay', target: null };
+		return { kind: 'relay', target: null, routeId: null };
 	}
 
 	/**
@@ -622,9 +625,14 @@ function createUiProxy(deps = {}) {
 		}
 
 		const bodyB64 = collected.body.length ? collected.body.toString('base64') : undefined;
+		// The relay link that answers for the home now: the policy's route
+		// when CHAP has moved the home to a local install, else the server
+		// the visitor was let in for. Admittance, the log and the login
+		// guard stay with that server either way.
+		const relayId = upstream.routeId || access.serverId;
 		let result;
 		try {
-			result = await relay.forwardHttp(access.serverId, {
+			result = await relay.forwardHttp(relayId, {
 				method: req.method, path: req.url, headers, bodyB64
 			});
 		} catch (err) {
@@ -663,7 +671,7 @@ function createUiProxy(deps = {}) {
 				}
 				finished = true;
 				detach();
-				relay.abortStream(access.serverId, result.requestId);
+				relay.abortStream(relayId, result.requestId);
 			});
 			detach = relay.attachStream(result.requestId, {
 				onChunk: (chunk) => {
@@ -791,11 +799,12 @@ function createUiProxy(deps = {}) {
 			});
 			return;
 		}
-		if (!relay.isConnected(access.serverId)) {
+		const relayId = upstream.routeId || access.serverId;
+		if (!relay.isConnected(relayId)) {
 			abortUpgrade(socket, 502, 'Home Assistant offline');
 			return;
 		}
-		wss.handleUpgrade(req, socket, head, (browser) => bridge(browser, req, access.serverId));
+		wss.handleUpgrade(req, socket, head, (browser) => bridge(browser, req, relayId));
 	}
 
 	/**
