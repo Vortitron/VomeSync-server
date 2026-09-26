@@ -973,6 +973,69 @@ describe('uiProxy hosted (direct) upstreams', () => {
 	});
 });
 
+describe('uiProxy follows a home CHAP has moved to a local install', () => {
+	// GamlaBio, 25 Sept 2026: the home ran on its house fallback, but its
+	// address still went to the hosted install, whose Home Assistant was
+	// stopped -- the phone app failed "when running local". The portal now
+	// names the relay link that answers for the home (route_id).
+	const host = { host: '127.0.0.1:8099', 'x-ha-original-host': 'gamlabio.home.vome.io' };
+
+	test('a request goes over the relay link the policy names', async () => {
+		const forwardHttp = jest.fn(async () => ({ status: 200, headers: [], bodyB64: undefined }));
+		const proxy = createUiProxy({
+			relayManager: { isConnected: () => true, forwardHttp },
+			verifyAccessToken: () => ({ serverId: 'vm-1', userId: 'u1' }),
+			fetchForwardPolicy: async () => ({
+				serverId: 'vm-1', upstream: { kind: 'relay', target: null, routeId: 'rly-home' }
+			}),
+			checkRateLimit: async () => ({ allowed: true })
+		});
+		const req = fakeReq({ url: '/?external_auth=1', headers: host });
+		const res = fakeRes();
+		proxy.httpHandler(req, res);
+		await tick();
+		req.emit('end');
+		await res.done;
+		expect(forwardHttp).toHaveBeenCalled();
+		expect(forwardHttp.mock.calls[0][0]).toBe('rly-home');
+		expect(forwardHttp.mock.calls[0][1].path).toBe('/?external_auth=1');
+	});
+
+	test('its frontend socket goes over that relay link too', async () => {
+		const asked = [];
+		const proxy = createUiProxy({
+			relayManager: { isConnected: (id) => { asked.push(id); return false; } },
+			verifyAccessToken: () => ({ serverId: 'vm-1' }),
+			fetchForwardPolicy: async () => ({
+				serverId: 'vm-1', upstream: { kind: 'relay', target: null, routeId: 'rly-home' }
+			})
+		});
+		const socket = { writable: true, written: '', destroyed: false,
+			write(s) { this.written += s; }, destroy() { this.destroyed = true; } };
+		await proxy.handleUpgrade(
+			fakeReq({ url: '/api/websocket', headers: host }), socket, Buffer.alloc(0));
+		expect(asked).toContain('rly-home');
+		expect(asked).not.toContain('vm-1');
+	});
+
+	test('without a route it goes to the server the visitor was let in for', async () => {
+		const forwardHttp = jest.fn(async () => ({ status: 200, headers: [], bodyB64: undefined }));
+		const proxy = createUiProxy({
+			relayManager: { isConnected: () => true, forwardHttp },
+			verifyAccessToken: () => ({ serverId: 'rly-1', userId: 'u1' }),
+			fetchForwardPolicy: async () => ({ serverId: 'rly-1', upstream: { kind: 'relay', target: null, routeId: null } }),
+			checkRateLimit: async () => ({ allowed: true })
+		});
+		const req = fakeReq({ url: '/lovelace', headers: host });
+		const res = fakeRes();
+		proxy.httpHandler(req, res);
+		await tick();
+		req.emit('end');
+		await res.done;
+		expect(forwardHttp.mock.calls[0][0]).toBe('rly-1');
+	});
+});
+
 describe('uiProxy hosted (direct) upgrades', () => {
 	const host = { host: '127.0.0.1:8099', 'x-ha-original-host': 'gamlabio.home.vome.io' };
 

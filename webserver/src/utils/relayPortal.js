@@ -99,7 +99,12 @@ async function fetchForwardPolicy(host) {
 			keyId: data.key_id ? String(data.key_id) : null,
 			upstream: {
 				kind: upstream.kind === 'direct' ? 'direct' : 'relay',
-				target: upstream.target ? String(upstream.target) : null
+				target: upstream.target ? String(upstream.target) : null,
+				// Which relay link answers for the home right now, when it is
+				// not the domain's own server: a hosted home whose local
+				// fallback is running it (CHAP) is reached over the relay link
+				// the fallback holds.
+				routeId: upstream.route_id ? String(upstream.route_id) : null
 			}
 		};
 	} catch (err) {
