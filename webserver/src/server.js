@@ -157,6 +157,8 @@ class VomeSyncServer {
 		}));
 
 		// API routes
+		// Before /api: readers of a live state watch, token-authenticated (routes/watch-routes.js).
+		this.app.use('/api/watch', require('./routes/watch-routes'));
 		this.app.use('/api', apiRoutes);
 
 		// Internal relay dispatch (portal → backend → component).  Not under

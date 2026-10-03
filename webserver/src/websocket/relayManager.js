@@ -519,8 +519,17 @@ class RelayManager {
 	 * `port`, so no caller-supplied frame is ever sent to a dashboard that has no
 	 * authentication of its own.
 	 */
-	openWs(serverId, { socketId, path, headers, target, command, configuration, port } = {}) {
+	openWs(serverId, { socketId, path, headers, target, command, configuration, port, entityIds } = {}) {
 		const payload = { type: 'ws_open', socketId, path, headers };
+		if (target === 'states') {
+			// A live watch of these entities' states (stateWatch.js). The same sentinel path as
+			// ESPHome's, for the same reason: a component too old to know the target must refuse
+			// it rather than bridge Home Assistant's frontend socket instead.
+			payload.target = target;
+			payload.entity_ids = Array.isArray(entityIds) ? entityIds : [];
+			payload.path = ESPHOME_SENTINEL_PATH;
+			return this._tunnelSend(serverId, payload);
+		}
 		if (target) {
 			payload.target = target;
 			payload.command = command;
