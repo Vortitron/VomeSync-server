@@ -12,6 +12,8 @@ const logger = require('../utils/logger');
 const config = require('../config/config');
 const relayManager = require('../websocket/relayManager');
 const { EsphomeStreamJobs } = require('../websocket/esphomeStream');
+const { StateWatchJobs } = require('../websocket/stateWatch');
+const stateWatches = require('../websocket/stateWatchJobs');
 
 const router = express.Router();
 
@@ -208,6 +210,49 @@ router.post('/relay/esphome/stream/cancel', (req, res) => {
 		return res.status(400).json({ error: 'job_id is required' });
 	}
 	return res.json({ cancelled: esphomeJobs.cancel(jobId, serverId || null) });
+});
+
+// ── Live states (see stateWatch.js) ─────────────────────────────────────────
+// The portal starts a watch after checking the key, and renews readers' tokens
+// only for a watch still running on that home. Readers follow it on
+// /api/watch with a token the portal signed (routes/watch-routes.js).
+
+router.post('/relay/states/watch', (req, res) => {
+	if (!authorised(req)) {
+		return res.status(401).json({ error: 'unauthorized' });
+	}
+	const { server_id: serverId, entity_ids: entityIds } = req.body || {};
+	if (!serverId) {
+		return res.status(400).json({ error: 'server_id is required' });
+	}
+	const checked = StateWatchJobs.entitiesOrError(entityIds);
+	if (checked.error) {
+		return res.status(400).json({ error: checked.error });
+	}
+	const started = stateWatches.start(serverId, checked.ids);
+	if (started.offline) {
+		return res.status(404).json({ error: 'No relay connection for this server.' });
+	}
+	if (started.busy) {
+		return res.status(429).json({ error: 'Too many live watches on this home; close one first.' });
+	}
+	return res.json({ job_id: started.jobId, entity_ids: checked.ids });
+});
+
+router.post('/relay/states/alive', (req, res) => {
+	if (!authorised(req)) {
+		return res.status(401).json({ error: 'unauthorized' });
+	}
+	const { server_id: serverId, job_id: jobId } = req.body || {};
+	return res.json({ alive: !!serverId && !!jobId && stateWatches.isAlive(jobId, serverId) });
+});
+
+router.post('/relay/states/cancel', (req, res) => {
+	if (!authorised(req)) {
+		return res.status(401).json({ error: 'unauthorized' });
+	}
+	const { server_id: serverId, job_id: jobId } = req.body || {};
+	return res.json({ cancelled: !!serverId && !!jobId && stateWatches.cancel(jobId, serverId) });
 });
 
 router.get('/relay/status', (req, res) => {
