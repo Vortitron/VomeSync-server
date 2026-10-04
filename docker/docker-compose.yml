@@ -202,9 +202,17 @@ services:
       - RELAY_PORTAL_VERIFY_URL=${RELAY_PORTAL_VERIFY_URL_DEV:-https://staging.vome.io/api/internal/relay/verify}
       - RELAY_RPC_TIMEOUT_MS=${RELAY_RPC_TIMEOUT_MS:-20000}
       - RELAY_FORWARD_SECRET=${RELAY_FORWARD_SECRET:-dev-forward-secret-change-in-production}
+      # End-to-end router (src/e2e/sniRouter.js): off unless the host's
+      # docker/.env sets E2E_LISTEN_DEV. On fin1 it listens on 9443, published
+      # on the second IP, and fin1 DNATs 95.216.77.207:443 to it (nginx keeps
+      # :443 on every other address) -- see VomeHome docs/e2e_remote_access.md.
+      - E2E_LISTEN=${E2E_LISTEN_DEV:-}
+      - E2E_SUFFIX=${E2E_SUFFIX:-e2e.vome.io}
+      - RELAY_E2E_ROUTE_URL=${RELAY_E2E_ROUTE_URL_DEV:-https://staging.vome.io/api/internal/relay/e2e-route}
     ports:
       - "${VOMESYNC_API_DEV_HOST_PORT:-3091}:3091"
       - "${VOMESYNC_WS_DEV_HOST_PORT:-3002}:3002"
+      - "${E2E_PUBLISH_DEV:-127.0.0.1:19443}:9443"
     volumes:
       - webserver_media_dev:/usr/src/app/media
     networks:

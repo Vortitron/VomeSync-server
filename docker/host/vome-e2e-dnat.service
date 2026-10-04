@@ -1,0 +1,25 @@
+# fin1: send 95.216.77.207:443 to the end-to-end router (src/e2e/sniRouter.js).
+#
+# nginx listens on 0.0.0.0:443 for every site on this host, so nothing else can
+# bind 95.216.77.207:443. Rewriting the destination in nat PREROUTING happens
+# before the socket lookup, so connections to the second IP reach the router
+# (published by Docker on 95.216.77.207:19443) and nginx never sees them, with
+# no change to its 70-odd listen lines. Connections from this host itself are
+# not rewritten (OUTPUT), so a local curl to .207:443 still lands on nginx.
+#
+# Install: cp to /etc/systemd/system/, systemctl enable --now vome-e2e-dnat.
+# To point it at the live lane later, change 19443 to the live publish port.
+[Unit]
+Description=Vome end-to-end: DNAT 95.216.77.207:443 to the router
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment="RULE=-d 95.216.77.207/32 -p tcp --dport 443 -m comment --comment vome-e2e -j DNAT --to-destination 95.216.77.207:19443"
+ExecStart=/bin/sh -c 'iptables -t nat -C PREROUTING $RULE 2>/dev/null || iptables -t nat -I PREROUTING 1 $RULE'
+ExecStop=/bin/sh -c 'iptables -t nat -D PREROUTING $RULE 2>/dev/null || true'
+
+[Install]
+WantedBy=multi-user.target
