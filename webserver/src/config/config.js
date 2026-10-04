@@ -104,6 +104,14 @@ const config = {
 		// (webhook pass-through / open companion-app access). Same shared
 		// secret as portalVerifyUrl; misses fail closed to cookie-only.
 		forwardPolicyUrl: process.env.RELAY_FORWARD_POLICY_URL || 'https://vome.io/api/internal/relay/forward-policy',
+		// ── End-to-end remote access (e2e/sniRouter.js) ─────────────────────
+		// `host:port` to accept raw TLS on (the second IP's :443, published
+		// by Docker). Empty = off. TLS ends in the home; nothing here holds a key.
+		e2eListen: process.env.E2E_LISTEN || '',
+		// The names routed; anything else is dropped at the ClientHello.
+		e2eSuffix: (process.env.E2E_SUFFIX || 'e2e.vome.io').toLowerCase(),
+		// Portal endpoint resolving an e2e name to the home it belongs to.
+		e2eRouteUrl: process.env.RELAY_E2E_ROUTE_URL || 'https://vome.io/api/internal/relay/e2e-route',
 		// Cookie carrying the access token (scoped to .vome.io by the portal).
 		forwardCookieName: process.env.RELAY_FORWARD_COOKIE || 'vome_fwd',
 		// Lifetime of the cookie written when a browser trades in a one-time

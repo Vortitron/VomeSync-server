@@ -113,4 +113,55 @@ async function fetchForwardPolicy(host) {
 	}
 }
 
-module.exports = { verifySecret, fetchForwardPolicy };
+/**
+ * The home an end-to-end name belongs to, or null.
+ *
+ * Asked by the E2E router (e2e/sniRouter.js) with the name from a
+ * ClientHello. The portal answers only for homes whose owner turned
+ * end-to-end access on; any miss or error is null and the connection is
+ * dropped. Answers are cached briefly so a page load's dozen connections
+ * cost one lookup, misses included.
+ *
+ * @param {string} host e.g. "nyvyn.e2e.vome.io"
+ * @returns {Promise<string|null>} the server id to tunnel to
+ */
+const e2eRouteCache = new Map();
+const E2E_ROUTE_TTL_MS = 30000;
+
+async function fetchE2eRoute(host) {
+	if (!config.relay.internalSecret || !host || typeof host !== 'string') {
+		return null;
+	}
+	const cached = e2eRouteCache.get(host);
+	if (cached && cached.expires > Date.now()) {
+		return cached.serverId;
+	}
+	let serverId = null;
+	try {
+		const resp = await fetch(config.relay.e2eRouteUrl, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${config.relay.internalSecret}`
+			},
+			body: JSON.stringify({ host }),
+			signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS)
+		});
+		if (resp.ok) {
+			const data = await resp.json();
+			if (data && data.ok === true && data.route_id) {
+				serverId = String(data.route_id);
+			}
+		}
+	} catch (err) {
+		logger.error('E2E route lookup failed:', err.message || err);
+		return null; // an error is not cached; the next connection asks again
+	}
+	if (e2eRouteCache.size > 10000) {
+		e2eRouteCache.clear();
+	}
+	e2eRouteCache.set(host, { serverId, expires: Date.now() + E2E_ROUTE_TTL_MS });
+	return serverId;
+}
+
+module.exports = { verifySecret, fetchForwardPolicy, fetchE2eRoute, _e2eRouteCache: e2eRouteCache };
