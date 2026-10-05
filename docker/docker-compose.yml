@@ -209,6 +209,11 @@ services:
       - E2E_LISTEN=${E2E_LISTEN_DEV:-}
       - E2E_SUFFIX=${E2E_SUFFIX:-e2e.vome.io}
       - RELAY_E2E_ROUTE_URL=${RELAY_E2E_ROUTE_URL_DEV:-https://staging.vome.io/api/internal/relay/e2e-route}
+      # The dev lane's homes are staging's: their access events and forward
+      # policies belong to the staging portal. These defaulted to live
+      # vome.io, which dropped the events (it does not know these homes).
+      - RELAY_ACCESS_EVENTS_URL=${RELAY_ACCESS_EVENTS_URL_DEV:-https://staging.vome.io/api/internal/relay/access-events}
+      - RELAY_FORWARD_POLICY_URL=${RELAY_FORWARD_POLICY_URL_DEV:-https://staging.vome.io/api/internal/relay/forward-policy}
     ports:
       - "${VOMESYNC_API_DEV_HOST_PORT:-3091}:3091"
       - "${VOMESYNC_WS_DEV_HOST_PORT:-3002}:3002"
