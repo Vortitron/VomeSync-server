@@ -266,6 +266,10 @@ class RelayManager {
 				event: event.event,
 				outcome: event.outcome,
 				clientIp: event.client_ip,
+				// The name and method a home's own door saw (end-to-end access);
+				// it may only describe visits to itself, so its word is enough.
+				host: typeof event.host === 'string' ? event.host.slice(0, 253) : undefined,
+				method: typeof event.method === 'string' ? event.method.slice(0, 16) : undefined,
 				path: event.path,
 				userAgent: event.user_agent,
 				detail: event.detail,
@@ -519,8 +523,18 @@ class RelayManager {
 	 * `port`, so no caller-supplied frame is ever sent to a dashboard that has no
 	 * authentication of its own.
 	 */
-	openWs(serverId, { socketId, path, headers, target, command, configuration, port, entityIds } = {}) {
+	openWs(serverId, { socketId, path, headers, target, command, configuration, port, entityIds, host, peer } = {}) {
 		const payload = { type: 'ws_open', socketId, path, headers };
+		if (target === 'e2e' || target === 'e2e-acme') {
+			// End-to-end remote access (e2e/sniRouter.js): raw TLS bytes for the
+			// home to decrypt. `host` is the name the browser asked for. The
+			// sentinel path makes a component that predates these targets refuse.
+			payload.target = target;
+			payload.host = host;
+			payload.peer = peer || null;
+			payload.path = ESPHOME_SENTINEL_PATH;
+			return this._tunnelSend(serverId, payload);
+		}
 		if (target === 'states') {
 			// A live watch of these entities' states (stateWatch.js). The same sentinel path as
 			// ESPHome's, for the same reason: a component too old to know the target must refuse

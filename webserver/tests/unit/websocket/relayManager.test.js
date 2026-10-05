@@ -196,6 +196,19 @@ describe('RelayManager WebSocket tunnel bridge', () => {
 		expect(sent).toMatchObject({ type: 'ws_open', socketId: 's1', path: '/api/websocket' });
 	});
 
+	test('openWs for end-to-end access names the host and uses the sentinel path', () => {
+		const ws = connect(mgr, 'rly-1');
+		for (const target of ['e2e', 'e2e-acme']) {
+			mgr.openWs('rly-1', { socketId: `s-${target}`, target, host: 'h.e2e.vome.io', peer: '81.2.3.4', command: 'x' });
+		}
+		const [ui, acme] = ws.sent.map((m) => JSON.parse(m));
+		expect(ui).toEqual({ type: 'ws_open', socketId: 's-e2e', target: 'e2e', host: 'h.e2e.vome.io', peer: '81.2.3.4', path: ui.path });
+		expect(acme.target).toBe('e2e-acme');
+		// A component that predates the targets must refuse, not bridge HA's socket.
+		expect(ui.path).not.toBe('/api/websocket');
+		expect(ui.path).toMatch(/^\//);
+	});
+
 	test('openWs returns false when the component is offline', () => {
 		expect(mgr.openWs('rly-missing', { socketId: 's1' })).toBe(false);
 	});
@@ -560,5 +573,38 @@ describe('cross-tenant frame injection', () => {
 		}));
 
 		expect(manager.streams.get(sent.requestId).queue).toEqual([]);
+	});
+});
+
+describe('RelayManager home access events', () => {
+	const accessEventsFactory = require('../../../src/utils/accessEvents');
+	afterEach(() => jest.restoreAllMocks());
+
+	test('a home reports its own visits: the socket names the home, not the payload', () => {
+		const recorded = [];
+		jest.spyOn(accessEventsFactory, 'getAccessEvents').mockReturnValue({ record: (e) => recorded.push(e) });
+		const mgr = new RelayManager();
+		connect(mgr, 'rly-1');
+		mgr.handleMessage('rly-1', JSON.stringify({ type: 'access_events', events: [{
+			server_id: 'rly-other', event: 'gate_shown', outcome: 'denied', client_ip: '203.0.113.9',
+			host: 'nyvyn.e2e.vome.io', method: 'GET', path: '/lovelace/0', user_agent: 'x'
+		}] }));
+		expect(recorded).toEqual([expect.objectContaining({
+			serverId: 'rly-1', source: 'home', event: 'gate_shown', clientIp: '203.0.113.9',
+			host: 'nyvyn.e2e.vome.io', method: 'GET', path: '/lovelace/0'
+		})]);
+	});
+
+	test('odd fields are dropped or clipped, never passed through as given', () => {
+		const recorded = [];
+		jest.spyOn(accessEventsFactory, 'getAccessEvents').mockReturnValue({ record: (e) => recorded.push(e) });
+		const mgr = new RelayManager();
+		connect(mgr, 'rly-1');
+		mgr.handleMessage('rly-1', JSON.stringify({ type: 'access_events', events: [
+			{ event: 'gate_shown', host: { not: 'a string' }, method: 'X'.repeat(100) }, null, 'junk'
+		] }));
+		expect(recorded).toHaveLength(1);
+		expect(recorded[0].host).toBeUndefined();
+		expect(recorded[0].method).toHaveLength(16);
 	});
 });

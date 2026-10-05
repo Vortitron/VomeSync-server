@@ -1,0 +1,26 @@
+# fin1's second address: the router DNAT and the guard that keeps everything
+# else off it -- see vome-second-ip (installed as /usr/local/sbin/vome-second-ip).
+#
+# nginx listens on 0.0.0.0:443 for every site on this host, so nothing else can
+# bind 95.216.77.207:443. Rewriting the destination in nat PREROUTING happens
+# before the socket lookup, so connections to the second IP reach the router
+# (at its fixed vome_edge address, 172.31.207.10:9443) and nginx never sees them, with
+# no change to its 70-odd listen lines. Connections from this host itself are
+# not rewritten (OUTPUT), so a local curl to .207:443 still lands on nginx.
+#
+# Install: cp vome-second-ip /usr/local/sbin/ (0755) and this file to
+# /etc/systemd/system/, then systemctl enable --now vome-e2e-dnat. To point
+# :443 at the live lane, set VOME_E2E_ROUTER=<ip:port> in an override.
+[Unit]
+Description=Vome: fin1's second IP -- the end-to-end router on :443, nothing else unbound
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/vome-second-ip start
+ExecStop=/usr/local/sbin/vome-second-ip stop
+
+[Install]
+WantedBy=multi-user.target

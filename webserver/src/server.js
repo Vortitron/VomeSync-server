@@ -13,6 +13,8 @@ const webSocketManager = require('./websocket/manager');
 const relayManager = require('./websocket/relayManager');
 const tcpTunnelManager = require('./websocket/tcpTunnelManager');
 const { attachUpgradeRouter } = require('./websocket/upgradeRouter');
+const { createSniRouter } = require('./e2e/sniRouter');
+const { fetchE2eRoute } = require('./utils/relayPortal');
 const { createUiProxy } = require('./proxy/uiProxy');
 const apiRoutes = require('./routes/api');
 const internalRoutes = require('./routes/internal-routes');
@@ -71,6 +73,7 @@ class VomeSyncServer {
 			// domains).  Listens on a loopback port; the portal points the shared
 			// `*.home.vome.io` wildcard at it per-slug via nginx map.d entries.
 			this.createForwardProxy();
+			this.createE2eRouter();
 
 			// Start listening (only after WS is initialised, so readiness checks don't race)
 			await this.startListening();
@@ -228,6 +231,24 @@ class VomeSyncServer {
 	}
 
 	/**
+	 * End-to-end remote access: raw TLS routed by name to a home, which holds
+	 * the only key (e2e/sniRouter.js). Off unless E2E_LISTEN is set.
+	 */
+	createE2eRouter() {
+		if (!config.relay.e2eListen) {
+			return;
+		}
+		const { server } = createSniRouter({
+			relayManager,
+			resolveHost: fetchE2eRoute,
+			suffix: config.relay.e2eSuffix,
+			forwards: config.relay.e2eForwards,
+			acceptProxyFrom: config.relay.e2eAcceptProxyFrom
+		});
+		this.e2eServer = server;
+	}
+
+	/**
 	 * Stand up the browser-facing full-UI forwarding proxy on its own port.
 	 *
 	 * Disabled (no server created) unless both a port and the shared HS256
@@ -296,6 +317,21 @@ class VomeSyncServer {
 						resolve();
 					}
 				});
+			}),
+			new Promise((resolve, reject) => {
+				if (!this.e2eServer) {
+					resolve();
+					return;
+				}
+				const listen = config.relay.e2eListen;
+				const cut = listen.lastIndexOf(':');
+				const host = cut > 0 ? listen.slice(0, cut) : '0.0.0.0';
+				const port = Number(cut >= 0 ? listen.slice(cut + 1) : listen);
+				this.e2eServer.once('error', reject);
+				this.e2eServer.listen(port, host, () => {
+					logger.info(`End-to-end router listening on ${host}:${port} for *.${config.relay.e2eSuffix}`);
+					resolve();
+				});
 			})
 		]);
 
@@ -353,6 +389,9 @@ class VomeSyncServer {
 				}
 				if (this.forwardServer) {
 					await closeServer(this.forwardServer, 'Forwarding proxy');
+				}
+				if (this.e2eServer) {
+					await closeServer(this.e2eServer, 'End-to-end router');
 				}
 
 				// Disconnect from Redis
