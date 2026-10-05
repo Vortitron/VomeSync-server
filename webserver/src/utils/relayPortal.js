@@ -127,6 +127,20 @@ async function fetchForwardPolicy(host) {
  */
 const e2eRouteCache = new Map();
 const E2E_ROUTE_TTL_MS = 30000;
+// Portal lookups (cache misses only) per second, across all names, so a
+// flood of random names cannot become a flood of portal requests. Over
+// budget is a miss, and is not cached.
+const E2E_LOOKUPS_PER_SECOND = 20;
+const e2eBudget = { windowStart: 0, used: 0 };
+
+function e2eLookupAllowed(now = Date.now()) {
+	if (now - e2eBudget.windowStart >= 1000) {
+		e2eBudget.windowStart = now;
+		e2eBudget.used = 0;
+	}
+	e2eBudget.used += 1;
+	return e2eBudget.used <= E2E_LOOKUPS_PER_SECOND;
+}
 
 async function fetchE2eRoute(host) {
 	if (!config.relay.internalSecret || !host || typeof host !== 'string') {
@@ -135,6 +149,9 @@ async function fetchE2eRoute(host) {
 	const cached = e2eRouteCache.get(host);
 	if (cached && cached.expires > Date.now()) {
 		return cached.serverId;
+	}
+	if (!e2eLookupAllowed()) {
+		return null;
 	}
 	let serverId = null;
 	try {
@@ -164,4 +181,7 @@ async function fetchE2eRoute(host) {
 	return serverId;
 }
 
-module.exports = { verifySecret, fetchForwardPolicy, fetchE2eRoute, _e2eRouteCache: e2eRouteCache };
+module.exports = {
+	verifySecret, fetchForwardPolicy, fetchE2eRoute,
+	_e2eRouteCache: e2eRouteCache, _e2eBudget: e2eBudget, E2E_LOOKUPS_PER_SECOND
+};

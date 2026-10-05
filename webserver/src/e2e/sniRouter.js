@@ -22,6 +22,12 @@ const loggerDefault = require('../utils/logger');
 
 const ACME_TLS_ALPN = 'acme-tls/1';
 const HELLO_TIMEOUT_MS = 10000;
+// One DNS label, the shapes the portal hands out (a free slug, a paid slug,
+// a hosted server id). Anything else is dropped before it costs a lookup.
+const LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+// Tunnels open to one home at once. A page load opens a handful; this is
+// far above that and well below what would swamp a home's link.
+const MAX_TUNNELS_PER_HOME = 64;
 
 /**
  * @param {object} deps
@@ -30,10 +36,31 @@ const HELLO_TIMEOUT_MS = 10000;
  * @param {string} deps.suffix e.g. 'e2e.vome.io'; other names are dropped
  */
 function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDefault,
-	helloTimeoutMs = HELLO_TIMEOUT_MS } = {}) {
+	helloTimeoutMs = HELLO_TIMEOUT_MS, maxTunnelsPerHome = MAX_TUNNELS_PER_HOME } = {}) {
 	const tail = `.${String(suffix || '').toLowerCase()}`;
+	const open = new Map(); // serverId -> tunnels open now
 
 	function bridge(sock, serverId, target, host, initial) {
+		const count = open.get(serverId) || 0;
+		if (count >= maxTunnelsPerHome) {
+			logger.warn(`E2E: ${host} already has ${count} tunnels open; refusing another`);
+			sock.destroy();
+			return;
+		}
+		open.set(serverId, count + 1);
+		let released = false;
+		const release = () => {
+			if (released) {
+				return;
+			}
+			released = true;
+			const left = (open.get(serverId) || 1) - 1;
+			if (left > 0) {
+				open.set(serverId, left);
+			} else {
+				open.delete(serverId);
+			}
+		};
 		const socketId = uuidv4();
 		let acked = false;
 		const queue = [initial];
@@ -58,6 +85,7 @@ function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDef
 		});
 		if (!relayManager.openWs(serverId, { socketId, target, host })) {
 			relayManager.unregisterTunnel(socketId);
+			release();
 			sock.destroy();
 			return;
 		}
@@ -69,6 +97,7 @@ function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDef
 			}
 		});
 		sock.on('close', () => {
+			release();
 			relayManager.unregisterTunnel(socketId);
 			relayManager.closeWs(serverId, { socketId, code: 1000, reason: '' });
 		});
@@ -77,7 +106,7 @@ function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDef
 
 	async function route(sock, hello, buf) {
 		const host = hello.sni;
-		if (!host || !host.endsWith(tail) || host.length === tail.length) {
+		if (!host || !host.endsWith(tail) || !LABEL_RE.test(host.slice(0, -tail.length))) {
 			sock.destroy();
 			return;
 		}
@@ -122,4 +151,4 @@ function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDef
 	return { server, handle };
 }
 
-module.exports = { createSniRouter, ACME_TLS_ALPN };
+module.exports = { createSniRouter, ACME_TLS_ALPN, LABEL_RE };

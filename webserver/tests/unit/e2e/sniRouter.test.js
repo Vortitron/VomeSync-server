@@ -136,6 +136,39 @@ describe('sniRouter', () => {
 		}
 	});
 
+	test('a name that is not one plain label never costs a lookup', async () => {
+		const asked = [];
+		const relay = fakeRelay(homePort);
+		const port = await routerWith(relay, async (h) => { asked.push(h); return 'rly-1'; });
+		for (const sni of ['a.b.e2e.vome.test', '-x.e2e.vome.test', 'x-.e2e.vome.test', `${'a'.repeat(64)}.e2e.vome.test`, 'a_b.e2e.vome.test']) {
+			const res = await connect(port, sni);
+			expect(res.ok).toBe(false);
+		}
+		expect(asked).toEqual([]);
+	});
+
+	test('a home gets at most maxTunnelsPerHome at once', async () => {
+		const relay = fakeRelay(homePort);
+		const { server } = createSniRouter({
+			relayManager: relay, resolveHost: async () => 'rly-1',
+			suffix: 'e2e.vome.test', logger: quietLogger, maxTunnelsPerHome: 1
+		});
+		const port = await listen(server);
+		cleanup.push(() => server.close());
+		// Hold one tunnel open: a raw socket that sends a ClientHello and waits.
+		const hold = await new Promise((resolve) => {
+			const c = tls.connect({ port, host: '127.0.0.1', servername: name, rejectUnauthorized: false });
+			c.on('secureConnect', () => resolve(c));
+			c.on('error', () => {});
+		});
+		const second = await connect(port, name);
+		expect(second.ok).toBe(false);
+		hold.destroy();
+		await new Promise((r) => setTimeout(r, 50));
+		const third = await connect(port, name);
+		expect(third.ok).toBe(true);
+	});
+
 	test('a connection that never sends a ClientHello is closed', async () => {
 		const { server } = createSniRouter({
 			relayManager: fakeRelay(homePort), resolveHost: async () => 'rly-1',

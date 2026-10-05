@@ -12,6 +12,8 @@ describe('fetchE2eRoute', () => {
 		config.relay.internalSecret = 'test-secret';
 		config.relay.e2eRouteUrl = 'http://portal.test/internal/e2e-route';
 		relayPortal._e2eRouteCache.clear();
+		relayPortal._e2eBudget.windowStart = 0;
+		relayPortal._e2eBudget.used = 0;
 	});
 	afterEach(() => {
 		global.fetch = realFetch;
@@ -44,5 +46,19 @@ describe('fetchE2eRoute', () => {
 		global.fetch = jest.fn();
 		expect(await relayPortal.fetchE2eRoute('d.e2e.vome.io')).toBeNull();
 		expect(global.fetch).not.toHaveBeenCalled();
+	});
+
+	test('a flood of new names is cut off at the budget; cached names never spend it', async () => {
+		global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ ok: true, route_id: 'rly-1' }) }));
+		expect(await relayPortal.fetchE2eRoute('known.e2e.vome.io')).toBe('rly-1');
+		const results = [];
+		for (let i = 0; i < relayPortal.E2E_LOOKUPS_PER_SECOND + 5; i++) {
+			results.push(await relayPortal.fetchE2eRoute(`junk${i}.e2e.vome.io`));
+		}
+		expect(global.fetch).toHaveBeenCalledTimes(relayPortal.E2E_LOOKUPS_PER_SECOND);
+		expect(results.filter((r) => r === null)).toHaveLength(6);
+		// The name already cached still answers, without asking.
+		expect(await relayPortal.fetchE2eRoute('known.e2e.vome.io')).toBe('rly-1');
+		expect(global.fetch).toHaveBeenCalledTimes(relayPortal.E2E_LOOKUPS_PER_SECOND);
 	});
 });
