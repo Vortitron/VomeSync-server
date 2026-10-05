@@ -110,7 +110,7 @@ describe('sniRouter', () => {
 		const res = await connect(port, name);
 		expect(res.body).toBe('hello from the home over http/1.1');
 		expect(res.cert.subject.CN).toBe(name);
-		expect(relay.opened).toEqual([expect.objectContaining({ serverId: 'rly-1', target: 'e2e', host: name })]);
+		expect(relay.opened).toEqual([expect.objectContaining({ serverId: 'rly-1', target: 'e2e', host: name, peer: '127.0.0.1' })]);
 	});
 
 	test('acme-tls/1 goes to the challenge target', async () => {

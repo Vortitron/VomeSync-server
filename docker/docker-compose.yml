@@ -212,11 +212,15 @@ services:
     ports:
       - "${VOMESYNC_API_DEV_HOST_PORT:-3091}:3091"
       - "${VOMESYNC_WS_DEV_HOST_PORT:-3002}:3002"
-      - "${E2E_PUBLISH_DEV:-127.0.0.1:19443}:9443"
     volumes:
       - webserver_media_dev:/usr/src/app/media
     networks:
-      - vomesync_network
+      vomesync_network: {}
+      # The end-to-end router is reached here, at a fixed address, so fin1 can
+      # DNAT 95.216.77.207:443 straight to it and the visitor's address
+      # survives (a Docker port publish would hide it behind docker-proxy).
+      vome_edge:
+        ipv4_address: ${E2E_EDGE_IP_DEV:-172.31.207.10}
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3091/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"]
       interval: 30s
@@ -288,3 +292,9 @@ volumes:
 networks:
   vomesync_network:
     driver: bridge
+  # Fixed addresses for the end-to-end routers (see vome-second-ip).
+  vome_edge:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.207.0/24

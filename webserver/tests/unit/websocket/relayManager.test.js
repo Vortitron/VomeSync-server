@@ -199,10 +199,10 @@ describe('RelayManager WebSocket tunnel bridge', () => {
 	test('openWs for end-to-end access names the host and uses the sentinel path', () => {
 		const ws = connect(mgr, 'rly-1');
 		for (const target of ['e2e', 'e2e-acme']) {
-			mgr.openWs('rly-1', { socketId: `s-${target}`, target, host: 'h.e2e.vome.io', command: 'x' });
+			mgr.openWs('rly-1', { socketId: `s-${target}`, target, host: 'h.e2e.vome.io', peer: '81.2.3.4', command: 'x' });
 		}
 		const [ui, acme] = ws.sent.map((m) => JSON.parse(m));
-		expect(ui).toEqual({ type: 'ws_open', socketId: 's-e2e', target: 'e2e', host: 'h.e2e.vome.io', path: ui.path });
+		expect(ui).toEqual({ type: 'ws_open', socketId: 's-e2e', target: 'e2e', host: 'h.e2e.vome.io', peer: '81.2.3.4', path: ui.path });
 		expect(acme.target).toBe('e2e-acme');
 		// A component that predates the targets must refuse, not bridge HA's socket.
 		expect(ui.path).not.toBe('/api/websocket');

@@ -2,9 +2,11 @@
 # fin1's second address, 95.216.77.207, carries exactly two things: the
 # end-to-end router (on :443) and coturn (40000-40199). Usage: start | stop.
 #
-# 1. :443 is rewritten in nat PREROUTING to the router's Docker publish port,
-#    because nginx listens on 0.0.0.0:443 for every site and nothing else can
-#    bind 95.216.77.207:443. Nginx's listen lines stay untouched.
+# 1. :443 is rewritten in nat PREROUTING straight to the router container's
+#    fixed address on the vome_edge network (docker-compose.yml), because
+#    nginx listens on 0.0.0.0:443 for every site and nothing else can bind
+#    95.216.77.207:443. Going to the container directly, not through a Docker
+#    port publish, keeps the visitor's address: docker-proxy would replace it.
 # 2. Everything else sent to the address is dropped unless it reaches a
 #    socket bound to that address *specifically*: `-m socket` ignores sockets
 #    bound to 0.0.0.0 unless told otherwise (`--nowildcard` would include them).
@@ -12,15 +14,17 @@
 #    this host with sockets on 0.0.0.0 (dnsmasq's query ports land in that
 #    range) would otherwise answer there too; so would nginx on :80, Jenkins
 #    and the rest. coturn and docker-proxy bind 95.216.77.207 explicitly.
-# 3. Docker-published ports never reach INPUT: Docker DNATs them and they are
-#    forwarded. DOCKER-USER drops new forwarded connections that were sent to
-#    this address. (The router's own port is reached through docker-proxy,
-#    on INPUT, because rule 1 rewrites :443 before Docker's DNAT runs.)
+# 3. Forwarded traffic never reaches INPUT. DOCKER-USER accepts exactly the
+#    router's connections (sent to .207:443, now going to the router), and
+#    drops every other new connection that was sent to this address, which
+#    is how Docker-published ports would otherwise answer on it.
 set -eu
 IP=95.216.77.207
-ROUTER_PORT="${VOME_E2E_ROUTER_PORT:-19443}"
+ROUTER="${VOME_E2E_ROUTER:-172.31.207.10:9443}"
+ROUTER_IP="${ROUTER%:*}"; ROUTER_PORT="${ROUTER##*:}"
+ALLOW="-d $ROUTER_IP/32 -p tcp --dport $ROUTER_PORT -m conntrack --ctstate NEW --ctorigdst $IP/32 --ctorigdstport 443 -m comment --comment vome-e2e -j ACCEPT"
 FWD="-m conntrack --ctstate NEW --ctorigdst $IP/32 -m comment --comment vome-207 -j DROP"
-DNAT="-d $IP/32 -p tcp --dport 443 -m comment --comment vome-e2e -j DNAT --to-destination $IP:$ROUTER_PORT"
+DNAT="-d $IP/32 -p tcp --dport 443 -m comment --comment vome-e2e -j DNAT --to-destination $ROUTER"
 
 case "${1:-}" in
 start)
@@ -33,8 +37,10 @@ start)
 	iptables -A VOME-207 -j DROP
 	iptables -C INPUT -d $IP/32 -j VOME-207 2>/dev/null || iptables -I INPUT 1 -d $IP/32 -j VOME-207
 	iptables -C DOCKER-USER $FWD 2>/dev/null || iptables -I DOCKER-USER 1 $FWD
+	iptables -C DOCKER-USER $ALLOW 2>/dev/null || iptables -I DOCKER-USER 1 $ALLOW
 	;;
 stop)
+	iptables -D DOCKER-USER $ALLOW 2>/dev/null || true
 	iptables -D DOCKER-USER $FWD 2>/dev/null || true
 	iptables -D INPUT -d $IP/32 -j VOME-207 2>/dev/null || true
 	iptables -F VOME-207 2>/dev/null || true

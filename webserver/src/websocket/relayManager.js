@@ -519,7 +519,7 @@ class RelayManager {
 	 * `port`, so no caller-supplied frame is ever sent to a dashboard that has no
 	 * authentication of its own.
 	 */
-	openWs(serverId, { socketId, path, headers, target, command, configuration, port, entityIds, host } = {}) {
+	openWs(serverId, { socketId, path, headers, target, command, configuration, port, entityIds, host, peer } = {}) {
 		const payload = { type: 'ws_open', socketId, path, headers };
 		if (target === 'e2e' || target === 'e2e-acme') {
 			// End-to-end remote access (e2e/sniRouter.js): raw TLS bytes for the
@@ -527,6 +527,7 @@ class RelayManager {
 			// sentinel path makes a component that predates these targets refuse.
 			payload.target = target;
 			payload.host = host;
+			payload.peer = peer || null;
 			payload.path = ESPHOME_SENTINEL_PATH;
 			return this._tunnelSend(serverId, payload);
 		}

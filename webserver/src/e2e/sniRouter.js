@@ -83,7 +83,10 @@ function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDef
 			},
 			onClose: () => sock.destroy()
 		});
-		if (!relayManager.openWs(serverId, { socketId, target, host })) {
+		// The visitor's own address: the home's door rate-limits, blocks
+		// repeated failed logins and logs by it, and nothing else can tell it.
+		const peer = String(sock.remoteAddress || '').replace(/^::ffff:/, '') || null;
+		if (!relayManager.openWs(serverId, { socketId, target, host, peer })) {
 			relayManager.unregisterTunnel(socketId);
 			release();
 			sock.destroy();
