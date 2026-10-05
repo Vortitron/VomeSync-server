@@ -575,3 +575,36 @@ describe('cross-tenant frame injection', () => {
 		expect(manager.streams.get(sent.requestId).queue).toEqual([]);
 	});
 });
+
+describe('RelayManager home access events', () => {
+	const accessEventsFactory = require('../../../src/utils/accessEvents');
+	afterEach(() => jest.restoreAllMocks());
+
+	test('a home reports its own visits: the socket names the home, not the payload', () => {
+		const recorded = [];
+		jest.spyOn(accessEventsFactory, 'getAccessEvents').mockReturnValue({ record: (e) => recorded.push(e) });
+		const mgr = new RelayManager();
+		connect(mgr, 'rly-1');
+		mgr.handleMessage('rly-1', JSON.stringify({ type: 'access_events', events: [{
+			server_id: 'rly-other', event: 'gate_shown', outcome: 'denied', client_ip: '203.0.113.9',
+			host: 'nyvyn.e2e.vome.io', method: 'GET', path: '/lovelace/0', user_agent: 'x'
+		}] }));
+		expect(recorded).toEqual([expect.objectContaining({
+			serverId: 'rly-1', source: 'home', event: 'gate_shown', clientIp: '203.0.113.9',
+			host: 'nyvyn.e2e.vome.io', method: 'GET', path: '/lovelace/0'
+		})]);
+	});
+
+	test('odd fields are dropped or clipped, never passed through as given', () => {
+		const recorded = [];
+		jest.spyOn(accessEventsFactory, 'getAccessEvents').mockReturnValue({ record: (e) => recorded.push(e) });
+		const mgr = new RelayManager();
+		connect(mgr, 'rly-1');
+		mgr.handleMessage('rly-1', JSON.stringify({ type: 'access_events', events: [
+			{ event: 'gate_shown', host: { not: 'a string' }, method: 'X'.repeat(100) }, null, 'junk'
+		] }));
+		expect(recorded).toHaveLength(1);
+		expect(recorded[0].host).toBeUndefined();
+		expect(recorded[0].method).toHaveLength(16);
+	});
+});

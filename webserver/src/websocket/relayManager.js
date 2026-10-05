@@ -266,6 +266,10 @@ class RelayManager {
 				event: event.event,
 				outcome: event.outcome,
 				clientIp: event.client_ip,
+				// The name and method a home's own door saw (end-to-end access);
+				// it may only describe visits to itself, so its word is enough.
+				host: typeof event.host === 'string' ? event.host.slice(0, 253) : undefined,
+				method: typeof event.method === 'string' ? event.method.slice(0, 16) : undefined,
 				path: event.path,
 				userAgent: event.user_agent,
 				detail: event.detail,
