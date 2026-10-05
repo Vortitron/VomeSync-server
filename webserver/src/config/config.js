@@ -112,6 +112,17 @@ const config = {
 		e2eSuffix: (process.env.E2E_SUFFIX || 'e2e.vome.io').toLowerCase(),
 		// Portal endpoint resolving an e2e name to the home it belongs to.
 		e2eRouteUrl: process.env.RELAY_E2E_ROUTE_URL || 'https://vome.io/api/internal/relay/e2e-route',
+		// Another lane's names, passed on unopened with a PROXY line:
+		// "suffix=host:port[,suffix=host:port]" (the live router fronts staging's).
+		e2eForwards: String(process.env.E2E_FORWARDS || '').split(',').map((s) => s.trim()).filter(Boolean)
+			.map((entry) => {
+				const [suffix, target] = entry.split('=');
+				const cut = String(target || '').lastIndexOf(':');
+				return { suffix: String(suffix || '').trim().toLowerCase(), host: target.slice(0, cut), port: Number(target.slice(cut + 1)) };
+			})
+			.filter((f) => f.suffix && f.host && f.port > 0),
+		// Routers whose PROXY line this one believes (their fixed vome_edge addresses).
+		e2eAcceptProxyFrom: String(process.env.E2E_ACCEPT_PROXY_FROM || '').split(',').map((s) => s.trim()).filter(Boolean),
 		// Cookie carrying the access token (scoped to .vome.io by the portal).
 		forwardCookieName: process.env.RELAY_FORWARD_COOKIE || 'vome_fwd',
 		// Lifetime of the cookie written when a browser trades in a one-time

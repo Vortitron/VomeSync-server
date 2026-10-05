@@ -10,7 +10,11 @@ const net = require('net');
 const os = require('os');
 const path = require('path');
 const tls = require('tls');
-const { createSniRouter } = require('../../../src/e2e/sniRouter');
+const { createSniRouter, parseProxyV1 } = require('../../../src/e2e/sniRouter');
+
+function pytestFail() {
+	throw new Error('the front router must not look up another lane\'s names');
+}
 
 const quietLogger = { warn: () => {}, info: () => {}, error: () => {} };
 
@@ -169,6 +173,62 @@ describe('sniRouter', () => {
 		expect(third.ok).toBe(true);
 	});
 
+	test('the front router passes another lane\'s names on, and that router learns the visitor', async () => {
+		const backRelay = fakeRelay(homePort);
+		const back = createSniRouter({
+			relayManager: backRelay, resolveHost: async () => 'rly-staging',
+			suffix: 'e2e-staging.vome.test', logger: quietLogger, acceptProxyFrom: ['127.0.0.1']
+		});
+		const backPort = await listen(back.server);
+		cleanup.push(() => back.server.close());
+		const frontRelay = fakeRelay(homePort);
+		const front = createSniRouter({
+			relayManager: frontRelay, resolveHost: async () => pytestFail(),
+			suffix: 'e2e.vome.test', logger: quietLogger,
+			forwards: [{ suffix: 'e2e-staging.vome.test', host: '127.0.0.1', port: backPort }]
+		});
+		const frontPort = await listen(front.server);
+		cleanup.push(() => front.server.close());
+		const res = await connect(frontPort, 'home1.e2e-staging.vome.test');
+		expect(res.body).toBe('hello from the home over http/1.1');
+		expect(frontRelay.opened).toEqual([]);
+		expect(backRelay.opened).toEqual([expect.objectContaining({ serverId: 'rly-staging', peer: '127.0.0.1' })]);
+	});
+
+	test('a PROXY line names the visitor, from a trusted router only', async () => {
+		const hello = await new Promise((resolve) => {
+			const srv = net.createServer((s2) => {
+				let b = Buffer.alloc(0);
+				s2.on('data', (d) => { b = Buffer.concat([b, d]); if (b.length > 100) { s2.destroy(); srv.close(); resolve(b); } });
+			});
+			srv.listen(0, '127.0.0.1', () => {
+				const c = tls.connect({ port: srv.address().port, host: '127.0.0.1', servername: name, rejectUnauthorized: false });
+				c.on('error', () => {});
+			});
+		});
+		const send = async (trusted) => {
+			const relay = fakeRelay(homePort);
+			const { server } = createSniRouter({
+				relayManager: relay, resolveHost: async () => 'rly-1', suffix: 'e2e.vome.test',
+				logger: quietLogger, acceptProxyFrom: trusted
+			});
+			const port = await listen(server);
+			cleanup.push(() => server.close());
+			await new Promise((resolve) => {
+				const c = net.connect(port, '127.0.0.1', () => {
+					c.write('PROXY TCP4 203.0.113.5 95.216.77.207 51234 443\r\n');
+					c.write(hello);
+				});
+				c.on('error', () => {});
+				c.on('close', resolve);
+				setTimeout(() => { c.destroy(); resolve(); }, 300);
+			});
+			return relay.opened;
+		};
+		expect(await send(['127.0.0.1'])).toEqual([expect.objectContaining({ peer: '203.0.113.5' })]);
+		expect(await send(['10.9.9.9'])).toEqual([]);
+	});
+
 	test('a connection that never sends a ClientHello is closed', async () => {
 		const { server } = createSniRouter({
 			relayManager: fakeRelay(homePort), resolveHost: async () => 'rly-1',
@@ -182,5 +242,23 @@ describe('sniRouter', () => {
 			c.on('error', () => {});
 		});
 		expect(closed).toBe(true);
+	});
+});
+
+describe('parseProxyV1', () => {
+	test('reads the visitor and leaves the rest', () => {
+		const r = parseProxyV1(Buffer.from('PROXY TCP4 203.0.113.5 10.0.0.1 51234 443\r\nREST'));
+		expect(r.status).toBe('ok');
+		expect(r.peer).toBe('203.0.113.5');
+		expect(r.rest.toString()).toBe('REST');
+	});
+	test('waits for the end of the line, but not forever', () => {
+		expect(parseProxyV1(Buffer.from('PROXY TCP4 1.2.3.4')).status).toBe('incomplete');
+		expect(parseProxyV1(Buffer.alloc(200, 65)).status).toBe('invalid');
+	});
+	test('refuses anything that is not a well-formed line', () => {
+		for (const bad of ['PROXY UNKNOWN\r\n', 'PROXY TCP4 notanip 1.2.3.4 1 2\r\n', 'GET / HTTP/1.1\r\n']) {
+			expect(parseProxyV1(Buffer.from(bad)).status).toBe('invalid');
+		}
 	});
 });

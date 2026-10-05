@@ -241,7 +241,9 @@ class VomeSyncServer {
 		const { server } = createSniRouter({
 			relayManager,
 			resolveHost: fetchE2eRoute,
-			suffix: config.relay.e2eSuffix
+			suffix: config.relay.e2eSuffix,
+			forwards: config.relay.e2eForwards,
+			acceptProxyFrom: config.relay.e2eAcceptProxyFrom
 		});
 		this.e2eServer = server;
 	}

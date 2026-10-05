@@ -28,6 +28,36 @@ const LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 // Tunnels open to one home at once. A page load opens a handful; this is
 // far above that and well below what would swamp a home's link.
 const MAX_TUNNELS_PER_HOME = 64;
+// A PROXY protocol v1 line is at most 107 bytes (haproxy's spec).
+const PROXY_V1_MAX = 107;
+// Connections passed on to another router at once.
+const MAX_PASSED_ON = 256;
+const PROXY_V1_RE = /^PROXY (TCP4|TCP6) ([0-9a-fA-F.:]+) ([0-9a-fA-F.:]+) (\d{1,5}) (\d{1,5})\r\n/;
+
+/**
+ * Read a PROXY v1 header off the front of `buf`.
+ * @returns {{status: 'incomplete'} | {status: 'invalid'} |
+ *   {status: 'ok', peer: string, rest: Buffer}}
+ */
+function parseProxyV1(buf) {
+	const end = buf.indexOf('\r\n');
+	if (end === -1) {
+		return buf.length < PROXY_V1_MAX ? { status: 'incomplete' } : { status: 'invalid' };
+	}
+	const line = buf.subarray(0, end + 2).toString('ascii');
+	const m = PROXY_V1_RE.exec(line);
+	if (!m || net.isIP(m[2]) === 0) {
+		return { status: 'invalid' };
+	}
+	return { status: 'ok', peer: m[2], rest: buf.subarray(end + 2) };
+}
+
+function proxyV1Line(sock) {
+	const src = String(sock.remoteAddress || '').replace(/^::ffff:/, '');
+	const dst = String(sock.localAddress || '').replace(/^::ffff:/, '');
+	const family = net.isIP(src) === 6 || net.isIP(dst) === 6 ? 'TCP6' : 'TCP4';
+	return `PROXY ${family} ${src} ${dst} ${sock.remotePort || 0} ${sock.localPort || 0}\r\n`;
+}
 
 /**
  * @param {object} deps
@@ -36,8 +66,17 @@ const MAX_TUNNELS_PER_HOME = 64;
  * @param {string} deps.suffix e.g. 'e2e.vome.io'; other names are dropped
  */
 function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDefault,
-	helloTimeoutMs = HELLO_TIMEOUT_MS, maxTunnelsPerHome = MAX_TUNNELS_PER_HOME } = {}) {
+	helloTimeoutMs = HELLO_TIMEOUT_MS, maxTunnelsPerHome = MAX_TUNNELS_PER_HOME,
+	forwards = [], acceptProxyFrom = [] } = {}) {
 	const tail = `.${String(suffix || '').toLowerCase()}`;
+	// Names this router does not serve itself but passes on, unopened, to
+	// another router (the live lane fronts the staging lane's names), with a
+	// PROXY line so that router still learns the visitor's address.
+	const passOn = forwards.map((f) => ({ tail: `.${String(f.suffix).toLowerCase()}`, host: f.host, port: f.port }));
+	// The routers whose PROXY line we believe. Anyone else sending one is
+	// simply not speaking TLS, and is dropped.
+	const trusted = new Set(acceptProxyFrom.map((a) => String(a)));
+	let passedOn = 0;
 	const open = new Map(); // serverId -> tunnels open now
 
 	function bridge(sock, serverId, target, host, initial) {
@@ -85,7 +124,8 @@ function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDef
 		});
 		// The visitor's own address: the home's door rate-limits, blocks
 		// repeated failed logins and logs by it, and nothing else can tell it.
-		const peer = String(sock.remoteAddress || '').replace(/^::ffff:/, '') || null;
+		const peer = sock.vomePeer
+			|| String(sock.remoteAddress || '').replace(/^::ffff:/, '') || null;
 		if (!relayManager.openWs(serverId, { socketId, target, host, peer })) {
 			relayManager.unregisterTunnel(socketId);
 			release();
@@ -107,8 +147,42 @@ function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDef
 		sock.resume();
 	}
 
+	function passOnTo(sock, target, buf) {
+		if (passedOn >= MAX_PASSED_ON) {
+			sock.destroy();
+			return;
+		}
+		passedOn += 1;
+		let released = false;
+		const release = () => {
+			if (!released) {
+				released = true;
+				passedOn -= 1;
+			}
+		};
+		const out = net.connect(target.port, target.host, () => {
+			out.write(proxyV1Line(sock));
+			out.write(buf);
+			sock.pipe(out);
+			out.pipe(sock);
+			sock.resume();
+		});
+		out.on('error', () => sock.destroy());
+		sock.on('close', () => {
+			release();
+			out.destroy();
+		});
+		out.on('close', () => sock.destroy());
+	}
+
 	async function route(sock, hello, buf) {
 		const host = hello.sni;
+		const elsewhere = host && passOn.find((f) => host.endsWith(f.tail)
+			&& LABEL_RE.test(host.slice(0, -f.tail.length)));
+		if (elsewhere) {
+			passOnTo(sock, elsewhere, buf);
+			return;
+		}
 		if (!host || !host.endsWith(tail) || !LABEL_RE.test(host.slice(0, -tail.length))) {
 			sock.destroy();
 			return;
@@ -131,8 +205,26 @@ function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDef
 		let buf = Buffer.alloc(0);
 		const timer = setTimeout(() => sock.destroy(), helloTimeoutMs);
 		sock.on('error', () => sock.destroy());
+		let expectProxy = trusted.has(String(sock.remoteAddress || '').replace(/^::ffff:/, ''));
 		const onData = (chunk) => {
 			buf = Buffer.concat([buf, chunk]);
+			if (expectProxy) {
+				const proxied = parseProxyV1(buf);
+				if (proxied.status === 'incomplete') {
+					return;
+				}
+				if (proxied.status !== 'ok') {
+					clearTimeout(timer);
+					sock.destroy();
+					return;
+				}
+				sock.vomePeer = proxied.peer;
+				buf = proxied.rest;
+				expectProxy = false;
+				if (!buf.length) {
+					return;
+				}
+			}
 			const hello = parseClientHello(buf);
 			if (hello.status === 'incomplete' && buf.length <= MAX_HELLO_BYTES + 1024) {
 				return;
@@ -154,4 +246,4 @@ function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDef
 	return { server, handle };
 }
 
-module.exports = { createSniRouter, ACME_TLS_ALPN, LABEL_RE };
+module.exports = { createSniRouter, ACME_TLS_ALPN, LABEL_RE, parseProxyV1 };
