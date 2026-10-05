@@ -26,8 +26,24 @@ ALLOW="-d $ROUTER_IP/32 -p tcp --dport $ROUTER_PORT -m conntrack --ctstate NEW -
 FWD="-m conntrack --ctstate NEW --ctorigdst $IP/32 -m comment --comment vome-207 -j DROP"
 DNAT="-d $IP/32 -p tcp --dport 443 -m comment --comment vome-e2e -j DNAT --to-destination $ROUTER"
 
+# Remove every rule this script owns, whatever router it last pointed at:
+# a stop with a changed VOME_E2E_ROUTER would otherwise miss the old ones.
+purge() {
+	# By line number, last first: deleting by the rule text -S printed fails
+	# for the conntrack matches under iptables-nft ("Bad rule").
+	for table_chain in "nat PREROUTING" "filter DOCKER-USER"; do
+		set -- $table_chain
+		iptables -t "$1" -L "$2" -n --line-numbers 2>/dev/null |
+			awk '/\/\* vome-(e2e|207) \*\//{print $1}' | sort -rn |
+			while read -r n; do
+				iptables -t "$1" -D "$2" "$n" 2>/dev/null || true
+			done
+	done
+}
+
 case "${1:-}" in
 start)
+	purge
 	iptables -t nat -C PREROUTING $DNAT 2>/dev/null || iptables -t nat -I PREROUTING 1 $DNAT
 	iptables -N VOME-207 2>/dev/null || iptables -F VOME-207
 	iptables -A VOME-207 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
@@ -40,12 +56,10 @@ start)
 	iptables -C DOCKER-USER $ALLOW 2>/dev/null || iptables -I DOCKER-USER 1 $ALLOW
 	;;
 stop)
-	iptables -D DOCKER-USER $ALLOW 2>/dev/null || true
-	iptables -D DOCKER-USER $FWD 2>/dev/null || true
+	purge
 	iptables -D INPUT -d $IP/32 -j VOME-207 2>/dev/null || true
 	iptables -F VOME-207 2>/dev/null || true
 	iptables -X VOME-207 2>/dev/null || true
-	iptables -t nat -D PREROUTING $DNAT 2>/dev/null || true
 	;;
 *)
 	echo "usage: $0 start|stop" >&2
