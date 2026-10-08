@@ -1,6 +1,7 @@
 #!/bin/sh
-# fin1's second address, 95.216.77.207, carries exactly two things: the
-# end-to-end router (on :443) and coturn (40000-40199). Usage: start | stop.
+# fin1's second address, 95.216.77.207, carries the end-to-end router (on
+# :443), coturn (40000-40199) and, once switched on, ESPHome dial-in
+# (40200-40999). Usage: start | stop | esphome.
 #
 # 1. :443 is rewritten in nat PREROUTING straight to the router container's
 #    fixed address on the vome_edge network (docker-compose.yml), because
@@ -18,6 +19,22 @@
 #    router's connections (sent to .207:443, now going to the router), and
 #    drops every other new connection that was sent to this address, which
 #    is how Docker-published ports would otherwise answer on it.
+# 4. ESPHome dial-in (`esphome`, also run by `start`). A device with
+#    `api: outgoing_connection:` dials a literal IP and a port, and each
+#    hosted home gets its own port. Each lane's portal writes
+#    <deploy>/esphome/dial-in.map, one "<port> <container host's tunnel
+#    address>" per line; this sends .207:<port> on to that address and the
+#    same port, where the container host forwards it to the VM's 6054 (see
+#    vome-esphome-dial-in in the portal repo). The source is rewritten to
+#    this host's tunnel address, or the VM would answer the device directly
+#    from Primo and the reply would never match. Nothing is read from the
+#    stream: after the device's hello it is Noise, keyed by the device.
+#    The map is written by the unprivileged portal and read here as root,
+#    so every line is checked and anything else is ignored. A port claimed
+#    twice (two lanes, or one lane's bug) is refused for both, since a
+#    device sent to the wrong home would only fail its handshake anyway.
+#    New connections are rate-limited per source, so a scan of the range
+#    costs the homes nothing.
 set -eu
 IP=95.216.77.207
 ROUTER="${VOME_E2E_ROUTER:-172.31.207.10:9443}"
@@ -25,16 +42,63 @@ ROUTER_IP="${ROUTER%:*}"; ROUTER_PORT="${ROUTER##*:}"
 ALLOW="-d $ROUTER_IP/32 -p tcp --dport $ROUTER_PORT -m conntrack --ctstate NEW --ctorigdst $IP/32 --ctorigdstport 443 -m comment --comment vome-e2e -j ACCEPT"
 FWD="-m conntrack --ctstate NEW --ctorigdst $IP/32 -m comment --comment vome-207 -j DROP"
 DNAT="-d $IP/32 -p tcp --dport 443 -m comment --comment vome-e2e -j DNAT --to-destination $ROUTER"
+ESP_LO=40200
+ESP_HI=40999
+ESP_RANGE="$ESP_LO:$ESP_HI"
+ESP_MAPS="${VOME_ESPHOME_MAPS:-/var/www/vome.home.*/esphome/dial-in.map}"
+# The container hosts' tunnel addresses; nothing else may be a target.
+ESP_TARGETS="${VOME_ESPHOME_TARGETS:-^10[.]99[.]0[.][0-9][0-9]?[0-9]?$}"
+ESP_ORIG="-m conntrack --ctorigdst $IP/32 --ctorigdstport $ESP_RANGE"
+
+# "<port> <address>" lines that pass, one per line, duplicates dropped.
+esphome_lines() {
+	# shellcheck disable=SC2086 # the glob is the point
+	cat $ESP_MAPS 2>/dev/null | awk -v lo="$ESP_LO" -v hi="$ESP_HI" -v re="$ESP_TARGETS" '
+		NF == 2 && $1 ~ /^[0-9]+$/ && $1 + 0 >= lo && $1 + 0 <= hi && $2 ~ re {
+			split($2, o, "."); bad = 0
+			for (i = 1; i <= 4; i++) if (o[i] + 0 > 255) bad = 1
+			if (bad) next
+			seen[$1]++; to[$1] = $2
+		}
+		END { for (p in seen) if (seen[p] == 1) print p, to[p] }' | sort -n
+}
+
+esphome_rules() {
+	iptables -t nat -N VOME-207-ESPHOME 2>/dev/null || iptables -t nat -F VOME-207-ESPHOME
+	esphome_lines | while read -r port target; do
+		iptables -t nat -A VOME-207-ESPHOME -p tcp --dport "$port" \
+			-j DNAT --to-destination "$target:$port"
+	done
+	iptables -t nat -I PREROUTING 1 -d $IP/32 -p tcp --dport $ESP_RANGE \
+		-m comment --comment vome-esphome -j VOME-207-ESPHOME
+	iptables -t nat -I POSTROUTING 1 -p tcp $ESP_ORIG \
+		-m comment --comment vome-esphome -j MASQUERADE
+	# DOCKER-USER, top first: the rate limit, then new and returning
+	# traffic for the range. Both sit above the vome-207 drop.
+	iptables -I DOCKER-USER 1 -p tcp $ESP_ORIG -m conntrack --ctstate ESTABLISHED,RELATED \
+		-m comment --comment vome-esphome -j ACCEPT
+	iptables -I DOCKER-USER 1 -p tcp $ESP_ORIG -m conntrack --ctstate NEW \
+		-m comment --comment vome-esphome -j ACCEPT
+	iptables -I DOCKER-USER 1 -p tcp $ESP_ORIG -m conntrack --ctstate NEW \
+		-m hashlimit --hashlimit-above 30/minute --hashlimit-burst 60 \
+		--hashlimit-mode srcip --hashlimit-name vome-esphome \
+		-m comment --comment vome-esphome -j DROP
+}
 
 # Remove every rule this script owns, whatever router it last pointed at:
 # a stop with a changed VOME_E2E_ROUTER would otherwise miss the old ones.
 purge() {
 	# By line number, last first: deleting by the rule text -S printed fails
 	# for the conntrack matches under iptables-nft ("Bad rule").
-	for table_chain in "nat PREROUTING" "filter DOCKER-USER"; do
+	purge_tagged 'vome-(e2e|207)' "nat PREROUTING" "filter DOCKER-USER"
+}
+
+purge_tagged() {
+	tag=$1; shift
+	for table_chain in "$@"; do
 		set -- $table_chain
 		iptables -t "$1" -L "$2" -n --line-numbers 2>/dev/null |
-			awk '/\/\* vome-(e2e|207) \*\//{print $1}' | sort -rn |
+			awk -v tag="$tag" '$0 ~ "/\\* " tag " \\*/" {print $1}' | sort -rn |
 			while read -r n; do
 				iptables -t "$1" -D "$2" "$n" 2>/dev/null || true
 			done
@@ -54,15 +118,25 @@ start)
 	iptables -C INPUT -d $IP/32 -j VOME-207 2>/dev/null || iptables -I INPUT 1 -d $IP/32 -j VOME-207
 	iptables -C DOCKER-USER $FWD 2>/dev/null || iptables -I DOCKER-USER 1 $FWD
 	iptables -C DOCKER-USER $ALLOW 2>/dev/null || iptables -I DOCKER-USER 1 $ALLOW
+	purge_tagged vome-esphome "nat PREROUTING" "nat POSTROUTING" "filter DOCKER-USER"
+	esphome_rules
+	;;
+esphome)
+	# A lane's map changed (vome-esphome-dial-in.path): rebuild only these.
+	purge_tagged vome-esphome "nat PREROUTING" "nat POSTROUTING" "filter DOCKER-USER"
+	esphome_rules
 	;;
 stop)
 	purge
+	purge_tagged vome-esphome "nat PREROUTING" "nat POSTROUTING" "filter DOCKER-USER"
+	iptables -t nat -F VOME-207-ESPHOME 2>/dev/null || true
+	iptables -t nat -X VOME-207-ESPHOME 2>/dev/null || true
 	iptables -D INPUT -d $IP/32 -j VOME-207 2>/dev/null || true
 	iptables -F VOME-207 2>/dev/null || true
 	iptables -X VOME-207 2>/dev/null || true
 	;;
 *)
-	echo "usage: $0 start|stop" >&2
+	echo "usage: $0 start|stop|esphome" >&2
 	exit 2
 	;;
 esac

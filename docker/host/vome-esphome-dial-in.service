@@ -1,0 +1,10 @@
+# Rebuilds only the ESPHome dial-in rules on fin1's second IP; the router
+# DNAT and the .207 guard are untouched. Started by vome-esphome-dial-in.path.
+[Unit]
+Description=Vome: ESPHome dial-in rules on fin1's second IP
+After=vome-e2e-dnat.service
+Requisite=vome-e2e-dnat.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vome-second-ip esphome
