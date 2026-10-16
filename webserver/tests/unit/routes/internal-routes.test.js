@@ -169,6 +169,50 @@ describe('POST /internal/relay/dispatch', () => {
 			expect(dispatched).toBe(true);
 		});
 
+		test('200 for every files op the component serves, with its method', async () => {
+			// /delete was missing here for months: the component and the portal
+			// both had it, and every ha_delete_config_file died at this hop.
+			for (const [method, path] of [
+				['GET', '/list?path='],
+				['GET', '/read?path=configuration.yaml'],
+				['POST', '/write?path=packages/a.yaml'],
+				['POST', '/delete?path=packages/a.yaml'],
+				['POST', '/move?path=a.yaml&to=packages/b.yaml&overwrite=0'],
+				['GET', '/media_list?path=snapshots'],
+				['GET', '/media_read?path=snapshots/door.jpg&encoding=base64'],
+			]) {
+				dispatched = false;
+				const res = await send({ method, path, target: 'files' });
+				expect([path, res.status]).toEqual([path, 200]);
+				expect(dispatched).toBe(true);
+			}
+		});
+
+		test('400 for a files op with the wrong method', async () => {
+			for (const [method, path] of [
+				['GET', '/delete?path=a.yaml'],
+				['GET', '/move?path=a.yaml&to=b.yaml'],
+				['POST', '/media_list?path='],
+				['POST', '/media_read?path=a.jpg'],
+				['DELETE', '/read?path=a.yaml'],
+			]) {
+				const res = await send({ method, path, target: 'files' });
+				expect([path, res.status]).toEqual([path, 400]);
+			}
+			expect(dispatched).toBe(false);
+		});
+
+		test('400 for files lookalikes and traversal', async () => {
+			for (const path of [
+				'/chmod?path=a', '/media', '/move-x?path=a', '/media_read/../read?path=a',
+				'/media_write?path=a',
+			]) {
+				const res = await send({ method: 'POST', path, target: 'files' });
+				expect([path, res.status]).toEqual([path, 400]);
+			}
+			expect(dispatched).toBe(false);
+		});
+
 		test('200 for websocket target without a REST path', async () => {
 			const res = await send({
 				target: 'websocket',

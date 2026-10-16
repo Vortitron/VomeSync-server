@@ -43,7 +43,15 @@ const ESPHOME_ALLOWED_PATHS = new Set([
 	'/devices', '/version', '/edit', '/migrate', '/vome-remote-build',
 ]);
 const FILES_ALLOWED_METHODS = new Set(['GET', 'POST']);
-const FILES_ALLOWED_PATHS = new Set(['/list', '/read', '/write']);
+// `/delete` and `/move` change the tree, so POST only; `/media_list` and
+// `/media_read` are read-only views of HA's media folder, so GET only. The
+// component (FILES_ALLOWED_PATHS in its const.py) applies the same rules, and
+// one too old for an op refuses it as non-allowlisted.
+const FILES_ALLOWED_PATHS = new Set([
+	'/list', '/read', '/write', '/delete', '/move', '/media_list', '/media_read',
+]);
+const FILES_POST_ONLY_PATHS = new Set(['/delete', '/move']);
+const FILES_GET_ONLY_PATHS = new Set(['/media_list', '/media_read']);
 
 function decodedSegment(segment) {
 	try {
@@ -96,6 +104,12 @@ function dispatchPolicyError({ method, path, target } = {}) {
 		}
 		if (!FILES_ALLOWED_PATHS.has(pathPortion)) {
 			return 'files path is not allowlisted';
+		}
+		if (FILES_POST_ONLY_PATHS.has(pathPortion) && upperMethod !== 'POST') {
+			return `files ${pathPortion} must be a POST`;
+		}
+		if (FILES_GET_ONLY_PATHS.has(pathPortion) && upperMethod !== 'GET') {
+			return `files ${pathPortion} is read-only and must be a GET`;
 		}
 		return null;
 	}
