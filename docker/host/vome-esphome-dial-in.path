@@ -1,0 +1,20 @@
+# Re-apply ESPHome dial-in on fin1's second IP when a lane's portal rewrites
+# its map (see `vome-second-ip esphome`). The portal writes the file by
+# rename, which PathChanged sees; boot is covered by vome-e2e-dnat's start.
+#
+# Install with the other two files here: cp this and
+# vome-esphome-dial-in.service to /etc/systemd/system/, then
+# systemctl enable --now vome-esphome-dial-in.path
+# A lane deployed elsewhere needs its path in an override, and in
+# VOME_ESPHOME_MAPS for vome-second-ip.
+[Unit]
+Description=Vome: re-apply ESPHome dial-in when a portal lane's map changes
+
+[Path]
+PathChanged=/var/www/vome.home.live/esphome/dial-in.map
+PathChanged=/var/www/vome.home.staging/esphome/dial-in.map
+PathChanged=/var/www/vome.home.dev/esphome/dial-in.map
+Unit=vome-esphome-dial-in.service
+
+[Install]
+WantedBy=multi-user.target
