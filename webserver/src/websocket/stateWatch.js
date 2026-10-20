@@ -30,6 +30,12 @@ const MAX_WATCHES_PER_SERVER = 10;
 const IDLE_TTL_MS = 3 * 60 * 1000;
 // Changes kept for readers that fall behind; one further back gets the whole current picture.
 const MAX_CHANGES = 2000;
+// The most of one state we keep.  A state is a few hundred bytes; a camera
+// or a weather entity with a long forecast is tens of kilobytes.  Anything
+// bigger has its attributes dropped, because the home decides what it sends
+// and this process is shared by every home: 10 watches × 2000 changes of a
+// state the size the frame allows was unbounded memory (October 2026 sweep).
+const MAX_STATE_BYTES = 64 * 1024;
 // The longest a read waits for a change before answering empty.
 const MAX_WAIT_MS = 25 * 1000;
 const SWEEP_INTERVAL_MS = 30 * 1000;
@@ -48,6 +54,21 @@ class StateWatchJobs {
 		}
 		const ids = [...new Set(entityIds.filter((e) => typeof e === 'string' && ENTITY_RE.test(e)))].slice(0, MAX_ENTITIES);
 		return ids.length > 0 ? { ids } : { error: 'no valid entity ids' };
+	}
+
+	/** The state as stored: whole when small, attributes dropped when not. */
+	static boundState(one) {
+		if (JSON.stringify(one).length <= MAX_STATE_BYTES) {
+			return one;
+		}
+		return {
+			entity_id: one.entity_id,
+			state: typeof one.state === 'string' ? one.state.slice(0, 255) : one.state,
+			last_changed: one.last_changed,
+			last_updated: one.last_updated,
+			attributes: {},
+			attributes_dropped: true
+		};
 	}
 
 	start(serverId, entityIds) {
@@ -110,9 +131,10 @@ class StateWatchJobs {
 			if (!one || typeof one.entity_id !== 'string' || !job.entityIds.includes(one.entity_id)) {
 				continue;
 			}
+			const kept = StateWatchJobs.boundState(one);
 			job.seq += 1;
-			job.latest.set(one.entity_id, one);
-			job.changes.push({ seq: job.seq, state: one });
+			job.latest.set(one.entity_id, kept);
+			job.changes.push({ seq: job.seq, state: kept });
 		}
 		if (frame && frame.event === 'snapshot') {
 			job.snapshotSeq = job.seq;

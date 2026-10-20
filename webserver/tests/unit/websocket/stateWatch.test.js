@@ -74,6 +74,22 @@ describe('StateWatchJobs', () => {
 		expect(jobs.cancel(jobId, 'rly-2')).toBe(false);
 	});
 
+	test('a state bigger than it has any right to be is kept without its attributes', async () => {
+		// October 2026 sweep: the home chooses what it sends, and this process
+		// is shared by every home, so a stored state has to be bounded here.
+		const manager = fakeManager();
+		const jobs = new StateWatchJobs(manager);
+		const { jobId } = jobs.start('rly-1', ['light.kitchen_2']);
+		const handlers = manager.tunnels.get(jobId);
+		handlers.onData(frame('snapshot', [{ entity_id: 'light.kitchen_2', state: 'on', attributes: { blob: 'x'.repeat(200 * 1024) } }]));
+		const first = await jobs.read(jobId, 'rly-1', 0, 0);
+		const kept = first.states[0];
+		expect(kept.state).toBe('on');
+		expect(kept.attributes).toEqual({});
+		expect(kept.attributes_dropped).toBe(true);
+		expect(JSON.stringify(kept).length).toBeLessThan(1024);
+	});
+
 	test('a watch nobody reads is closed at the home', () => {
 		const manager = fakeManager();
 		const jobs = new StateWatchJobs(manager);

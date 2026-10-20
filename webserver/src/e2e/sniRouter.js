@@ -32,6 +32,15 @@ const MAX_TUNNELS_PER_HOME = 64;
 const PROXY_V1_MAX = 107;
 // Connections passed on to another router at once.
 const MAX_PASSED_ON = 256;
+// One visitor's share of a home's tunnels, and of the passed-on slots.  The
+// October 2026 sweep showed a visitor holding 64 idle sockets shut a home's
+// door to everyone else, the owner included: the cap was per home only.  A
+// browser opens a handful of connections to one site; eight is generous.
+const MAX_TUNNELS_PER_PEER = 8;
+// A bridged tunnel that carries nothing either way for this long is closed.
+// Without it a socket that sent a ClientHello and then went quiet held its
+// slot for ever (the hello timer is cleared once the handshake is routed).
+const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 const PROXY_V1_RE = /^PROXY (TCP4|TCP6) ([0-9a-fA-F.:]+) ([0-9a-fA-F.:]+) (\d{1,5}) (\d{1,5})\r\n/;
 
 /**
@@ -67,6 +76,7 @@ function proxyV1Line(sock) {
  */
 function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDefault,
 	helloTimeoutMs = HELLO_TIMEOUT_MS, maxTunnelsPerHome = MAX_TUNNELS_PER_HOME,
+	maxTunnelsPerPeer = MAX_TUNNELS_PER_PEER, idleTimeoutMs = IDLE_TIMEOUT_MS,
 	forwards = [], acceptProxyFrom = [] } = {}) {
 	const tail = `.${String(suffix || '').toLowerCase()}`;
 	// Names this router does not serve itself but passes on, unopened, to
@@ -78,11 +88,62 @@ function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDef
 	const trusted = new Set(acceptProxyFrom.map((a) => String(a)));
 	let passedOn = 0;
 	const open = new Map(); // serverId -> tunnels open now
+	const openByPeer = new Map(); // visitor address -> tunnels open now (bridged + passed on)
+
+	// The visitor's own address: the home's door rate-limits, blocks
+	// repeated failed logins and logs by it, and nothing else can tell it.
+	const peerOf = (sock) => sock.vomePeer
+		|| String(sock.remoteAddress || '').replace(/^::ffff:/, '') || null;
+
+	/** Take one of the visitor's slots, or null when they are all in use. */
+	function takePeerSlot(peer, what) {
+		const key = peer || '?';
+		const held = openByPeer.get(key) || 0;
+		if (held >= maxTunnelsPerPeer) {
+			logger.warn(`E2E: ${key} already holds ${held} ${what}; refusing another`);
+			return null;
+		}
+		openByPeer.set(key, held + 1);
+		let given = false;
+		return () => {
+			if (given) {
+				return;
+			}
+			given = true;
+			const left = (openByPeer.get(key) || 1) - 1;
+			if (left > 0) {
+				openByPeer.set(key, left);
+			} else {
+				openByPeer.delete(key);
+			}
+		};
+	}
+
+	/** Destroy `sock` when nothing has passed in either direction for a while. */
+	function idleWatch(sock) {
+		if (!(idleTimeoutMs > 0)) {
+			return () => {};
+		}
+		let timer = null;
+		const arm = () => {
+			clearTimeout(timer);
+			timer = setTimeout(() => sock.destroy(), idleTimeoutMs);
+		};
+		arm();
+		sock.on('close', () => clearTimeout(timer));
+		return arm;
+	}
 
 	function bridge(sock, serverId, target, host, initial) {
 		const count = open.get(serverId) || 0;
 		if (count >= maxTunnelsPerHome) {
 			logger.warn(`E2E: ${host} already has ${count} tunnels open; refusing another`);
+			sock.destroy();
+			return;
+		}
+		const peer = peerOf(sock);
+		const givePeerSlot = takePeerSlot(peer, 'tunnels');
+		if (!givePeerSlot) {
 			sock.destroy();
 			return;
 		}
@@ -93,6 +154,7 @@ function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDef
 				return;
 			}
 			released = true;
+			givePeerSlot();
 			const left = (open.get(serverId) || 1) - 1;
 			if (left > 0) {
 				open.set(serverId, left);
@@ -100,6 +162,7 @@ function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDef
 				open.delete(serverId);
 			}
 		};
+		const touched = idleWatch(sock);
 		const socketId = uuidv4();
 		let acked = false;
 		const queue = [initial];
@@ -117,15 +180,12 @@ function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDef
 			},
 			onData: (data) => {
 				if (data.dataB64 != null && !sock.destroyed) {
+					touched();
 					sock.write(Buffer.from(data.dataB64, 'base64'));
 				}
 			},
 			onClose: () => sock.destroy()
 		});
-		// The visitor's own address: the home's door rate-limits, blocks
-		// repeated failed logins and logs by it, and nothing else can tell it.
-		const peer = sock.vomePeer
-			|| String(sock.remoteAddress || '').replace(/^::ffff:/, '') || null;
 		if (!relayManager.openWs(serverId, { socketId, target, host, peer })) {
 			relayManager.unregisterTunnel(socketId);
 			release();
@@ -133,6 +193,7 @@ function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDef
 			return;
 		}
 		sock.on('data', (chunk) => {
+			touched();
 			if (acked) {
 				send(chunk);
 			} else {
@@ -152,17 +213,26 @@ function createSniRouter({ relayManager, resolveHost, suffix, logger = loggerDef
 			sock.destroy();
 			return;
 		}
+		const givePeerSlot = takePeerSlot(peerOf(sock), 'passed-on connections');
+		if (!givePeerSlot) {
+			sock.destroy();
+			return;
+		}
 		passedOn += 1;
 		let released = false;
 		const release = () => {
 			if (!released) {
 				released = true;
+				givePeerSlot();
 				passedOn -= 1;
 			}
 		};
+		const touched = idleWatch(sock);
+		sock.on('data', touched);
 		const out = net.connect(target.port, target.host, () => {
 			out.write(proxyV1Line(sock));
 			out.write(buf);
+			out.on('data', touched);
 			sock.pipe(out);
 			out.pipe(sock);
 			sock.resume();

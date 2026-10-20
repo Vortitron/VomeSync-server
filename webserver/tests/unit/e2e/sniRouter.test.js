@@ -173,6 +173,53 @@ describe('sniRouter', () => {
 		expect(third.ok).toBe(true);
 	});
 
+	test('one visitor gets at most maxTunnelsPerPeer, whatever the home allows', async () => {
+		// October 2026 sweep: the cap was per home only, so one visitor
+		// holding 64 quiet sockets shut the door to everyone, owner included.
+		const relay = fakeRelay(homePort);
+		const { server } = createSniRouter({
+			relayManager: relay, resolveHost: async () => 'rly-1',
+			suffix: 'e2e.vome.test', logger: quietLogger, maxTunnelsPerHome: 64, maxTunnelsPerPeer: 1
+		});
+		const port = await listen(server);
+		cleanup.push(() => server.close());
+		const hold = await new Promise((resolve) => {
+			const c = tls.connect({ port, host: '127.0.0.1', servername: name, rejectUnauthorized: false });
+			c.on('secureConnect', () => resolve(c));
+			c.on('error', () => {});
+		});
+		const second = await connect(port, name);
+		expect(second.ok).toBe(false);
+		hold.destroy();
+		await new Promise((r) => setTimeout(r, 50));
+		const third = await connect(port, name);
+		expect(third.ok).toBe(true);
+	});
+
+	test('a bridged tunnel that carries nothing is closed after idleTimeoutMs', async () => {
+		// A home that completes the handshake and then says nothing, so the
+		// visitor's socket would otherwise stay open for as long as they like.
+		const quiet = tls.createServer(makeCert(name), () => {});
+		const quietPort = await listen(quiet);
+		cleanup.push(() => quiet.close());
+		const relay = fakeRelay(quietPort);
+		const { server } = createSniRouter({
+			relayManager: relay, resolveHost: async () => 'rly-1',
+			suffix: 'e2e.vome.test', logger: quietLogger, idleTimeoutMs: 150
+		});
+		const port = await listen(server);
+		cleanup.push(() => server.close());
+		const closed = await new Promise((resolve) => {
+			const c = tls.connect({ port, host: '127.0.0.1', servername: name, rejectUnauthorized: false });
+			const started = Date.now();
+			c.on('error', () => {});
+			c.on('close', () => resolve(Date.now() - started));
+			setTimeout(() => { c.destroy(); resolve(null); }, 2000);
+		});
+		expect(closed).not.toBeNull();
+		expect(closed).toBeGreaterThanOrEqual(100);
+	});
+
 	test('the front router passes another lane\'s names on, and that router learns the visitor', async () => {
 		const backRelay = fakeRelay(homePort);
 		const back = createSniRouter({
