@@ -86,8 +86,19 @@ pipeline {
                 expression { params.PULL_LATEST }
             }
             steps {
+                // The host checkout is owned by the host user, not Jenkins, so
+                // git refuses it as "dubious ownership" unless told otherwise.
+                // Before 21 Oct 2026 that refusal ("Not a git repository") was
+                // read as "local changes", the pull was skipped, and every
+                // deploy rebuilt whatever the checkout already held. LIVE no
+                // longer builds from here at all (see Deploy LIVE).
                 sh '''
                     cd /var/www/VomeSync-server
+                    git config --global --add safe.directory /var/www/VomeSync-server
+                    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+                        echo "ERROR: /var/www/VomeSync-server is not a git checkout Jenkins can read" >&2
+                        exit 1
+                    fi
                     if git diff --quiet && git diff --cached --quiet; then
                         git pull --ff-only || echo "WARNING: git pull failed; continuing with existing working copy"
                     else
@@ -167,17 +178,25 @@ pipeline {
             steps {
                 script {
                     def cacheFlag = params.NO_CACHE ? '--no-cache' : ''
+                    // LIVE is built from this job's own checkout: the commit that
+                    // was approved, not whatever branch or state the shared host
+                    // checkout is in (it sits on Develop, and other sessions edit
+                    // it). The image carries that commit, and the Health Check
+                    // stage refuses a container that does not.
+                    def commit = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+                    env.LIVE_COMMIT = commit
                     sh """
+                        echo "Building LIVE services from ${commit}..."
+                        docker build ${cacheFlag} --label vome.commit=${commit} \\
+                            -t docker-vomesync-webserver:latest "${env.WORKSPACE}/webserver"
                         cd /var/www/VomeSync-server/docker
-                        echo "Building LIVE services..."
-                        docker compose build ${cacheFlag} vomesync-webserver
                         echo "Starting LIVE services..."
                         # NB: vomesync-proxy is intentionally NOT started on LIVE — this
                         # host terminates TLS with the system nginx/envoy, which already
                         # owns :8443. Recreating the container's 8443:443 binding collides
                         # with envoy and fails the whole `up`. Prod traffic goes
                         # host-nginx -> vomesync-webserver:3090/3001 directly.
-                        docker compose up -d --force-recreate vomesync-redis vomesync-webserver vomesync-website
+                        docker compose up -d --no-build --force-recreate vomesync-redis vomesync-webserver vomesync-website
                     """
                 }
             }
@@ -227,6 +246,17 @@ pipeline {
                         } else {
                             error("LIVE health check failed (HTTP ${liveStatus})")
                         }
+                        // A healthy container is not proof the new code is in it:
+                        // on 16 Oct 2026 a "successful" deploy restarted the old
+                        // build. The running container must carry the commit.
+                        def running = sh(
+                            script: "docker inspect -f '{{ index .Config.Labels \"vome.commit\" }}' vomesync-webserver",
+                            returnStdout: true
+                        ).trim()
+                        if (running != env.LIVE_COMMIT) {
+                            error("LIVE is running '${running}', not ${env.LIVE_COMMIT}: the new build did not reach the container")
+                        }
+                        echo "LIVE runs ${running}"
                     }
                 }
             }
