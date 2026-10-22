@@ -50,12 +50,13 @@
 		"jest-environment-jsdom": "^29.7.0",
 		"nodemon": "^3.0.1",
 		"redis-memory-server": "^0.9.0",
+		"semver": "^6.3.1",
 		"supertest": "^6.3.3"
 	},
 	"redisMemoryServer": {
 		"version": "7.4.6"
 	},
 	"engines": {
-		"node": ">=18.0.0"
+		"node": ">=20.9.0"
 	}
 }
