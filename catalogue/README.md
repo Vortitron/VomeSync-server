@@ -72,7 +72,7 @@ Environment:
 - `ADMIN_API_KEY` — or `docker/.env`; used to grant premium and purge tests
 - `HCAPTCHA_BYPASS_TOKEN` — only if live captcha is on
 
-Apply grants this owner premium for ten years. Set `CATALOGUE_OWNER_ID` so create/publicize caps skip that owner. Paying customers stay on 50 switches / 25 public. Watching a public UID is free and does not count toward it.
+Apply grants this owner premium for ten years. Set `CATALOGUE_OWNER_ID` so create/publicize caps skip that owner. Paying customers stay on 50 switches / 25 public. Watching a public UID never counts toward those create/publicize caps. It does count toward a free home's 10 watched switches (`FREE_TIER_MAX_SUBSCRIPTIONS` in the HA integration), the same as any other switch the home doesn't own.
 
 Live observe state lives in `/var/lib/vomesync-catalogue/switches.json`, not the git tree:
 
