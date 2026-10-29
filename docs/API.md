@@ -429,7 +429,7 @@ List switches owned by the signing owner key.
 
 ### Set Switch State (v2)
 
-Set a switch state and optionally pass a short `note` and `params` (e.g. light colour/brightness, "now playing"). Both are forwarded to WebSocket subscribers, logged, and shown on public switches. Each change replaces the previous note and params. Limits: note ≤ 280 characters; params ≤ 16 keys, ≤ 2 KB, values text/number/boolean/null or a short array, no nested objects.
+Set a switch state and optionally pass a short `note` and `params` (e.g. light colour/brightness, "now playing"). Both are forwarded to WebSocket subscribers, logged, and shown on public switches. Each change replaces the previous note and params. Limits: note ≤ 280 characters (longer is refused); params are clipped to 16 keys and 2 KB (text cut at 200 characters, nested objects turned into short text) rather than refused.
 
 The signed canonical JSON is `{ v: 2, action: 'set_state', uid, ts, nonce, state, params }`, plus `note` **only when a non-empty note is sent**.
 

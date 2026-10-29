@@ -160,11 +160,14 @@ describe('Switch extras', () => {
 		expect(status.body.data.note).toBe('42');
 	});
 
-	test('params over the limits are refused', async () => {
+	test('params over the limits are clipped, and the change still happens', async () => {
 		const ctx = await createSwitch(app);
-		const resp = await setState(app, ctx, { state: true, params: { deep: { a: 1 } } });
-		expect(resp.status).toBe(400);
-		expect(resp.body.error).toMatch(/nested/);
+		const params = { stale: true, lastError: 'x'.repeat(500), deep: { a: 1 } };
+		await setState(app, ctx, { state: true, params }).expect(200);
+		const status = await request(app).get(`/api/status/${ctx.uid}`).expect(200);
+		expect(status.body.data.state).toBe(true);
+		expect(status.body.data.lastParams.lastError).toHaveLength(200);
+		expect(status.body.data.lastParams.deep).toBe('{"a":1}');
 	});
 
 	test('signed update replaces extras and shows the webhook secret once', async () => {

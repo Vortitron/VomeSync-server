@@ -39,8 +39,13 @@ object. They describe *this* change ("Now playing: Abba", `{ "song": "SOS" }`).
   collapsed. Empty string clears.
 - `params`: object, ≤ 16 keys, keys `^[A-Za-z][A-Za-z0-9_]{0,31}$`, JSON ≤ 2 KB.
   Values: string ≤ 200, finite number, boolean, null, or an array of ≤ 8
-  numbers/strings (so `rgb_color: [255, 0, 0]` still works). No nested objects.
-  (Before this, params had no limit at all.)
+  numbers/strings (so `rgb_color: [255, 0, 0]` still works). The server
+  **clips** rather than refuses: long text is cut, nested objects become short
+  JSON text, bad keys and keys past the limits are dropped. Params are a
+  pass-through that existing senders (the catalogue's error text, older Home
+  Assistant installs) never had to size, and a long value must not stop the
+  switch from changing. The signature covers what was sent; the clipped copy
+  is what is stored and broadcast. (Before this, params had no limit at all.)
 - Each change **replaces** the previous note/params (a change without them
   clears them, so stale "now playing" text cannot linger).
 - Stored on the switch hash as `lastNote`, `params`, `lastSource`, `lastChangeAt`.

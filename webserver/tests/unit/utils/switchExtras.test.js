@@ -42,17 +42,21 @@ describe('switchExtras', () => {
 			expect(() => extras.cleanVisitorMessage('x'.repeat(141))).toThrow(/140/);
 		});
 
-		test('params keep light settings and refuse nesting and size', () => {
+		test('params keep light settings and clip instead of refusing', () => {
 			const ok = { rgb_color: [255, 0, 0], brightness: 200, song: 'SOS', live: true, gone: null };
 			expect(extras.cleanParams(ok)).toEqual(ok);
-			expect(() => extras.cleanParams({ deep: { a: 1 } })).toThrow(/nested/);
-			expect(() => extras.cleanParams({ list: [1, 2, 3, 4, 5, 6, 7, 8, 9] })).toThrow(/8 items/);
-			expect(() => extras.cleanParams({ 'bad-key': 1 })).toThrow(/not allowed/);
+			expect(extras.cleanParams({ deep: { a: 1 } })).toEqual({ deep: '{"a":1}' });
+			expect(extras.cleanParams({ list: [1, 2, 3, 4, 5, 6, 7, 8, 9] }).list).toHaveLength(8);
+			expect(extras.cleanParams({ 'bad-key': 1, fine: 2 })).toEqual({ fine: 2 });
+			expect(extras.cleanParams({ lastError: 'e'.repeat(500) }).lastError).toHaveLength(200);
 			const wide = {};
-			for (let i = 0; i < 12; i += 1) {
+			for (let i = 0; i < 20; i += 1) {
 				wide[`k${i}`] = 'y'.repeat(190);
 			}
-			expect(() => extras.cleanParams(wide)).toThrow(/2048/);
+			const clipped = extras.cleanParams(wide);
+			expect(JSON.stringify(clipped).length).toBeLessThanOrEqual(2048);
+			expect(Object.keys(clipped).length).toBeLessThanOrEqual(16);
+			expect(() => extras.cleanParams([1, 2])).toThrow(/object/);
 		});
 	});
 

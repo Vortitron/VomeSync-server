@@ -174,41 +174,36 @@ function cleanVisitorMessage(raw) {
 	return text;
 }
 
-function cleanParamValue(key, value) {
+function clipParamValue(value) {
 	if (value === null || typeof value === 'boolean') {
 		return value;
 	}
 	if (typeof value === 'number') {
-		if (!Number.isFinite(value)) {
-			throw new ExtrasError(`params.${key} must be a finite number`);
-		}
-		return value;
+		return Number.isFinite(value) ? value : null;
 	}
 	if (typeof value === 'string') {
-		if (value.length > MAX_PARAM_STRING) {
-			throw new ExtrasError(`params.${key} is longer than ${MAX_PARAM_STRING} characters`);
-		}
-		return value;
+		return value.slice(0, MAX_PARAM_STRING);
 	}
 	if (Array.isArray(value)) {
-		if (value.length > MAX_PARAM_ARRAY) {
-			throw new ExtrasError(`params.${key} has more than ${MAX_PARAM_ARRAY} items`);
-		}
-		for (const item of value) {
-			const okNumber = typeof item === 'number' && Number.isFinite(item);
-			const okString = typeof item === 'string' && item.length <= MAX_PARAM_STRING;
-			if (!okNumber && !okString) {
-				throw new ExtrasError(`params.${key} may only hold numbers and short text`);
-			}
-		}
-		return value;
+		return value
+			.slice(0, MAX_PARAM_ARRAY)
+			.map((item) => {
+				if (typeof item === 'number' && Number.isFinite(item)) {
+					return item;
+				}
+				return String(typeof item === 'object' ? JSON.stringify(item) : item).slice(0, MAX_PARAM_STRING);
+			});
 	}
-	throw new ExtrasError(`params.${key} cannot be a nested object`);
+	// Nested objects become short text rather than failing the change.
+	return JSON.stringify(value).slice(0, MAX_PARAM_STRING);
 }
 
 /**
- * Validate per-change params. Values are kept exactly as sent (no trimming)
- * because the signed set_state canonical JSON includes them.
+ * Bring per-change params within the limits. This clips rather than refuses:
+ * params are a pass-through that existing senders (the catalogue's error
+ * text, older Home Assistant installs) never had to size, and a long value
+ * must not stop the switch itself from changing. The signature is checked
+ * against what was sent; what is stored and broadcast is the clipped copy.
  */
 function cleanParams(raw) {
 	if (raw === undefined || raw === null) {
@@ -217,19 +212,22 @@ function cleanParams(raw) {
 	if (!isPlainObject(raw)) {
 		throw new ExtrasError('params must be an object');
 	}
-	const entries = Object.entries(raw);
-	if (entries.length > MAX_PARAMS_KEYS) {
-		throw new ExtrasError(`params has more than ${MAX_PARAMS_KEYS} keys`);
-	}
 	const out = {};
-	for (const [key, val] of entries) {
-		if (!PARAM_KEY.test(key)) {
-			throw new ExtrasError(`params key "${String(key).slice(0, 40)}" is not allowed`);
+	let size = 2;
+	for (const [key, val] of Object.entries(raw)) {
+		if (Object.keys(out).length >= MAX_PARAMS_KEYS) {
+			break;
 		}
-		out[key] = cleanParamValue(key, val);
-	}
-	if (JSON.stringify(out).length > MAX_PARAMS_JSON) {
-		throw new ExtrasError(`params is larger than ${MAX_PARAMS_JSON} bytes`);
+		if (!PARAM_KEY.test(key)) {
+			continue;
+		}
+		const clipped = clipParamValue(val);
+		const added = JSON.stringify(key).length + JSON.stringify(clipped).length + 2;
+		if (size + added > MAX_PARAMS_JSON) {
+			continue;
+		}
+		out[key] = clipped;
+		size += added;
 	}
 	return out;
 }
