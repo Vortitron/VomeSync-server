@@ -1,5 +1,6 @@
 const Joi = require('joi');
 const { listingPromotion } = require('./promote');
+const { isPlainObject, publicCommerce, ownerCommerce } = require('./switchExtras');
 
 const MAX_DESCRIPTION_LENGTH = 500;
 const MAX_SWITCH_NAME_LENGTH = 80;
@@ -9,6 +10,10 @@ const MAX_CAPTCHA_TOKEN_LENGTH = 2000;
 const MAX_ACCESS_KEY_NAME_LENGTH = 100;
 const MAX_REDIRECT_REASON_LENGTH = 500;
 const V2_ACCESS_KEY_PERMISSIONS = ['toggle', 'comment', 'metadata'];
+// Generous here; utils/switchExtras applies the real limits with clear messages.
+const MAX_CHANGE_NOTE_INPUT = 1000;
+const EXTRAS_OBJECT = Joi.object().unknown(true);
+const EXTRAS_OBJECT_OR_JSON = Joi.alternatives().try(Joi.object().unknown(true), Joi.string().max(20000).allow(''));
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const V2_UID_REGEX = /^vs_[0-9a-hjkmnpqrstvwxyz]{26}$/i;
@@ -105,6 +110,8 @@ const schemas = {
 		// because the server would introduce new fields into the signed canonical payload.
 		iconUrl: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).min(1),
 		bannerUrl: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).min(1),
+		// Same rule: only part of the signed payload when the client sends it.
+		properties: EXTRAS_OBJECT,
 		captchaToken: Joi.string().max(MAX_CAPTCHA_TOKEN_LENGTH).allow('')
 	}),
 
@@ -128,9 +135,13 @@ const schemas = {
 		link: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow(''),
 		iconUrl: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow(''),
 		bannerUrl: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow(''),
+		properties: EXTRAS_OBJECT,
+		commerce: EXTRAS_OBJECT,
+		reward: EXTRAS_OBJECT.allow(null),
+		rotateWebhookSecret: Joi.boolean(),
 		captchaToken: Joi.string().max(MAX_CAPTCHA_TOKEN_LENGTH).allow('')
 	}).custom((value, helpers) => {
-		const updatableFields = ['name', 'description', 'location', 'category', 'publicize', 'link', 'iconUrl', 'bannerUrl'];
+		const updatableFields = ['name', 'description', 'location', 'category', 'publicize', 'link', 'iconUrl', 'bannerUrl', 'properties', 'commerce', 'reward', 'rotateWebhookSecret'];
 		const hasUpdate = updatableFields.some((field) => Object.prototype.hasOwnProperty.call(value, field));
 		if (!hasUpdate) {
 			return helpers.message('At least one metadata field is required');
@@ -205,7 +216,13 @@ const schemas = {
 		category: Joi.string().valid(...SWITCH_CATEGORIES),
 		link: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow(''),
 		iconUrl: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow(''),
-		bannerUrl: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow('')
+		bannerUrl: Joi.string().uri({ scheme: ['http', 'https'] }).max(MAX_URL_LENGTH).allow(''),
+		// Multipart forms send these as JSON strings; utils/switchExtras parses them.
+		properties: EXTRAS_OBJECT_OR_JSON,
+		propertiesReplace: Joi.boolean(),
+		commerce: EXTRAS_OBJECT_OR_JSON,
+		reward: EXTRAS_OBJECT_OR_JSON.allow(null),
+		rotateWebhookSecret: Joi.boolean()
 	}),
 
 	v2SetState: Joi.object({
@@ -213,7 +230,20 @@ const schemas = {
 		nonce: Joi.string().min(8).max(128).required(),
 		sigSwitch: Joi.string().max(200).required(),
 		state: Joi.boolean().required(),
-		params: Joi.object().unknown(true).default({})
+		params: Joi.object().unknown(true).default({}),
+		// Not defaulted: the signed canonical JSON only carries a non-empty note.
+		note: Joi.string().max(MAX_CHANGE_NOTE_INPUT).allow('')
+	}),
+
+	v2ToggleViaAccessKey: Joi.object({
+		state: Joi.boolean(),
+		note: Joi.string().max(MAX_CHANGE_NOTE_INPUT).allow(''),
+		params: Joi.object().unknown(true)
+	}),
+
+	publicToggle: Joi.object({
+		message: Joi.string().max(MAX_CHANGE_NOTE_INPUT).allow(''),
+		captchaToken: Joi.string().max(MAX_CAPTCHA_TOKEN_LENGTH).allow('')
 	}),
 
 	adminBlock: Joi.object({
@@ -308,6 +338,15 @@ const validateUID = (req, res, next) => {
 	next();
 };
 
+// Fixed properties and what the last change said.
+const changeExtras = (switchData) => ({
+	properties: isPlainObject(switchData.properties) ? switchData.properties : {},
+	note: switchData.lastNote ? String(switchData.lastNote) : '',
+	lastParams: isPlainObject(switchData.params) ? switchData.params : {},
+	lastSource: switchData.lastSource || '',
+	lastChangeAt: switchData.lastChangeAt || switchData.lastToggled || 0
+});
+
 const sanitizePublicSwitchData = (switchData) => {
 	if (!switchData) return null;
 
@@ -327,7 +366,10 @@ const sanitizePublicSwitchData = (switchData) => {
 		bannerUrl: switchData.bannerUrl || '',
 		ownerProfileUrl: switchData.ownerProfileUrl || '',
 		promoted: promotion.promoted,
-		promotedUntil: promotion.promotedUntil
+		promotedUntil: promotion.promotedUntil,
+		...changeExtras(switchData),
+		commerce: publicCommerce(switchData.commerce),
+		reward: isPlainObject(switchData.reward) ? switchData.reward : null
 	};
 };
 
@@ -349,7 +391,12 @@ const sanitizePrivateSwitchData = (switchData) => {
 		iconUrl: switchData.iconUrl || '',
 		bannerUrl: switchData.bannerUrl || '',
 		...(typeof switchData.index === 'number' ? { index: switchData.index } : {}),
-		...(switchData.authVersion ? { authVersion: switchData.authVersion } : {})
+		...(switchData.authVersion ? { authVersion: switchData.authVersion } : {}),
+		...changeExtras(switchData),
+		// The owner sees their webhook URL, never the secret (shown once on creation).
+		commerce: ownerCommerce(switchData.commerce),
+		hasWebhookSecret: Boolean(switchData.commerceWebhookSecret),
+		reward: isPlainObject(switchData.reward) ? switchData.reward : null
 	};
 };
 

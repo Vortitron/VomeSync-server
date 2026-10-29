@@ -38,6 +38,8 @@ const {
 	sendFreeTierLimitError,
 	pickSwitchMetadata,
 	pickSwitchMetadataUpdatesV2,
+	buildExtrasUpdates,
+	plainMetadataUpdates,
 	abbreviateActor,
 	uploadV2MetadataFiles,
 	v2CanonicalCreate,
@@ -55,7 +57,21 @@ const {
 	v2CanonicalBillingPortal
 } = require('./route-helpers');
 
+const {
+	ExtrasError,
+	cleanProperties,
+	cleanNote,
+	cleanParams,
+	cleanVisitorMessage,
+	PUBLIC_MIN_COOLDOWN_SECONDS
+} = require('../utils/switchExtras');
+const { applySwitchChange, applyVisitorAction, claimCooldown } = require('../utils/switchActions');
+
 const router = express.Router();
+
+function sendExtrasError(res, error) {
+	return res.status(400).json({ success: false, error: error.message });
+}
 
 function ownerLimitSnapshot(tierName) {
 	const limits = config.limits || {};
@@ -168,6 +184,16 @@ router.post('/v2/switch',
 			}
 
 			const switchConfig = pickSwitchMetadata(data);
+			if (switchConfig.properties !== undefined) {
+				try {
+					switchConfig.properties = cleanProperties(switchConfig.properties);
+				} catch (extrasErr) {
+					if (extrasErr instanceof ExtrasError) {
+						return sendExtrasError(res, extrasErr);
+					}
+					throw extrasErr;
+				}
+			}
 			// If icon/banner URLs are provided, ingest and re-host them (store only local URLs).
 			try {
 				if (typeof switchConfig.iconUrl === 'string' && switchConfig.iconUrl.trim()) {
@@ -288,36 +314,35 @@ router.post('/v2/switch/:uid/state',
 				return res.status(401).json({ success: false, error: 'Invalid switch signature' });
 			}
 
-			const newState = Boolean(data.state);
-			const oldState = Boolean(switchData.state);
-			const params = (data.params && typeof data.params === 'object') ? data.params : {};
-			const timestamp = Date.now();
-
-			await redisClient.setSwitchState(uid, newState, { params });
-
-			let toggleCount = switchData.toggleCount || 0;
-			if (newState !== oldState) {
-				toggleCount = await redisClient.incrementToggleCount(uid);
+			let params;
+			let note;
+			try {
+				params = cleanParams(data.params);
+				note = cleanNote(data.note);
+			} catch (extrasErr) {
+				if (extrasErr instanceof ExtrasError) {
+					return sendExtrasError(res, extrasErr);
+				}
+				throw extrasErr;
 			}
 
-			await redisClient.appendEvent(uid, {
-				type: 'state',
-				state: newState,
-				actor: `owner:${(ownerId || '').substring(0, 8)}...`,
-				viaApiKey: false,
+			const result = await applySwitchChange(uid, {
+				state: data.state,
+				note,
 				params,
-				timestamp
+				source: 'owner',
+				actor: `owner:${(ownerId || '').substring(0, 8)}...`,
+				existing: switchData
 			});
-
-			await redisClient.publishSwitchUpdate(uid, newState, params);
 
 			return res.json({
 				success: true,
 				data: {
 					uid,
-					state: newState,
-					timestamp,
-					toggleCount
+					state: result.state,
+					timestamp: result.timestamp,
+					toggleCount: result.toggleCount,
+					note
 				}
 			});
 		} catch (error) {
@@ -360,16 +385,27 @@ router.post('/v2/switch/:uid',
 				return res.status(401).json({ success: false, error: 'Invalid owner signature' });
 			}
 
-			const updates = pickSwitchMetadataUpdatesV2(data);
-			if (!updates || Object.keys(updates).length === 0) {
+			const signedUpdates = pickSwitchMetadataUpdatesV2(data);
+			if (!signedUpdates || Object.keys(signedUpdates).length === 0) {
 				return res.status(400).json({ success: false, error: 'No metadata updates provided' });
 			}
 
-			const canonical = v2CanonicalUpdateSwitch(uid, data, updates);
+			const canonical = v2CanonicalUpdateSwitch(uid, data, signedUpdates);
 			const ok = verifyEd25519SignatureB64Url(data.ownerPubKey, canonical, data.sigOwner);
 			if (!ok) {
 				return res.status(401).json({ success: false, error: 'Invalid owner signature' });
 			}
+
+			let extrasResult;
+			try {
+				extrasResult = buildExtrasUpdates(switchData, signedUpdates, { merge: false });
+			} catch (extrasErr) {
+				if (extrasErr instanceof ExtrasError) {
+					return sendExtrasError(res, extrasErr);
+				}
+				throw extrasErr;
+			}
+			const updates = { ...plainMetadataUpdates(signedUpdates), ...extrasResult.updates };
 
 			const limitCheck = await checkFreeTierLimits({
 				ownerId,
@@ -421,7 +457,10 @@ router.post('/v2/switch/:uid',
 
 			return res.json({
 				success: true,
-				data: sanitizePrivateSwitchData(updated)
+				data: {
+					...sanitizePrivateSwitchData(updated),
+					...(extrasResult.webhookSecret ? { webhookSecret: extrasResult.webhookSecret } : {})
+				}
 			});
 		} catch (error) {
 			logger.error(`Error updating v2 switch metadata ${req.params.uid}:`, error);
@@ -758,31 +797,38 @@ router.post('/v2/switch/:uid/toggle',
 			const { uid } = req.params;
 			const { switchData } = req;
 			const actorLabel = abbreviateActor(req.apiKeyId);
-			const timestamp = Date.now();
 
-			const oldState = Boolean(switchData.state);
-			const newState = !oldState;
-
-			await redisClient.setSwitchState(uid, newState);
-
-			let toggleCount = switchData.toggleCount || 0;
-			if (newState !== oldState) {
-				toggleCount = await redisClient.incrementToggleCount(uid);
+			const { error: bodyError, value: body } = schemas.v2ToggleViaAccessKey.validate(req.body || {}, { stripUnknown: true });
+			if (bodyError) {
+				return res.status(400).json({ success: false, error: bodyError.message });
+			}
+			let params;
+			let note;
+			try {
+				params = cleanParams(body.params);
+				note = cleanNote(body.note);
+			} catch (extrasErr) {
+				if (extrasErr instanceof ExtrasError) {
+					return sendExtrasError(res, extrasErr);
+				}
+				throw extrasErr;
 			}
 
+			const newState = typeof body.state === 'boolean' ? body.state : !switchData.state;
+
 			await redisClient.recordUserInteraction(uid, req.apiKeyId);
-			await redisClient.appendEvent(uid, {
-				type: 'state',
+			const result = await applySwitchChange(uid, {
 				state: newState,
+				note,
+				params,
+				source: 'key',
 				actor: actorLabel,
-				viaApiKey: true,
-				timestamp
+				existing: switchData
 			});
-			await redisClient.publishSwitchUpdate(uid, newState);
 
 			return res.json({
 				success: true,
-				data: { uid, state: newState, timestamp, toggleCount }
+				data: { uid, state: result.state, timestamp: result.timestamp, toggleCount: result.toggleCount, note }
 			});
 		} catch (error) {
 			logger.error(`Error toggling v2 switch via access key ${req.params.uid}:`, error);
@@ -802,7 +848,20 @@ router.post('/v2/switch/:uid/metadata',
 	async (req, res) => {
 		try {
 			const { uid } = req.params;
-			const updates = pickSwitchMetadataUpdatesV2(req.validatedData || {});
+			const requested = req.validatedData || {};
+			let extrasResult;
+			try {
+				extrasResult = buildExtrasUpdates(req.switchData, requested, { merge: true });
+			} catch (extrasErr) {
+				if (extrasErr instanceof ExtrasError) {
+					return sendExtrasError(res, extrasErr);
+				}
+				throw extrasErr;
+			}
+			const updates = {
+				...plainMetadataUpdates(pickSwitchMetadataUpdatesV2(requested)),
+				...extrasResult.updates
+			};
 			const iconFile = req.files && req.files.iconFile ? req.files.iconFile[0] : null;
 			const bannerFile = req.files && req.files.bannerFile ? req.files.bannerFile[0] : null;
 
@@ -838,11 +897,84 @@ router.post('/v2/switch/:uid/metadata',
 
 			return res.json({
 				success: true,
-				data: sanitizePrivateSwitchData(updated)
+				data: {
+					...sanitizePrivateSwitchData(updated),
+					...(extrasResult.webhookSecret ? { webhookSecret: extrasResult.webhookSecret } : {})
+				}
 			});
 		} catch (error) {
 			logger.error(`Error updating v2 switch metadata via access key for ${req.params.uid}:`, error);
 			return res.status(500).json({ success: false, error: 'Failed to update switch' });
+		}
+	}
+);
+
+// ── V2: Public toggle (owner opted in; no key, rate-limited) ───────────────────
+
+router.post('/v2/switch/:uid/public-toggle',
+	validateUID,
+	authManager.rateLimit('v2_public_toggle', 20, 900000),
+	validateRequest(schemas.publicToggle),
+	async (req, res) => {
+		try {
+			const { uid } = req.params;
+			const data = req.validatedData;
+			const switchData = await redisClient.getSwitchState(uid);
+			if (!switchData || !switchData.publicize || switchData.authVersion !== 2) {
+				return res.status(404).json({ success: false, error: 'Switch not found' });
+			}
+			if (switchData.ownerId && await redisClient.isOwnerBlocked(switchData.ownerId)) {
+				return res.status(403).json({ success: false, error: 'Owner blocked' });
+			}
+			if (await redisClient.getSwitchRedirect(uid)) {
+				return res.status(409).json({ success: false, error: 'Switch has moved' });
+			}
+			const commerce = switchData.commerce || {};
+			if (commerce.toggleMode !== 'public') {
+				return res.status(403).json({ success: false, error: 'The owner has not opened this switch to the public' });
+			}
+
+			let note = '';
+			if (data.message) {
+				if (!commerce.allowMessage) {
+					return res.status(400).json({ success: false, error: 'This switch does not take messages' });
+				}
+				try {
+					note = cleanVisitorMessage(data.message);
+				} catch (extrasErr) {
+					if (extrasErr instanceof ExtrasError) {
+						return sendExtrasError(res, extrasErr);
+					}
+					throw extrasErr;
+				}
+			}
+
+			const cooldown = Math.max(PUBLIC_MIN_COOLDOWN_SECONDS, Number(commerce.cooldownSeconds) || 0);
+			const claim = await claimCooldown(uid, cooldown);
+			if (!claim.ok) {
+				res.set('Retry-After', String(Math.ceil(claim.retryAfterMs / 1000)));
+				return res.status(429).json({
+					success: false,
+					error: 'Someone just switched it. Try again in a moment.',
+					retryAfterMs: claim.retryAfterMs
+				});
+			}
+
+			const result = await applyVisitorAction(uid, switchData, { source: 'public', note });
+			return res.json({
+				success: true,
+				data: {
+					uid,
+					state: result.state,
+					timestamp: result.timestamp,
+					note,
+					...(result.revertsAt ? { revertsAt: result.revertsAt } : {}),
+					nextAllowedAt: Date.now() + (cooldown * 1000)
+				}
+			});
+		} catch (error) {
+			logger.error(`Error in public toggle for ${req.params.uid}:`, error);
+			return res.status(500).json({ success: false, error: 'Failed to switch' });
 		}
 	}
 );

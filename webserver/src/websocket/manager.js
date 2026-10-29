@@ -192,6 +192,12 @@ class WebSocketManager {
 				if (switchData.params && Object.keys(switchData.params).length > 0) {
 					payload.params = switchData.params;
 				}
+				if (switchData.lastNote) {
+					payload.note = switchData.lastNote;
+				}
+				if (switchData.lastSource) {
+					payload.source = switchData.lastSource;
+				}
 				this.sendToClient(clientId, payload);
 			} else {
 				this.sendToClient(clientId, {
@@ -255,6 +261,11 @@ class WebSocketManager {
 					};
 					if (updateData.params && Object.keys(updateData.params).length > 0) {
 						payload.params = updateData.params;
+					}
+					for (const field of ['note', 'source', 'paid']) {
+						if (updateData[field]) {
+							payload[field] = updateData[field];
+						}
 					}
 					this.broadcastToSwitch(uid, payload);
 				} catch (error) {

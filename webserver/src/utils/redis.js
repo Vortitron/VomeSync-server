@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const config = require('../config/config');
 const logger = require('./logger');
 const { listingPromotion, sortPublicSwitches } = require('./promote');
+const { publicCommerce } = require('./switchExtras');
 let testRedisServer = null;
 
 const DEFAULT_REDIS_CONNECT_MAX_ATTEMPTS = 30;
@@ -26,6 +27,10 @@ const SWITCH_REDIRECTS_HASH = 'switch_redirects';
 const SWITCH_LISTING_OVERRIDES_PREFIX = 'switch_override:';
 const ALL_SWITCHES_SORTED_SET = 'all_switches';
 const DAILY_SWITCH_STATS_PREFIX = 'daily_switches:';
+
+function isPlainObjectValue(value) {
+	return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
 
 function _sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -435,7 +440,15 @@ class RedisClient {
 			link: data.link || '',
 			iconUrl: data.iconUrl || '',
 			bannerUrl: data.bannerUrl || '',
-			params: (data.params && typeof data.params === 'object') ? data.params : undefined
+			params: (data.params && typeof data.params === 'object') ? data.params : undefined,
+			// Text fields go through the hash deserialiser, which turns "42" into 42.
+			lastNote: data.lastNote === undefined || data.lastNote === null ? '' : String(data.lastNote),
+			lastSource: data.lastSource ? String(data.lastSource) : '',
+			lastChangeAt: Number(data.lastChangeAt) || Number(data.lastToggled) || 0,
+			properties: isPlainObjectValue(data.properties) ? data.properties : {},
+			commerce: isPlainObjectValue(data.commerce) ? data.commerce : null,
+			reward: isPlainObjectValue(data.reward) ? data.reward : null,
+			commerceWebhookSecret: data.commerceWebhookSecret ? String(data.commerceWebhookSecret) : ''
 		};
 	}
 
@@ -497,7 +510,10 @@ class RedisClient {
 			iconUrl: switchConfig.iconUrl || '',
 			bannerUrl: switchConfig.bannerUrl || '',
 			toggleCount: 0,
-			params: {}
+			params: {},
+			...(switchConfig.properties && Object.keys(switchConfig.properties).length > 0
+				? { properties: switchConfig.properties }
+				: {})
 		};
 
 		await this.client.hSet(key, this._serializeHash(switchData));
@@ -739,7 +755,8 @@ class RedisClient {
 				bannerUrl: listingData.bannerUrl || '',
 				ownerProfileUrl,
 				promoted: promotion.promoted,
-				promotedUntil: promotion.promotedUntil
+				promotedUntil: promotion.promotedUntil,
+				...await this.publicSwitchExtras(listingData)
 			});
 		}
 
@@ -805,15 +822,24 @@ class RedisClient {
 	}
 
 	// Pub/Sub operations for real-time updates
-	async publishSwitchUpdate(uid, state, params = undefined) {
+	async publishSwitchUpdate(uid, state, params = undefined, extra = {}) {
 		const channel = `switch_updates:${uid}`;
 		const payload = {
 			uid,
 			state,
-			timestamp: Date.now()
+			timestamp: extra.timestamp || Date.now()
 		};
 		if (params && typeof params === 'object' && Object.keys(params).length > 0) {
 			payload.params = params;
+		}
+		if (extra.note) {
+			payload.note = extra.note;
+		}
+		if (extra.source) {
+			payload.source = extra.source;
+		}
+		if (extra.paid) {
+			payload.paid = { amount: extra.paid.amount, currency: extra.paid.currency };
 		}
 		const message = JSON.stringify(payload);
 
@@ -1582,7 +1608,40 @@ class RedisClient {
 			ownerProfileUrl,
 			events,
 			promoted: promotion.promoted,
-			promotedUntil: promotion.promotedUntil
+			promotedUntil: promotion.promotedUntil,
+			...await this.publicSwitchExtras(listingData)
+		};
+	}
+
+	/**
+	 * Whether money for this owner's paid switches has somewhere to go: a
+	 * ready Stripe connected account, or the catalogue owner (Vome sells).
+	 * The connect record is written by utils/connect.js.
+	 */
+	async ownerCanTakePayments(ownerId) {
+		if (!ownerId) {
+			return false;
+		}
+		const catalogueOwner = String((config.limits && config.limits.catalogueOwnerId) || '').toLowerCase();
+		if (catalogueOwner && String(ownerId).toLowerCase() === catalogueOwner) {
+			return true;
+		}
+		const ready = await this.client.hGet(`owner_connect:${ownerId}`, 'ready');
+		return ready === 'true';
+	}
+
+	/** Properties, last note and the public side of commerce/reward. */
+	async publicSwitchExtras(switchData) {
+		const commerce = switchData.commerce;
+		const needsPayments = Boolean(commerce && (commerce.toggleMode === 'paid' || commerce.tips));
+		const canTakePayments = needsPayments ? await this.ownerCanTakePayments(switchData.ownerId) : false;
+		return {
+			properties: isPlainObjectValue(switchData.properties) ? switchData.properties : {},
+			note: switchData.lastNote || '',
+			lastParams: isPlainObjectValue(switchData.params) ? switchData.params : {},
+			lastSource: switchData.lastSource || '',
+			commerce: publicCommerce(commerce, { canTakePayments }),
+			reward: isPlainObjectValue(switchData.reward) ? switchData.reward : null
 		};
 	}
 
