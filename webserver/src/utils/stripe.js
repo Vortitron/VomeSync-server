@@ -1,5 +1,6 @@
 /**
- * Stripe helpers for directory promotion and owner premium.
+ * Stripe helpers for directory promotion, owner premium, and visitors
+ * paying to switch or tipping (docs/SWITCH_EXTRAS.md section 4).
  *
  * Hosted Checkout Sessions (no payment_method_types — Dashboard decides
  * methods). Restricted keys (rk_) preferred over sk_ in production.
@@ -11,6 +12,7 @@
 const crypto = require('crypto');
 const Stripe = require('stripe');
 const config = require('../config/config');
+const { applicationFee } = require('./switchExtras');
 
 const STRIPE_API_VERSION = '2026-05-27.dahlia';
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz';
@@ -34,6 +36,11 @@ function isPremiumConfigured() {
 
 function isStripeConfigured() {
 	return isPromoteConfigured() || isPremiumConfigured();
+}
+
+/** Paid switches and tips only need the keys; the price is the owner's. */
+function isPaymentsConfigured() {
+	return hasStripeKeys();
 }
 
 function getStripe() {
@@ -214,6 +221,103 @@ async function createBillingPortalSession({ customerId, uid }) {
 	return { id: session.id, url: session.url };
 }
 
+const SWITCH_PAYMENT_KINDS = {
+	switch: 'vomesync_paid_switch',
+	tip: 'vomesync_tip'
+};
+
+function switchPaymentFee(amount) {
+	const stripe = config.stripe || {};
+	return applicationFee(amount, {
+		percent: stripe.connectFeePercent,
+		fixed: stripe.connectFeeFixed
+	});
+}
+
+/**
+ * Checkout for a visitor paying to switch, or tipping the owner.
+ *
+ * Owner with a ready connected account: destination charge, the owner is the
+ * settlement merchant (on_behalf_of), Vome keeps application_fee_amount. No
+ * automatic tax: it is the owner's sale.
+ * Catalogue owner (platformSale): plain platform charge with Vome's usual tax.
+ */
+async function createSwitchPaymentSession({
+	uid,
+	ownerId,
+	kind,
+	amount,
+	currency,
+	message = '',
+	connectedAccountId = '',
+	platformSale = false,
+	switchName = ''
+}) {
+	const stripe = getStripe();
+	if (!stripe) {
+		throw new Error('Stripe is not configured');
+	}
+	const metaKind = SWITCH_PAYMENT_KINDS[kind];
+	if (!metaKind) {
+		throw new Error(`Unknown payment kind ${kind}`);
+	}
+	if (!platformSale && !connectedAccountId) {
+		throw new Error('Owner has no connected account');
+	}
+	const unitAmount = Number(amount);
+	if (!Number.isInteger(unitAmount) || unitAmount <= 0) {
+		throw new Error('Amount must be a positive whole number of minor units');
+	}
+	const cur = String(currency || '').toLowerCase();
+	const label = String(switchName || '').trim().slice(0, 80);
+	const name = kind === 'tip'
+		? `Tip${label ? ` for ${label}` : ' for a VomeSync switch'}`
+		: `Switch ${label || 'a VomeSync switch'}`;
+	const metadata = {
+		kind: metaKind,
+		uid,
+		ownerId: ownerId || '',
+		message: String(message || '').slice(0, 140),
+		amount: String(unitAmount),
+		currency: cur
+	};
+	const publicBase = publicBaseUrl();
+	const switchUrl = `${publicBase}/switch/${encodeURIComponent(uid)}`;
+	const params = {
+		mode: 'payment',
+		line_items: [{
+			quantity: 1,
+			price_data: {
+				currency: cur,
+				unit_amount: unitAmount,
+				...(platformSale ? priceDataTax() : {}),
+				product_data: platformSale ? productData(name) : { name }
+			}
+		}],
+		success_url: `${switchUrl}?paid=success`,
+		cancel_url: `${switchUrl}?paid=cancel`,
+		client_reference_id: uid,
+		integration_identifier: integrationIdentifier(metaKind),
+		metadata
+	};
+	if (platformSale) {
+		params.payment_intent_data = { metadata };
+		Object.assign(params, checkoutPresentment());
+	} else {
+		params.payment_intent_data = {
+			on_behalf_of: connectedAccountId,
+			transfer_data: { destination: connectedAccountId },
+			application_fee_amount: switchPaymentFee(unitAmount),
+			metadata
+		};
+	}
+	const session = await stripe.checkout.sessions.create(params);
+	if (!session.url) {
+		throw new Error('Stripe Checkout did not return a URL');
+	}
+	return { id: session.id, url: session.url };
+}
+
 function constructWebhookEvent(rawBody, signature) {
 	const stripe = getStripe();
 	if (!stripe) {
@@ -227,10 +331,14 @@ module.exports = {
 	isStripeConfigured,
 	isPromoteConfigured,
 	isPremiumConfigured,
+	isPaymentsConfigured,
+	SWITCH_PAYMENT_KINDS,
+	switchPaymentFee,
 	getStripe,
 	setStripeForTests,
 	createPromoteCheckoutSession,
 	createPremiumCheckoutSession,
 	createBillingPortalSession,
+	createSwitchPaymentSession,
 	constructWebhookEvent
 };

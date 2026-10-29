@@ -229,7 +229,11 @@ const config = {
 		taxEnabled: parseEnvFlag(process.env.STRIPE_TAX_ENABLED, true),
 		taxCode: process.env.STRIPE_TAX_CODE || 'txcd_10103000',
 		taxBehavior: String(process.env.STRIPE_TAX_BEHAVIOR || 'inclusive').toLowerCase(),
-		adaptivePricing: parseEnvFlag(process.env.STRIPE_ADAPTIVE_PRICING, true)
+		adaptivePricing: parseEnvFlag(process.env.STRIPE_ADAPTIVE_PRICING, true),
+		// Paid switches and tips through an owner's connected account: Vome's
+		// application fee is percent of the amount plus a fixed part (minor units).
+		connectFeePercent: parsePositiveInt(process.env.STRIPE_CONNECT_FEE_PERCENT, 10),
+		connectFeeFixed: parsePositiveInt(process.env.STRIPE_CONNECT_FEE_FIXED, 30)
 	}
 };
 

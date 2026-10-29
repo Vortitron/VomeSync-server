@@ -152,14 +152,20 @@ change cancels the pending revert.
   `STRIPE_CONNECT_FEE_FIXED` (default 30 minor units), capped at the amount.
   Destination charges make the platform pay Stripe's fee, so the fixed part
   is not optional.
-- Metadata: `kind = vomesync_paid_switch | vomesync_tip`, `uid`, `ownerId`,
-  `message`.
+- Metadata (session and PaymentIntent): `kind = vomesync_paid_switch |
+  vomesync_tip`, `uid`, `ownerId`, `message`, `amount`, `currency`.
+- Only paid sessions count, so slow payment methods apply on
+  `checkout.session.async_payment_succeeded`. A paid switch still applies if
+  the owner turned paid mode off while the visitor was in Checkout (they paid).
+- If Stripe refuses an owner charge, the owner is marked not ready so the next
+  visitor gets the 409 instead of the same Stripe error.
 - Webhook `checkout.session.completed` (paid) → idempotent on session id
   (`SET NX paid_session:<id>`):
   - `vomesync_paid_switch`: apply `action` with note = message or
     "Paid by a visitor", source `paid`, `paid: {amount, currency}`; schedule
-    hold; append event; DIY webhook `paid`; bump `paidCount` and
-    `earnings:<currency>` on the switch.
+    hold; append event; DIY webhook `paid`; bump the separate hash
+    `switch:<uid>:earnings` (`paidCount`, `tipCount`, `paid:<cur>`,
+    `tip:<cur>`).
   - `vomesync_tip`: no state change; append event `{type:'tip', amount,
     currency, note}`; DIY webhook `tip`; bump tip totals.
 - Success/cancel URLs: `/switch/:uid?paid=success|cancel`.
@@ -175,14 +181,23 @@ change cancels the pending revert.
 - Onboarding: Account Links v2, `use_case.type = 'account_onboarding'`,
   configurations `['merchant', 'recipient']`.
 - Ready = card_payments **and** stripe_transfers status `active`. Status is
-  read from Stripe on demand (status call, return URL) and cached 10 min.
+  read from Stripe on demand (status call, return URL) and cached 10 min for a
+  ready account, 30 s for one that is not ready yet (so an owner coming back
+  from onboarding is seen quickly). `requirementsDue` is a count. The v2
+  account-updated thin events are not handled; they need an event
+  destination of their own.
+- **Not yet tried for real:** Connect and Accounts v2 are not enabled on the
+  Stripe sandbox (`non_connect_platform_accounts_v2_access_blocked`). The
+  destination-charge parameters were accepted by Stripe up to the account
+  lookup; a platform-sale Checkout was created in the sandbox.
 - Routes:
   - owner-signed (Home Assistant): `POST /api/v2/owner/connect`
     (start/resume onboarding → `{ url }`), `POST /api/v2/owner/connect/status`
     (→ `{ connected, ready, requirementsDue, dashboardUrl? }`). Canonical
     actions `connect_onboard` / `connect_status` (`{ v:2, action, ownerPubKey, ts, nonce }`).
   - access key with `metadata` (website): `POST /api/v2/switch/:uid/connect`,
-    `POST /api/v2/switch/:uid/connect/status`.
+    `POST /api/v2/switch/:uid/connect/status` (also returns `paymentsEnabled`,
+    `platformSale` and this switch's `earnings`).
 - Return/refresh URLs: `/switch/:uid?connect=return|refresh` (or `/?connect=…`).
 
 ## 6. Getting paid to switch: reward offers
@@ -220,6 +235,15 @@ Community challenges, energy co-ops, a shop paying for window lamps.
   `POST /api/v2/owner/reward-claims` `{ uid, … }` (canonical action `reward_claims_list`).
 - Claimant sees their own: owner-signed `POST /api/v2/owner/my-rewards`
   (canonical action `my_rewards`) → claims across switches + totals owed.
+- Responses: a claim is `{ id: 'rc_…', claimant, changeAt, claimedAt,
+  entities, amount, currency, status }`. Lists return `{ uid, claims, totals:
+  { owed: {cur: n}, paid: {cur: n} }, owedByClaimant: [{ claimant, currency,
+  amount, count }] }`; my-rewards returns `{ claims: [{ uid, switchName, … }],
+  totals }`. Errors: no offer 409, own reward 403, unknown change 404, wrong
+  direction 409, too late 410, already claimed 409, over the daily limit 429
+  (a refused claim does not use up the change).
+- The `reward_claim` webhook body carries `claimId`, `claimant`, `changeAt`,
+  `entities`, `amount`, `currency` (source `reward`).
 - **Settlement is DIY for now** (publisher pays however they like, then marks
   paid). Claims are self-reported by the claimant's Home Assistant: good for
   community challenges, not for grid settlement. Paying claimants through

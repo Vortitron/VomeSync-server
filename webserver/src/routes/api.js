@@ -10,6 +10,7 @@ const logger = require('../utils/logger');
 const v2Routes = require('./v2-routes');
 const adminRoutes = require('./admin-routes');
 const legacyRoutes = require('./legacy-routes');
+const commerceRoutes = require('./commerce-routes');
 const publicRoutes = require('./public-routes');
 
 const router = express.Router();
@@ -18,6 +19,7 @@ const router = express.Router();
 router.use(v2Routes);
 router.use(adminRoutes);
 router.use(legacyRoutes);
+router.use(commerceRoutes);
 router.use(publicRoutes);
 
 // Global error handler for all API routes
