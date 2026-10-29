@@ -1,9 +1,10 @@
 // =============================================================================
 // VomeSync server — DEV auto-deploy
 //
-// On every push to main or develop, run CI then hand off to vomesync-deploy
-// with TARGET=dev. That job is the single source of truth for *how* a deploy
-// is performed (compose build/up, health check).
+// On every push to Develop, run CI, then build the DEV backend from this
+// job's checkout of that commit and prove the container runs it (see the
+// Deploy to DEV stage for why this no longer hands off to vomesync-deploy,
+// which still does manual and LIVE deploys).
 //
 // Jenkins job: VomeSync/vomesync-autodeploy-dev (provisioned from casc.yaml).
 //
@@ -45,10 +46,6 @@ pipeline {
 		)
 	}
 
-	environment {
-		DEPLOY_JOB_NAME = 'VomeSync/vomesync-deploy'
-	}
-
 	stages {
 		stage('Resolve commit') {
 			steps {
@@ -75,19 +72,54 @@ pipeline {
 
 		stage('Deploy to DEV') {
 			steps {
-				// RUN_TESTS_FIRST is always false from here: either Pre-flight CI
-				// already ran vomesync-ci for this commit, or the operator skipped
-				// tests. Re-running CI inside vomesync-deploy would double the wait
-				// and hold the serialised deploy job for no reason.
-				build job: env.DEPLOY_JOB_NAME, wait: true, propagate: true,
-					parameters: [
-						string(name: 'TARGET', value: 'dev'),
-						booleanParam(name: 'PULL_LATEST', value: true),
-						booleanParam(name: 'NO_CACHE', value: false),
-						booleanParam(name: 'RUN_TESTS_FIRST', value: false),
-						booleanParam(name: 'BACKUP_BEFORE_DEPLOY', value: false),
-						booleanParam(name: 'SKIP_APPROVAL', value: true),
-					]
+				// DEV is built here, from this job's own checkout of the pushed
+				// Develop commit. It used to call vomesync-deploy, which builds
+				// DEV from the shared host checkout after a `git pull` there; from
+				// 21 to 29 Oct 2026 that pull failed on every run ("Host key
+				// verification failed"), was logged as a warning, and every
+				// "successful" DEV deploy restarted the old code. vomesync-deploy
+				// checks out main, so it cannot build a Develop commit itself.
+				// The image carries the commit and the check below refuses a
+				// container that does not, the same rule LIVE has had since 21 Oct.
+				//
+				// The website containers (live and dev alike) serve the host
+				// checkout's website/ folder, so a website change does not reach
+				// sync.vome.io or dev from here. That is deliberate for now:
+				// updating that folder would publish to LIVE without approval.
+				script {
+					env.DEV_COMMIT = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+					sh """
+						echo "Building DEV from ${env.DEV_COMMIT}..."
+						docker build --label vome.commit=${env.DEV_COMMIT} \\
+							-t docker-vomesync-webserver-dev:latest "${env.WORKSPACE}/webserver"
+						cd /var/www/VomeSync-server/docker
+						docker compose up -d --no-build --force-recreate vomesync-redis-dev vomesync-webserver-dev
+					"""
+				}
+			}
+		}
+
+		stage('Check DEV') {
+			steps {
+				script {
+					sleep(time: 8, unit: 'SECONDS')
+					def running = sh(
+						script: "docker inspect -f '{{ index .Config.Labels \"vome.commit\" }}' vomesync-webserver-dev",
+						returnStdout: true
+					).trim()
+					if (running != env.DEV_COMMIT) {
+						error("DEV is running '${running}', not ${env.DEV_COMMIT}: the new build did not reach the container")
+					}
+					// The image's own HEALTHCHECK probes 3090; DEV listens on 3091 (PORT in compose).
+					def healthy = sh(
+						script: "docker exec vomesync-webserver-dev node -e \"require('http').get('http://127.0.0.1:3091/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\"",
+						returnStatus: true
+					)
+					if (healthy != 0) {
+						error("DEV runs ${running} but its health check failed")
+					}
+					echo "DEV runs ${running} and is healthy"
+				}
 			}
 		}
 	}
