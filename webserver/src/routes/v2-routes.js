@@ -909,6 +909,15 @@ router.post('/v2/switch/:uid/metadata',
 	}
 );
 
+// ── V2: Owner's view via access key (private settings, never the secret) ───────
+
+router.post('/v2/switch/:uid/owner-view',
+	validateUID,
+	authManager.rateLimit('v2_owner_view', 200, 900000, { perKey: true }),
+	authManager.requireV2AccessKey('metadata'),
+	async (req, res) => res.json({ success: true, data: sanitizePrivateSwitchData(req.switchData) })
+);
+
 // ── V2: Public toggle (owner opted in; no key, rate-limited) ───────────────────
 
 router.post('/v2/switch/:uid/public-toggle',

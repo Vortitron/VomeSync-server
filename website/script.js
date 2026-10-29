@@ -877,6 +877,7 @@ function setupEventListeners() {
 	searchBox.addEventListener('input', () => applyFilters());
 	userCountFilter.addEventListener('change', () => applyFilters());
 	refreshBtn.addEventListener('click', loadAllData);
+	setupSwitchExtrasListeners();
 
 	if (homeBrand) {
 		homeBrand.addEventListener('click', (e) => {
@@ -1563,6 +1564,11 @@ function updateSwitchCardElement(card, switchData) {
 		promotedEl.classList.toggle('hidden', !isListingPromoted(switchData));
 	}
 
+	const extrasBadgesEl = card.querySelector('[data-field="extrasBadges"]');
+	if (extrasBadgesEl) {
+		extrasBadgesEl.innerHTML = renderExtrasBadgesHtml(switchData);
+	}
+
 	const descEl = card.querySelector('[data-field="description"]');
 	if (descEl) {
 		const description = getSwitchDescription(switchData);
@@ -1749,17 +1755,32 @@ function wsSendJson(value) {
 	}
 }
 
-function handleStateUpdate(uid, state, timestamp) {
+/**
+ * Note/source/params of a live change. A `state_update` without `source` is a
+ * snapshot (sent on subscribe) or from an older server: it leaves them alone.
+ */
+function applyLiveChangeExtras(target, extras) {
+	if (!target || !extras || typeof extras.source !== 'string' || !extras.source) return target;
+	return {
+		...target,
+		note: typeof extras.note === 'string' ? extras.note : '',
+		lastSource: extras.source,
+		lastParams: extras.params && typeof extras.params === 'object' ? extras.params : {},
+		lastPaid: extras.paid && typeof extras.paid === 'object' ? extras.paid : null
+	};
+}
+
+function handleStateUpdate(uid, state, timestamp, extras = null) {
 	const targetUid = String(uid || '').trim();
 	if (!targetUid) return;
 
 	const idx = allSwitches.findIndex((sw) => sw && sw.uid === targetUid);
 	if (idx >= 0) {
-		allSwitches[idx] = {
+		allSwitches[idx] = applyLiveChangeExtras({
 			...allSwitches[idx],
 			state: Boolean(state),
 			lastToggled: timestamp ? Number(timestamp) : allSwitches[idx].lastToggled
-		};
+		}, extras);
 	}
 
 	// Patch visible card if present
@@ -1770,13 +1791,15 @@ function handleStateUpdate(uid, state, timestamp) {
 	}
 
 	if (currentSwitchId && currentSwitchId === targetUid) {
-		currentSwitchDetail = {
+		currentSwitchDetail = applyLiveChangeExtras({
 			...(currentSwitchDetail || {}),
 			uid: targetUid,
 			state: Boolean(state),
 			lastToggled: timestamp ? Number(timestamp) : (currentSwitchDetail?.lastToggled || null)
-		};
+		}, extras);
 		updateHeroStatusButton(currentSwitchDetail);
+		renderLastNote(currentSwitchDetail);
+		updateSwitchExtrasVisibility();
 		if (toggleDialog && !toggleDialog.classList.contains('hidden')) {
 			if (toggleDialogSwitch) {
 				toggleDialogSwitch.checked = Boolean(state);
@@ -1922,7 +1945,10 @@ function syncSwitchDetailToIndex(detail) {
 			name: detail.name || allSwitches[idx].name,
 			description: detail.description || allSwitches[idx].description,
 			location: detail.location || allSwitches[idx].location,
-			category: detail.category || allSwitches[idx].category
+			category: detail.category || allSwitches[idx].category,
+			commerce: detail.commerce !== undefined ? detail.commerce : allSwitches[idx].commerce,
+			reward: detail.reward !== undefined ? detail.reward : allSwitches[idx].reward,
+			properties: detail.properties !== undefined ? detail.properties : allSwitches[idx].properties
 		};
 		updateRenderedSwitchCards();
 		updateStats();
@@ -1965,7 +1991,7 @@ function connectRealtime(initialUid) {
 			if (!raw) return;
 			const msg = JSON.parse(raw);
 			if (msg && msg.type === 'state_update') {
-				handleStateUpdate(msg.uid, msg.state, msg.timestamp);
+				handleStateUpdate(msg.uid, msg.state, msg.timestamp, msg);
 			}
 		} catch (err) {
 			console.warn('Bad WS message:', err);
@@ -2761,6 +2787,7 @@ function createSwitchCard(switchData) {
 						<div class="switch-name-row">
 							<a class="switch-name" data-field="name" href="${escapeAttr(buildSwitchPath(uid))}">${escapeHtml(displayName)}</a>
 							<span class="promoted-badge ${isListingPromoted(switchData) ? '' : 'hidden'}" data-field="promotedBadge">Promoted</span>
+							<span class="extras-badges" data-field="extrasBadges">${renderExtrasBadgesHtml(switchData)}</span>
 						</div>
 						<div class="switch-description ${displayDescription ? '' : 'hidden'}" data-field="description">${escapeHtml(displayDescription)}</div>
 					</div>
@@ -2982,6 +3009,7 @@ function renderSwitchDetail(detail) {
 	}
 
 	renderEvents(detail.events || []);
+	renderSwitchExtras(detail);
 	if (toggleDialog && !toggleDialog.classList.contains('hidden')) {
 		renderToggleDialogActivity(detail);
 	}
@@ -3106,11 +3134,13 @@ function updateManagePanel(detail) {
 	updatePromotePanel(detail);
 	updatePremiumPanel(detail);
 	if (!hasManagement) {
+		resetManageExtras();
 		return;
 	}
 
 	if (manageLinkInput) manageLinkInput.value = detail.link || '';
 	resetManageMediaPickers(detail);
+	updateManageExtras(detail);
 
 	// If a management key was supplied via #accessKey=..., scroll to this panel once
 	const wantScroll = Boolean(
@@ -3276,10 +3306,37 @@ function renderEvents(events) {
 			`;
 		}
 
+		if (event.type === 'tip') {
+			const tipAmount = Number(event.amount) > 0 ? formatMoney(event.amount, event.currency) : '';
+			return `
+				<li class="timeline-item">
+					<div class="timeline-dot comment"></div>
+					<div class="timeline-content">
+						<div class="timeline-head">
+							<span class="timeline-type type-tip">Tip</span>
+							<span class="timeline-actor">${escapeHtml(tipAmount)}</span>
+							<span class="timeline-time">${timeText}</span>
+						</div>
+						${event.note ? `<p>${escapeHtml(event.note)}</p>` : ''}
+					</div>
+				</li>
+			`;
+		}
+
 		const stateLabel = event.state ? 'ON' : 'OFF';
 		const actor = event.actor || 'user';
 		const via = event.viaApiKey ? 'API' : 'key';
 		const typeCls = event.state ? 'type-state-on' : 'type-state-off';
+		const sourceKey = String(event.source || '');
+		const sourceHtml = EXTRAS_SOURCE_LABELS[sourceKey]
+			? `<span class="source-badge source-${sourceKey}" title="${escapeAttr(EXTRAS_SOURCE_TITLES[sourceKey])}">${EXTRAS_SOURCE_LABELS[sourceKey]}</span>`
+			: '';
+		const paidHtml = Number(event.amount) > 0
+			? `<span class="last-note-paid">${escapeHtml(formatMoney(event.amount, event.currency))}</span>`
+			: '';
+		const actorHtml = sourceKey && sourceKey !== 'owner' && sourceKey !== 'key'
+			? ''
+			: `<span class="timeline-actor">${escapeHtml(actor)} (${via})</span>`;
 
 		return `
 			<li class="timeline-item">
@@ -3287,9 +3344,11 @@ function renderEvents(events) {
 				<div class="timeline-content">
 					<div class="timeline-head">
 						<span class="timeline-type ${typeCls}">${stateLabel}</span>
-						<span class="timeline-actor">${escapeHtml(actor)} (${via})</span>
+						${sourceHtml}${paidHtml}
+						${actorHtml}
 						<span class="timeline-time">${timeText}</span>
 					</div>
+					${event.note ? `<p>${escapeHtml(event.note)}</p>` : ''}
 				</div>
 			</li>
 		`;
@@ -3317,6 +3376,20 @@ function renderToggleDialogActivity(detail) {
 							<span class="timeline-time">${timeText}</span>
 						</div>
 						<p>${escapeHtml(event.comment || '')}</p>
+					</div>
+				</li>
+			`;
+		}
+		if (event.type === 'tip') {
+			return `
+				<li class="timeline-item">
+					<div class="timeline-dot comment"></div>
+					<div class="timeline-content">
+						<div class="timeline-head">
+							<span class="timeline-type type-tip">Tip</span>
+							<span class="timeline-actor">${escapeHtml(Number(event.amount) > 0 ? formatMoney(event.amount, event.currency) : '')}</span>
+							<span class="timeline-time">${timeText}</span>
+						</div>
 					</div>
 				</li>
 			`;
@@ -3453,6 +3526,8 @@ function closeDetail() {
 	detailSection.classList.add('hidden');
 	currentSwitchId = null;
 	currentSwitchDetail = null;
+	resetManageExtras();
+	extrasCommerceRenderKey = '';
 	hideRedirectNotice();
 	clearHeroBanner();
 	restoreHeroText();
@@ -3484,12 +3559,16 @@ function restoreSwitchFromQuery() {
 			consumePromotedQuery();
 			consumePremiumQuery();
 			consumeBillingQuery();
+			consumePaidQuery();
+			consumeConnectQuery();
 		});
 	} else {
 		closeDetail();
 		consumePromotedQuery();
 		consumePremiumQuery();
 		consumeBillingQuery();
+		consumePaidQuery();
+		consumeConnectQuery();
 	}
 }
 
@@ -3826,9 +3905,1337 @@ function escapeHtml(text) {
 }
 
 function escapeAttr(text) {
-	const div = document.createElement('div');
-	div.textContent = text;
-	return div.innerHTML;
+	// textContent→innerHTML escapes &, < and > but not quotes, which matter in attributes.
+	return String(text ?? '')
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;');
+}
+
+// ── Switch extras: properties, notes, paying to switch, rewards ───────────────
+// Contract: docs/SWITCH_EXTRAS.md. Everything shown here is owner- or
+// visitor-supplied, so it is built with textContent / createElement only.
+
+const EXTRAS_MAX_PROPERTIES = 12;
+const EXTRAS_PROPERTY_KEY = /^[a-z][a-z0-9_]{0,31}$/;
+const EXTRAS_MAX_PROPERTY_VALUE = 200;
+const EXTRAS_MAX_VISITOR_MESSAGE = 140;
+const EXTRAS_CURRENCIES = {
+	eur: { min: 100, max: 50000 },
+	gbp: { min: 100, max: 50000 },
+	usd: { min: 100, max: 50000 },
+	sek: { min: 1000, max: 500000 }
+};
+const EXTRAS_SOURCE_LABELS = {
+	owner: 'Owner',
+	key: 'Key holder',
+	public: 'Visitor',
+	paid: 'Paid',
+	auto: 'Auto'
+};
+const EXTRAS_SOURCE_TITLES = {
+	owner: 'Changed by the owner',
+	key: 'Changed by someone with an access key',
+	public: 'Changed by a visitor on this page',
+	paid: 'Changed by a visitor who paid',
+	auto: 'Put back automatically when the hold time ran out'
+};
+
+let extrasCommerceRenderKey = '';
+let publicToggleCooldownUntil = 0;
+let publicToggleCooldownTimer = null;
+let manageExtrasUid = '';
+let manageCommerceWebhookUrl;
+let rewardClaimsCache = [];
+
+function extrasEl(tag, attrs, ...children) {
+	const node = document.createElement(tag);
+	if (attrs) {
+		Object.entries(attrs).forEach(([key, value]) => {
+			if (value === undefined || value === null || value === false) return;
+			if (key === 'className') node.className = value;
+			else if (key === 'text') node.textContent = String(value);
+			else if (key === 'dataset') Object.assign(node.dataset, value);
+			else if (key.startsWith('on') && typeof value === 'function') node.addEventListener(key.slice(2).toLowerCase(), value);
+			else node.setAttribute(key, value === true ? '' : String(value));
+		});
+	}
+	children.flat().forEach((child) => {
+		if (child === null || child === undefined || child === false || child === '') return;
+		node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
+	});
+	return node;
+}
+
+function getMoneyLocale() {
+	try {
+		return (navigator.languages && navigator.languages[0]) || navigator.language || 'en-GB';
+	} catch {
+		return 'en-GB';
+	}
+}
+
+/** Money from minor units, e.g. formatMoney(200, 'sek') → "2,00 kr" in Swedish. */
+function formatMoney(amountMinor, currency) {
+	const code = String(currency || 'eur').toUpperCase();
+	const value = (Number(amountMinor) || 0) / 100;
+	try {
+		return new Intl.NumberFormat(getMoneyLocale(), { style: 'currency', currency: code }).format(value);
+	} catch {
+		return `${value.toFixed(2)} ${code}`;
+	}
+}
+
+/** "1.50" / "1,50" → 150. Returns NaN for anything that is not a plain amount. */
+function parseMoneyInput(text) {
+	const raw = String(text || '').trim().replace(/\s/g, '').replace(',', '.');
+	if (!/^\d+(\.\d{1,2})?$/.test(raw)) return NaN;
+	return Math.round(Number(raw) * 100);
+}
+
+function minorToInput(amountMinor) {
+	const n = Number(amountMinor);
+	if (!Number.isFinite(n)) return '';
+	return (n / 100).toFixed(2);
+}
+
+function formatDurationSeconds(seconds) {
+	const s = Math.max(0, Math.round(Number(seconds) || 0));
+	if (s < 120) return `${s} s`;
+	if (s < 7200) {
+		const m = Math.floor(s / 60);
+		const rest = s % 60;
+		return rest ? `${m} min ${rest} s` : `${m} min`;
+	}
+	const hours = Math.floor(s / 3600);
+	const mins = Math.round((s % 3600) / 60);
+	return mins ? `${hours} h ${mins} min` : `${hours} h`;
+}
+
+/** Only http(s) links are ever put in an href. */
+function safeExternalUrl(value) {
+	const raw = String(value || '').trim();
+	if (!raw) return '';
+	try {
+		const parsed = new URL(raw);
+		if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return '';
+		return parsed.href;
+	} catch {
+		return '';
+	}
+}
+
+function humanisePropertyKey(key) {
+	const text = String(key || '').replace(/_/g, ' ').trim();
+	return text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
+}
+
+function formatPropertyValue(value) {
+	if (value === true) return 'yes';
+	if (value === false) return 'no';
+	if (value === null || value === undefined) return '';
+	return String(value);
+}
+
+function sourceBadge(source) {
+	const key = String(source || '');
+	if (!EXTRAS_SOURCE_LABELS[key]) return null;
+	return extrasEl('span', {
+		className: `source-badge source-${key}`,
+		title: EXTRAS_SOURCE_TITLES[key],
+		text: EXTRAS_SOURCE_LABELS[key]
+	});
+}
+
+function getCommerce(detail) {
+	const c = detail && detail.commerce;
+	return c && typeof c === 'object' && !Array.isArray(c) ? c : null;
+}
+
+function getReward(detail) {
+	const r = detail && detail.reward;
+	return r && typeof r === 'object' && !Array.isArray(r) && Number(r.amount) > 0 ? r : null;
+}
+
+function commerceCanTakePayments(commerce) {
+	return Boolean(commerce && commerce.canTakePayments !== false);
+}
+
+function getTipCurrency(commerce) {
+	const currency = String((commerce && commerce.price && commerce.price.currency) || 'eur').toLowerCase();
+	return EXTRAS_CURRENCIES[currency] ? currency : 'eur';
+}
+
+/** Small badges for directory cards. Static strings only, so safe as HTML. */
+function renderExtrasBadgesHtml(switchData) {
+	const commerce = getCommerce(switchData);
+	const badges = [];
+	if (commerce && commerce.toggleMode === 'public') {
+		badges.push('<span class="extras-badge badge-public" title="Anyone can switch it from its page">Public</span>');
+	}
+	if (commerce && commerce.toggleMode === 'paid') {
+		badges.push('<span class="extras-badge badge-paid" title="Pay to switch it">Paid</span>');
+	}
+	if (commerce && commerce.tips && commerceCanTakePayments(commerce)) {
+		badges.push('<span class="extras-badge badge-tips" title="The owner takes tips">Tips</span>');
+	}
+	if (getReward(switchData)) {
+		badges.push('<span class="extras-badge badge-reward" title="The owner pays a reward for acting on it from Home Assistant">Reward</span>');
+	}
+	return badges.join('');
+}
+
+// ── Switch page (public) ──────────────────────────────────────────────────────
+
+function renderSwitchExtras(detail) {
+	const wrap = document.getElementById('switchExtras');
+	if (!wrap || !detail) return;
+	renderLastNote(detail);
+	renderPropertiesTable(detail.properties);
+	renderCommercePanel(detail);
+	renderRewardOffer(getReward(detail));
+	updateSwitchExtrasVisibility();
+}
+
+function updateSwitchExtrasVisibility() {
+	const wrap = document.getElementById('switchExtras');
+	if (!wrap) return;
+	const anyVisible = Array.from(wrap.children).some((child) => !child.classList.contains('hidden'));
+	wrap.classList.toggle('hidden', !anyVisible);
+}
+
+function renderLastNote(detail) {
+	const box = document.getElementById('detailNote');
+	if (!box) return;
+	box.textContent = '';
+	const note = String((detail && (detail.note ?? detail.lastNote)) || '').trim();
+	const source = detail ? String(detail.lastSource || '') : '';
+	const badge = sourceBadge(source);
+	const paid = detail && detail.lastPaid && Number(detail.lastPaid.amount) > 0 ? detail.lastPaid : null;
+	if (!note && !badge) {
+		box.classList.add('hidden');
+		return;
+	}
+	box.appendChild(extrasEl('span', { className: 'last-note-label', text: 'Last change' }));
+	if (badge) box.appendChild(badge);
+	if (paid) {
+		box.appendChild(extrasEl('span', { className: 'last-note-paid', text: formatMoney(paid.amount, paid.currency) }));
+	}
+	if (note) {
+		box.appendChild(extrasEl('span', { className: 'last-note-text', text: note }));
+	}
+	box.classList.remove('hidden');
+}
+
+function renderPropertiesTable(properties) {
+	const wrap = document.getElementById('detailPropertiesWrap');
+	const table = document.getElementById('detailProperties');
+	if (!wrap || !table) return;
+	table.textContent = '';
+	const entries = properties && typeof properties === 'object' && !Array.isArray(properties)
+		? Object.entries(properties).filter(([, v]) => v !== null && v !== undefined)
+		: [];
+	if (!entries.length) {
+		wrap.classList.add('hidden');
+		return;
+	}
+	const body = extrasEl('tbody');
+	entries.forEach(([key, value]) => {
+		body.appendChild(extrasEl('tr', null,
+			extrasEl('th', { scope: 'row', title: key, text: humanisePropertyKey(key) }),
+			extrasEl('td', { text: formatPropertyValue(value) })
+		));
+	});
+	table.appendChild(body);
+	wrap.classList.remove('hidden');
+}
+
+function describeVisitorAction(action) {
+	if (action === 'on') return 'Turn it on';
+	if (action === 'off') return 'Turn it off';
+	return 'Flip it';
+}
+
+function describePaidAction(action) {
+	if (action === 'on') return 'to turn it on';
+	if (action === 'off') return 'to turn it off';
+	return 'to switch';
+}
+
+function renderCommercePanel(detail) {
+	const panel = document.getElementById('commercePanel');
+	if (!panel) return;
+	const commerce = getCommerce(detail);
+	// Re-render only when the settings change, so a visitor's half-typed
+	// message survives the live refreshes.
+	const renderKey = JSON.stringify([detail && detail.uid, commerce]);
+	if (renderKey === extrasCommerceRenderKey && panel.childNodes.length) return;
+	extrasCommerceRenderKey = renderKey;
+	panel.textContent = '';
+
+	const mode = commerce ? commerce.toggleMode : 'owner';
+	const canPay = commerceCanTakePayments(commerce);
+	const showToggle = mode === 'public' || mode === 'paid';
+	const showTips = Boolean(commerce && commerce.tips && canPay);
+	const payLink = commerce ? safeExternalUrl(commerce.payLink) : '';
+	const ownerNote = commerce ? String(commerce.note || '').trim() : '';
+
+	if (!commerce || (!showToggle && !showTips && !payLink && !ownerNote)) {
+		panel.classList.add('hidden');
+		return;
+	}
+
+	panel.appendChild(extrasEl('h3', { text: showToggle ? 'Switch it yourself' : 'Support this switch' }));
+
+	if (ownerNote) {
+		panel.appendChild(extrasEl('p', { className: 'commerce-owner-note' },
+			extrasEl('span', { className: 'muted small', text: 'From the owner: ' }),
+			extrasEl('span', { text: ownerNote })
+		));
+	}
+
+	const hold = Number(commerce.holdSeconds) || 0;
+	const cooldown = Number(commerce.cooldownSeconds) || 0;
+	const action = commerce.action || 'toggle';
+
+	if (showToggle && commerce.allowMessage) {
+		panel.appendChild(extrasEl('label', { for: 'commerceMessage', text: 'Message (optional)' }));
+		panel.appendChild(extrasEl('input', {
+			id: 'commerceMessage',
+			type: 'text',
+			maxlength: String(EXTRAS_MAX_VISITOR_MESSAGE),
+			autocomplete: 'off',
+			placeholder: 'Shown with your change'
+		}));
+		panel.appendChild(extrasEl('p', { className: 'muted small', text: 'Up to 140 characters, no links. Everyone can see it.' }));
+	}
+
+	const actions = extrasEl('div', { className: 'comment-actions commerce-actions' });
+
+	if (mode === 'public') {
+		actions.appendChild(extrasEl('button', {
+			id: 'publicToggleBtn',
+			type: 'button',
+			className: 'refresh-btn',
+			dataset: { label: describeVisitorAction(action) },
+			text: describeVisitorAction(action)
+		}));
+	}
+
+	if (mode === 'paid') {
+		if (canPay && commerce.price && Number(commerce.price.amount) > 0) {
+			actions.appendChild(extrasEl('button', {
+				id: 'paidToggleBtn',
+				type: 'button',
+				className: 'refresh-btn',
+				text: `Pay ${formatMoney(commerce.price.amount, commerce.price.currency)} ${describePaidAction(action)}`
+			}));
+		}
+	}
+
+	if (actions.childNodes.length) panel.appendChild(actions);
+
+	const facts = [];
+	if (mode === 'public') {
+		facts.push('Free. Anyone on this page can do it.');
+		if (cooldown > 0) facts.push(`One change every ${formatDurationSeconds(Math.max(cooldown, 5))} for everyone.`);
+	}
+	if (mode === 'paid') {
+		if (canPay) {
+			facts.push('Card payment through Stripe Checkout. The switch changes once Stripe confirms the payment.');
+		} else {
+			facts.push('Paying to switch is turned on, but the owner cannot take payments yet.');
+		}
+	}
+	if (showToggle && hold > 0) {
+		facts.push(`It goes back after ${formatDurationSeconds(hold)}.`);
+	}
+	if (facts.length) {
+		panel.appendChild(extrasEl('p', { className: 'muted small commerce-facts', text: facts.join(' ') }));
+	}
+
+	if (showTips) {
+		const currency = getTipCurrency(commerce);
+		const floor = EXTRAS_CURRENCIES[currency].min;
+		const tipRow = extrasEl('div', { className: 'tip-row' },
+			extrasEl('label', { for: 'tipAmount', text: `Tip (${currency.toUpperCase()})` }),
+			extrasEl('div', { className: 'tip-inputs' },
+				extrasEl('input', {
+					id: 'tipAmount',
+					type: 'text',
+					inputmode: 'decimal',
+					autocomplete: 'off',
+					value: minorToInput(Math.max(floor, Number(commerce.price && commerce.price.currency === currency ? commerce.price.amount : floor) || floor))
+				}),
+				extrasEl('button', { id: 'tipBtn', type: 'button', className: 'ghost-btn', text: 'Tip' })
+			),
+			extrasEl('p', { className: 'muted small', text: `Card payment through Stripe Checkout. At least ${formatMoney(floor, currency)}.` })
+		);
+		panel.appendChild(tipRow);
+	}
+
+	if (payLink) {
+		panel.appendChild(extrasEl('div', { className: 'paylink-row' },
+			extrasEl('a', {
+				id: 'ownerPayLink',
+				className: 'ghost-btn',
+				href: payLink,
+				target: '_blank',
+				rel: 'noopener nofollow',
+				text: 'Owner\'s own payment page ↗'
+			}),
+			extrasEl('p', { className: 'muted small', text: 'This link goes to a payment page the owner set up themselves. Vome does not handle that payment and cannot see, confirm or refund it.' })
+		));
+	}
+
+	panel.appendChild(extrasEl('span', { id: 'commerceStatus', className: 'comment-status hidden', role: 'status' }));
+	panel.classList.remove('hidden');
+	updatePublicToggleButton();
+}
+
+function renderRewardOffer(reward) {
+	const box = document.getElementById('rewardOffer');
+	if (!box) return;
+	box.textContent = '';
+	if (!reward) {
+		box.classList.add('hidden');
+		return;
+	}
+	const money = formatMoney(reward.amount, reward.currency);
+	let when = 'each time you act on this switch from Home Assistant';
+	if (reward.on === 'on') when += ' when it turns on';
+	else if (reward.on === 'off') when += ' when it turns off';
+	box.appendChild(extrasEl('h3', { text: 'Reward for acting on it' }));
+	box.appendChild(extrasEl('p', { text: `The owner pays ${money} ${when}.` }));
+	const note = String(reward.note || '').trim();
+	if (note) {
+		box.appendChild(extrasEl('p', { className: 'commerce-owner-note' },
+			extrasEl('span', { className: 'muted small', text: 'From the owner: ' }),
+			extrasEl('span', { text: note })
+		));
+	}
+	const rules = [];
+	if (Number(reward.windowSeconds) > 0) {
+		rules.push(`Your Home Assistant has to act within ${formatDurationSeconds(reward.windowSeconds)} of the change.`);
+	}
+	if (Number(reward.maxPerDay) > 0) {
+		rules.push(`At most ${Number(reward.maxPerDay)} a day per person.`);
+	}
+	if (rules.length) box.appendChild(extrasEl('p', { className: 'muted small', text: rules.join(' ') }));
+	box.appendChild(extrasEl('p', { className: 'small' },
+		'To take part, subscribe to this switch in Home Assistant and turn on ',
+		extrasEl('strong', { text: 'Claim rewards' }),
+		' in the VomeSync integration options (Settings → Devices & services → VomeSync → Configure). After it has switched the entities you linked to this switch, it sends a claim.'
+	));
+	box.appendChild(extrasEl('p', { className: 'muted small', text: 'The owner pays claims themselves. Vome keeps the list of claims but does not pay them out.' }));
+	box.classList.remove('hidden');
+}
+
+function setCommerceStatus(message, kind = '') {
+	const el = document.getElementById('commerceStatus');
+	if (!el) return;
+	if (!message) {
+		el.textContent = '';
+		el.className = 'comment-status hidden';
+		return;
+	}
+	el.textContent = message;
+	el.className = `comment-status${kind ? ` ${kind}` : ''}`;
+}
+
+/** Returns the message to send, '' for none, or null when it is not allowed. */
+function readVisitorMessage() {
+	const input = document.getElementById('commerceMessage');
+	if (!input) return '';
+	const text = String(input.value || '').replace(/\s+/g, ' ').trim();
+	if (!text) return '';
+	if (text.length > EXTRAS_MAX_VISITOR_MESSAGE) {
+		setCommerceStatus('Your message is longer than 140 characters.', 'error');
+		return null;
+	}
+	if (/https?:|www\.|\.[a-z]{2,}\//i.test(text)) {
+		setCommerceStatus('Messages cannot contain links.', 'error');
+		return null;
+	}
+	return text;
+}
+
+function updatePublicToggleButton() {
+	const btn = document.getElementById('publicToggleBtn');
+	if (!btn) return;
+	const remaining = publicToggleCooldownUntil - Date.now();
+	if (remaining > 0) {
+		btn.disabled = true;
+		btn.textContent = `Wait ${Math.ceil(remaining / 1000)} s`;
+	} else {
+		btn.disabled = false;
+		btn.textContent = btn.dataset.label || 'Flip it';
+	}
+}
+
+function startPublicToggleCooldown(ms) {
+	const wait = Math.max(0, Number(ms) || 0);
+	publicToggleCooldownUntil = Date.now() + wait;
+	if (publicToggleCooldownTimer) {
+		clearTimeout(publicToggleCooldownTimer);
+		publicToggleCooldownTimer = null;
+	}
+	const tick = () => {
+		publicToggleCooldownTimer = null;
+		updatePublicToggleButton();
+		if (publicToggleCooldownUntil > Date.now()) {
+			publicToggleCooldownTimer = setTimeout(tick, 1000);
+		}
+	};
+	tick();
+}
+
+async function readJsonSafe(response) {
+	try {
+		return (await response.json()) || {};
+	} catch {
+		return {};
+	}
+}
+
+async function publicToggleCurrentSwitch() {
+	const uid = currentSwitchId;
+	if (!uid) return;
+	if (publicToggleCooldownUntil > Date.now()) {
+		updatePublicToggleButton();
+		return;
+	}
+	const message = readVisitorMessage();
+	if (message === null) return;
+	const commerce = getCommerce(currentSwitchDetail) || {};
+	const btn = document.getElementById('publicToggleBtn');
+	if (btn) btn.disabled = true;
+	setCommerceStatus('Switching…');
+	try {
+		const body = message ? { message } : {};
+		const response = await fetch(`${API_BASE_URL}/v2/switch/${encodeURIComponent(uid)}/public-toggle`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(body)
+		});
+		const data = await readJsonSafe(response);
+		if (response.status === 429) {
+			const retryMs = Number(data.retryAfterMs ?? (data.data && data.data.retryAfterMs)) || 5000;
+			startPublicToggleCooldown(retryMs);
+			setCommerceStatus(`Someone changed it moments ago. You can try again in ${formatDurationSeconds(Math.ceil(retryMs / 1000))}.`, 'error');
+			return;
+		}
+		if (!response.ok || !data.success) {
+			setCommerceStatus(data.error || 'Could not change the switch.', 'error');
+			updatePublicToggleButton();
+			return;
+		}
+		const result = data.data || {};
+		if (typeof result.state === 'boolean') {
+			handleStateUpdate(uid, result.state, result.timestamp || Date.now(), {
+				source: 'public',
+				note: typeof result.note === 'string' ? result.note : message
+			});
+		}
+		const input = document.getElementById('commerceMessage');
+		if (input) input.value = '';
+		const hold = Number(commerce.holdSeconds) || 0;
+		const stateText = typeof result.state === 'boolean' ? ` It is now ${result.state ? 'on' : 'off'}.` : '';
+		setCommerceStatus(`Done.${stateText}${hold > 0 ? ` It goes back after ${formatDurationSeconds(hold)}.` : ''}`, 'success');
+		const cooldown = Math.max(Number(commerce.cooldownSeconds) || 0, 5);
+		startPublicToggleCooldown(cooldown * 1000);
+	} catch (error) {
+		console.error('Public toggle failed:', error);
+		setCommerceStatus('Could not reach the server. Try again.', 'error');
+		updatePublicToggleButton();
+	}
+}
+
+async function startVisitorCheckout(kind) {
+	const uid = currentSwitchId;
+	if (!uid) return;
+	const commerce = getCommerce(currentSwitchDetail) || {};
+	const body = { kind };
+	if (kind === 'tip') {
+		const currency = getTipCurrency(commerce);
+		const limits = EXTRAS_CURRENCIES[currency];
+		const amount = parseMoneyInput(document.getElementById('tipAmount')?.value);
+		if (!Number.isFinite(amount) || amount < limits.min || amount > limits.max) {
+			setCommerceStatus(`Enter a tip from ${formatMoney(limits.min, currency)} to ${formatMoney(limits.max, currency)}.`, 'error');
+			return;
+		}
+		body.amount = amount;
+	}
+	if (commerce.allowMessage) {
+		const message = readVisitorMessage();
+		if (message === null) return;
+		if (message) body.message = message;
+	}
+	const btn = document.getElementById(kind === 'tip' ? 'tipBtn' : 'paidToggleBtn');
+	if (btn) btn.disabled = true;
+	setCommerceStatus('Opening Stripe Checkout…');
+	try {
+		const response = await fetch(`${API_BASE_URL}/v2/switch/${encodeURIComponent(uid)}/pay`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(body)
+		});
+		const data = await readJsonSafe(response);
+		if (response.status === 409) {
+			setCommerceStatus('The owner cannot take payments yet.', 'error');
+			if (btn) btn.disabled = false;
+			return;
+		}
+		if (!response.ok || !data.success || !data.data || !data.data.url) {
+			setCommerceStatus(data.error || 'Could not start checkout.', 'error');
+			if (btn) btn.disabled = false;
+			return;
+		}
+		window.location.assign(data.data.url);
+	} catch (error) {
+		console.error('Checkout failed:', error);
+		setCommerceStatus('Could not start checkout.', 'error');
+		if (btn) btn.disabled = false;
+	}
+}
+
+function setSiteNotice(message, kind = '') {
+	const el = document.getElementById('siteNotice');
+	if (!el) return;
+	if (!message) {
+		el.textContent = '';
+		el.className = 'comment-status site-notice hidden';
+		return;
+	}
+	el.textContent = message;
+	el.className = `comment-status site-notice${kind ? ` ${kind}` : ''}`;
+}
+
+function takeQueryParam(name) {
+	const params = new URLSearchParams(window.location.search);
+	const value = params.get(name);
+	if (!value) return '';
+	params.delete(name);
+	const suffix = params.toString();
+	const next = `${window.location.pathname}${suffix ? `?${suffix}` : ''}${window.location.hash || ''}`;
+	try {
+		window.history.replaceState({}, '', next);
+	} catch {
+		// ignore
+	}
+	return value;
+}
+
+function consumePaidQuery() {
+	const result = takeQueryParam('paid');
+	if (result === 'success') {
+		setSiteNotice('Thank you. Stripe Checkout is complete. If you paid to switch, it changes as soon as Stripe confirms the payment, usually within a few seconds.', 'success');
+	} else if (result === 'cancel') {
+		setSiteNotice('Checkout cancelled. Nothing was charged.', 'error');
+	}
+}
+
+function consumeConnectQuery() {
+	const result = takeQueryParam('connect');
+	if (!result) return;
+	const hasKey = Boolean(currentSwitchId && getActiveManagementKey(currentSwitchId));
+	if (result === 'return') {
+		setSiteNotice(hasKey
+			? 'Back from Stripe. Checking your payout status…'
+			: 'Back from Stripe. Open the owner tools for this switch to see your payout status.', 'success');
+		if (hasKey) {
+			loadConnectStatus().then((status) => {
+				if (!status) return;
+				setSiteNotice(status.ready
+					? 'Back from Stripe. Payouts are set up and you can take payments.'
+					: 'Back from Stripe. Stripe still needs some details before you can take payments.', status.ready ? 'success' : 'error');
+			});
+		}
+	} else if (result === 'refresh') {
+		setSiteNotice('That Stripe setup link has expired. Use “Continue Stripe setup” in the owner tools to get a new one.', 'error');
+	}
+}
+
+// ── Owner tools (access key with `metadata`) ──────────────────────────────────
+
+function getManageKeyForCurrent() {
+	if (!currentSwitchId) return '';
+	return getActiveManagementKey(currentSwitchId) || getStoredManagementKey(currentSwitchId);
+}
+
+async function manageExtrasRequest(path, body) {
+	const uid = currentSwitchId;
+	const apiKey = getManageKeyForCurrent();
+	if (!uid || !apiKey) {
+		throw new Error('Access key required.');
+	}
+	const response = await fetch(`${API_BASE_URL}/v2/switch/${encodeURIComponent(uid)}${path}`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'X-Api-Key': apiKey
+		},
+		body: JSON.stringify(body || {})
+	});
+	const data = await readJsonSafe(response);
+	if (!response.ok || data.success === false) {
+		const err = new Error(data.error || `HTTP ${response.status}`);
+		err.status = response.status;
+		throw err;
+	}
+	return data;
+}
+
+function setManageExtrasStatus(id, message, kind = '') {
+	const el = document.getElementById(id);
+	if (!el) return;
+	if (!message) {
+		el.textContent = '';
+		el.className = 'comment-status hidden';
+		return;
+	}
+	el.textContent = message;
+	el.className = `comment-status${kind ? ` ${kind}` : ''}`;
+}
+
+/** Called from updateManagePanel when a management key is present. */
+function updateManageExtras(detail) {
+	const uid = detail && detail.uid;
+	if (!uid) return;
+	// Fill the editors once per switch (from the loaded detail), so live
+	// refreshes never wipe what the owner is typing.
+	if (manageExtrasUid === uid) return;
+	if (!currentSwitchDetail || currentSwitchDetail.uid !== uid) return;
+	manageExtrasUid = uid;
+	const source = currentSwitchDetail;
+	fillManagePropertiesForm(source.properties);
+	fillManageCommerceForm(source.commerce);
+	fillManageRewardForm(source.reward);
+	hideWebhookSecret();
+	loadOwnerView(uid);
+	loadConnectStatus();
+	loadRewardClaims();
+}
+
+// The public detail leaves out private settings (the webhook URL, a private
+// switch's extras). The key holder reads them here and the forms refill.
+async function loadOwnerView(uid) {
+	try {
+		const result = await manageExtrasRequest('/owner-view', {});
+		const data = result && result.data;
+		if (!data || manageExtrasUid !== uid) return;
+		fillManagePropertiesForm(data.properties);
+		fillManageCommerceForm(data.commerce || {});
+		fillManageRewardForm(data.reward);
+	} catch (_err) {
+		// Older servers have no owner view; the public detail is still shown.
+	}
+}
+
+function resetManageExtras() {
+	manageExtrasUid = '';
+	manageCommerceWebhookUrl = undefined;
+	rewardClaimsCache = [];
+}
+
+function addPropertyRow(key = '', value = '') {
+	const rows = document.getElementById('managePropsRows');
+	if (!rows) return;
+	if (rows.querySelectorAll('.prop-row').length >= EXTRAS_MAX_PROPERTIES) {
+		setManageExtrasStatus('managePropsStatus', `At most ${EXTRAS_MAX_PROPERTIES} properties.`, 'error');
+		return;
+	}
+	const valueType = typeof value === 'number' ? 'number' : (typeof value === 'boolean' ? 'boolean' : 'string');
+	const row = extrasEl('div', { className: 'prop-row', dataset: { type: valueType, original: formatPropertyValue(value) } },
+		extrasEl('input', { type: 'text', className: 'prop-key', 'aria-label': 'Property name', placeholder: 'name', maxlength: '32', autocomplete: 'off', value: key }),
+		extrasEl('input', { type: 'text', className: 'prop-value', 'aria-label': 'Property value', placeholder: 'value', maxlength: String(EXTRAS_MAX_PROPERTY_VALUE), autocomplete: 'off', value: formatPropertyValue(value) }),
+		extrasEl('button', { type: 'button', className: 'ghost-btn prop-remove', 'aria-label': 'Remove property', title: 'Remove', text: '✕' })
+	);
+	rows.appendChild(row);
+	updatePropertyAddButton();
+}
+
+function updatePropertyAddButton() {
+	const rows = document.getElementById('managePropsRows');
+	const add = document.getElementById('managePropsAdd');
+	if (!rows || !add) return;
+	add.disabled = rows.querySelectorAll('.prop-row').length >= EXTRAS_MAX_PROPERTIES;
+}
+
+function fillManagePropertiesForm(properties) {
+	const rows = document.getElementById('managePropsRows');
+	if (!rows) return;
+	rows.textContent = '';
+	const entries = properties && typeof properties === 'object' && !Array.isArray(properties)
+		? Object.entries(properties).filter(([, v]) => v !== null && v !== undefined)
+		: [];
+	entries.slice(0, EXTRAS_MAX_PROPERTIES).forEach(([k, v]) => addPropertyRow(k, v));
+	if (!entries.length) addPropertyRow();
+	updatePropertyAddButton();
+}
+
+/** Reads the property rows. Returns { properties } or { error }. */
+function collectPropertiesFromForm() {
+	const rows = Array.from(document.querySelectorAll('#managePropsRows .prop-row'));
+	const properties = {};
+	for (const row of rows) {
+		const keyInput = row.querySelector('.prop-key');
+		const valueInput = row.querySelector('.prop-value');
+		const key = String(keyInput?.value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+		const text = String(valueInput?.value || '').trim();
+		if (!key && !text) continue;
+		if (!EXTRAS_PROPERTY_KEY.test(key)) {
+			return { error: `“${key || '(blank)'}” is not a valid name. Use lower-case letters, digits and _, starting with a letter (up to 32).` };
+		}
+		if (Object.prototype.hasOwnProperty.call(properties, key)) {
+			return { error: `“${key}” is used twice.` };
+		}
+		if (text.length > EXTRAS_MAX_PROPERTY_VALUE) {
+			return { error: `The value for “${key}” is longer than ${EXTRAS_MAX_PROPERTY_VALUE} characters.` };
+		}
+		// Keep numbers and true/false as they were when the owner left them alone.
+		const type = row.dataset.type;
+		if (type === 'number' && text !== '' && Number.isFinite(Number(text))) {
+			properties[key] = Number(text);
+		} else if (type === 'boolean' && (text === 'yes' || text === 'no' || text === 'true' || text === 'false')) {
+			properties[key] = text === 'yes' || text === 'true';
+		} else {
+			properties[key] = text;
+		}
+		if (keyInput) keyInput.value = key;
+	}
+	if (Object.keys(properties).length > EXTRAS_MAX_PROPERTIES) {
+		return { error: `At most ${EXTRAS_MAX_PROPERTIES} properties.` };
+	}
+	return { properties };
+}
+
+function mergeSavedDetail(saved) {
+	if (!saved || typeof saved !== 'object' || !currentSwitchDetail) return;
+	['properties', 'reward'].forEach((field) => {
+		if (Object.prototype.hasOwnProperty.call(saved, field)) {
+			currentSwitchDetail[field] = saved[field];
+		}
+	});
+}
+
+async function submitManageProperties() {
+	const result = collectPropertiesFromForm();
+	if (result.error) {
+		setManageExtrasStatus('managePropsStatus', result.error, 'error');
+		return;
+	}
+	setManageExtrasStatus('managePropsStatus', 'Saving…');
+	try {
+		const data = await manageExtrasRequest('/metadata', { properties: result.properties, propertiesReplace: true });
+		const saved = data.data || {};
+		mergeSavedDetail(saved);
+		fillManagePropertiesForm(saved.properties !== undefined ? saved.properties : result.properties);
+		if (currentSwitchDetail) renderSwitchExtras(currentSwitchDetail);
+		setManageExtrasStatus('managePropsStatus', 'Saved.', 'success');
+		if (currentSwitchId) refreshSwitchDetail(currentSwitchId);
+	} catch (error) {
+		setManageExtrasStatus('managePropsStatus', `Failed: ${error.message || 'Unknown error'}`, 'error');
+	}
+}
+
+function setInputValue(id, value) {
+	const el = document.getElementById(id);
+	if (!el) return;
+	if (el.type === 'checkbox') el.checked = Boolean(value);
+	else el.value = value === undefined || value === null ? '' : String(value);
+}
+
+function fillManageCommerceForm(commerce) {
+	const c = commerce && typeof commerce === 'object' ? commerce : {};
+	setInputValue('commerceToggleMode', c.toggleMode || 'owner');
+	setInputValue('commerceAction', c.action || 'toggle');
+	const wholeOr = (v, fallback) => (v === undefined || v === null || !Number.isFinite(Number(v)) ? fallback : Number(v));
+	setInputValue('commerceHoldSeconds', wholeOr(c.holdSeconds, 0));
+	setInputValue('commerceCooldownSeconds', wholeOr(c.cooldownSeconds, 10));
+	const price = c.price && typeof c.price === 'object' ? c.price : null;
+	setInputValue('commercePriceAmount', price ? minorToInput(price.amount) : '');
+	setInputValue('commercePriceCurrency', price && EXTRAS_CURRENCIES[String(price.currency).toLowerCase()] ? String(price.currency).toLowerCase() : 'eur');
+	setInputValue('commerceTips', c.tips);
+	setInputValue('commerceAllowMessage', c.allowMessage);
+	setInputValue('commerceNote', c.note || '');
+	setInputValue('commercePayLink', c.payLink || '');
+	// The public summary never carries webhookUrl; the owner's save response may.
+	if (Object.prototype.hasOwnProperty.call(c, 'webhookUrl')) {
+		manageCommerceWebhookUrl = String(c.webhookUrl || '');
+	}
+	setInputValue('commerceWebhookUrl', manageCommerceWebhookUrl || '');
+	setInputValue('commerceWebhookRemove', false);
+	setInputValue('commerceWebhookRotate', false);
+	const hint = document.getElementById('commerceWebhookHint');
+	if (hint) {
+		const base = 'We send a signed POST here for every visitor, paid and automatic change, every tip and every reward claim. Must use https.';
+		hint.textContent = manageCommerceWebhookUrl === undefined
+			? `${base} For privacy this page cannot show a webhook you set earlier: leave it blank to keep it.`
+			: base;
+	}
+}
+
+/** Reads the commerce form. Returns { body } or { error }. */
+function collectCommerceFromForm() {
+	const value = (id) => String(document.getElementById(id)?.value || '').trim();
+	const checked = (id) => Boolean(document.getElementById(id)?.checked);
+	const toggleMode = value('commerceToggleMode') || 'owner';
+	const action = value('commerceAction') || 'toggle';
+	const holdSeconds = Number(value('commerceHoldSeconds') || 0);
+	const cooldownSeconds = Number(value('commerceCooldownSeconds') || 0);
+	if (!Number.isInteger(holdSeconds) || holdSeconds < 0 || holdSeconds > 3600) {
+		return { error: '“Put it back after” must be a whole number of seconds from 0 to 3600.' };
+	}
+	if (!Number.isInteger(cooldownSeconds) || cooldownSeconds < 0 || cooldownSeconds > 3600) {
+		return { error: 'The minimum gap must be a whole number of seconds from 0 to 3600.' };
+	}
+	const currency = value('commercePriceCurrency') || 'eur';
+	const priceText = value('commercePriceAmount');
+	let price = null;
+	if (priceText) {
+		const amount = parseMoneyInput(priceText);
+		const limits = EXTRAS_CURRENCIES[currency];
+		if (!limits || !Number.isFinite(amount) || amount < limits.min || amount > limits.max) {
+			const cur = limits ? currency : 'eur';
+			return { error: `The price must be from ${formatMoney(EXTRAS_CURRENCIES[cur].min, cur)} to ${formatMoney(EXTRAS_CURRENCIES[cur].max, cur)}.` };
+		}
+		price = { amount, currency };
+	}
+	if (toggleMode === 'paid' && !price) {
+		return { error: 'Paid switching needs a price.' };
+	}
+	const payLink = value('commercePayLink');
+	if (payLink && !safeExternalUrl(payLink)) {
+		return { error: 'Your payment link must be a full web address starting with https://.' };
+	}
+	const commerce = {
+		toggleMode,
+		action,
+		holdSeconds,
+		cooldownSeconds: toggleMode === 'public' ? Math.max(cooldownSeconds, 5) : cooldownSeconds,
+		price,
+		tips: checked('commerceTips'),
+		allowMessage: checked('commerceAllowMessage'),
+		note: value('commerceNote'),
+		payLink
+	};
+	const webhookInput = value('commerceWebhookUrl');
+	if (checked('commerceWebhookRemove')) {
+		commerce.webhookUrl = '';
+	} else if (webhookInput) {
+		if (!/^https:\/\//i.test(webhookInput) || !safeExternalUrl(webhookInput)) {
+			return { error: 'The webhook URL must start with https://.' };
+		}
+		if (webhookInput !== manageCommerceWebhookUrl) commerce.webhookUrl = webhookInput;
+	} else if (manageCommerceWebhookUrl) {
+		// It was known and the owner cleared the box.
+		commerce.webhookUrl = '';
+	}
+	const body = { commerce };
+	if (checked('commerceWebhookRotate')) body.rotateWebhookSecret = true;
+	return { body };
+}
+
+function showWebhookSecret(secret) {
+	const box = document.getElementById('webhookSecretBox');
+	const valueEl = document.getElementById('webhookSecretValue');
+	if (!box || !valueEl) return;
+	valueEl.textContent = String(secret);
+	box.classList.remove('hidden');
+}
+
+function hideWebhookSecret() {
+	const box = document.getElementById('webhookSecretBox');
+	const valueEl = document.getElementById('webhookSecretValue');
+	if (valueEl) valueEl.textContent = '';
+	if (box) box.classList.add('hidden');
+}
+
+async function submitManageCommerce() {
+	const result = collectCommerceFromForm();
+	if (result.error) {
+		setManageExtrasStatus('manageCommerceStatus', result.error, 'error');
+		return;
+	}
+	hideWebhookSecret();
+	setManageExtrasStatus('manageCommerceStatus', 'Saving…');
+	try {
+		const data = await manageExtrasRequest('/metadata', result.body);
+		const saved = data.data || {};
+		const secret = saved.webhookSecret || data.webhookSecret;
+		if (Object.prototype.hasOwnProperty.call(result.body.commerce, 'webhookUrl')) {
+			manageCommerceWebhookUrl = result.body.commerce.webhookUrl;
+		}
+		fillManageCommerceForm(saved.commerce && typeof saved.commerce === 'object' ? saved.commerce : result.body.commerce);
+		if (secret) showWebhookSecret(secret);
+		setManageExtrasStatus('manageCommerceStatus', 'Saved.', 'success');
+		// The public summary (canTakePayments etc.) comes from the public detail.
+		if (currentSwitchId) refreshSwitchDetail(currentSwitchId);
+	} catch (error) {
+		setManageExtrasStatus('manageCommerceStatus', `Failed: ${error.message || 'Unknown error'}`, 'error');
+	}
+}
+
+function fillManageRewardForm(reward) {
+	const r = reward && typeof reward === 'object' ? reward : null;
+	const currency = r && EXTRAS_CURRENCIES[String(r.currency).toLowerCase()] ? String(r.currency).toLowerCase() : 'sek';
+	setInputValue('rewardAmount', r ? minorToInput(r.amount) : '');
+	setInputValue('rewardCurrency', currency);
+	setInputValue('rewardOn', (r && r.on) || 'on');
+	setInputValue('rewardWindowMinutes', r && Number(r.windowSeconds) ? Math.max(1, Math.round(Number(r.windowSeconds) / 60)) : 15);
+	setInputValue('rewardMaxPerDay', r && Number(r.maxPerDay) ? Number(r.maxPerDay) : 5);
+	setInputValue('rewardNote', (r && r.note) || '');
+	const remove = document.getElementById('rewardRemoveBtn');
+	if (remove) remove.classList.toggle('hidden', !r);
+}
+
+function collectRewardFromForm() {
+	const value = (id) => String(document.getElementById(id)?.value || '').trim();
+	const currency = value('rewardCurrency') || 'sek';
+	const limits = EXTRAS_CURRENCIES[currency];
+	const amount = parseMoneyInput(value('rewardAmount'));
+	if (!limits || !Number.isFinite(amount) || amount < 1 || amount > limits.max) {
+		return { error: `Enter an amount from ${formatMoney(1, limits ? currency : 'sek')} to ${formatMoney((limits || EXTRAS_CURRENCIES.sek).max, limits ? currency : 'sek')}.` };
+	}
+	const minutes = Number(value('rewardWindowMinutes') || 15);
+	if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) {
+		return { error: '“Claim within” must be from 1 to 1440 minutes.' };
+	}
+	const maxPerDay = Number(value('rewardMaxPerDay') || 5);
+	if (!Number.isInteger(maxPerDay) || maxPerDay < 1 || maxPerDay > 100) {
+		return { error: '“Most per person per day” must be from 1 to 100.' };
+	}
+	return {
+		reward: {
+			amount,
+			currency,
+			on: value('rewardOn') || 'on',
+			windowSeconds: minutes * 60,
+			maxPerDay,
+			note: value('rewardNote')
+		}
+	};
+}
+
+async function saveManageReward(reward) {
+	setManageExtrasStatus('manageRewardStatus', 'Saving…');
+	try {
+		const data = await manageExtrasRequest('/metadata', { reward });
+		const saved = data.data || {};
+		const next = Object.prototype.hasOwnProperty.call(saved, 'reward') ? saved.reward : reward;
+		if (currentSwitchDetail) currentSwitchDetail.reward = next;
+		fillManageRewardForm(next);
+		if (currentSwitchDetail) renderSwitchExtras(currentSwitchDetail);
+		setManageExtrasStatus('manageRewardStatus', reward ? 'Saved.' : 'Reward offer removed.', 'success');
+		if (currentSwitchId) refreshSwitchDetail(currentSwitchId);
+	} catch (error) {
+		setManageExtrasStatus('manageRewardStatus', `Failed: ${error.message || 'Unknown error'}`, 'error');
+	}
+}
+
+async function submitManageReward() {
+	const result = collectRewardFromForm();
+	if (result.error) {
+		setManageExtrasStatus('manageRewardStatus', result.error, 'error');
+		return;
+	}
+	await saveManageReward(result.reward);
+}
+
+function renderConnectStatus(status) {
+	const text = document.getElementById('connectStatusText');
+	const reqList = document.getElementById('connectRequirements');
+	const startBtn = document.getElementById('connectStartBtn');
+	const dash = document.getElementById('connectDashboardLink');
+	if (!text) return;
+	const s = status || {};
+	if (reqList) {
+		reqList.textContent = '';
+		reqList.classList.add('hidden');
+	}
+	if (!s.connected) {
+		text.textContent = 'Payouts are not set up.';
+		if (startBtn) startBtn.textContent = 'Set up payouts with Stripe';
+	} else if (!s.ready) {
+		text.textContent = 'Stripe still needs some details before you can take payments.';
+		if (startBtn) startBtn.textContent = 'Continue Stripe setup';
+		const due = Array.isArray(s.requirementsDue) ? s.requirementsDue : [];
+		if (reqList && due.length) {
+			due.slice(0, 10).forEach((item) => reqList.appendChild(extrasEl('li', { text: String(item).replace(/[._]/g, ' ') })));
+			if (due.length > 10) reqList.appendChild(extrasEl('li', { text: `and ${due.length - 10} more` }));
+			reqList.classList.remove('hidden');
+		} else if (Number(s.requirementsDue) > 0) {
+			text.textContent = `Stripe still needs ${Number(s.requirementsDue)} detail${Number(s.requirementsDue) === 1 ? '' : 's'} before you can take payments.`;
+		}
+	} else {
+		text.textContent = 'Payouts are set up. You can take payments.';
+		if (startBtn) startBtn.textContent = 'Review Stripe details';
+	}
+	if (dash) {
+		const url = safeExternalUrl(s.dashboardUrl);
+		dash.classList.toggle('hidden', !url);
+		dash.href = url || '#';
+	}
+}
+
+async function loadConnectStatus() {
+	if (!getManageKeyForCurrent()) return null;
+	const text = document.getElementById('connectStatusText');
+	if (text) text.textContent = 'Checking…';
+	try {
+		const data = await manageExtrasRequest('/connect/status', {});
+		const status = data.data || {};
+		renderConnectStatus(status);
+		setManageExtrasStatus('connectStatus', '');
+		return status;
+	} catch (error) {
+		if (text) text.textContent = 'Could not check payout status.';
+		setManageExtrasStatus('connectStatus', error.message || 'Could not check payout status.', 'error');
+		return null;
+	}
+}
+
+async function startConnectOnboarding() {
+	const btn = document.getElementById('connectStartBtn');
+	if (btn) btn.disabled = true;
+	setManageExtrasStatus('connectStatus', 'Opening Stripe…');
+	try {
+		const data = await manageExtrasRequest('/connect', {});
+		const url = data.data && safeExternalUrl(data.data.url);
+		if (!url) throw new Error('Stripe did not return a link.');
+		window.location.assign(url);
+	} catch (error) {
+		setManageExtrasStatus('connectStatus', `Could not open Stripe: ${error.message || 'Unknown error'}`, 'error');
+		if (btn) btn.disabled = false;
+	}
+}
+
+function shortClaimant(id) {
+	const text = String(id || '');
+	return text.length > 12 ? `${text.slice(0, 10)}…` : text;
+}
+
+/** Totals owed per claimant and currency, from the claims themselves. */
+function computeRewardTotals(claims) {
+	const byKey = new Map();
+	(claims || []).forEach((claim) => {
+		if (!claim || claim.status !== 'owed') return;
+		const currency = String(claim.currency || '').toLowerCase();
+		const key = `${claim.claimant}|${currency}`;
+		const entry = byKey.get(key) || { claimant: claim.claimant, currency, amount: 0, count: 0, ids: [] };
+		entry.amount += Number(claim.amount) || 0;
+		entry.count += 1;
+		entry.ids.push(claim.id);
+		byKey.set(key, entry);
+	});
+	return Array.from(byKey.values()).sort((a, b) => b.amount - a.amount);
+}
+
+function renderRewardClaims(claims) {
+	const totalsWrap = document.getElementById('rewardTotals');
+	const claimsWrap = document.getElementById('rewardClaims');
+	if (!totalsWrap || !claimsWrap) return;
+	totalsWrap.textContent = '';
+	claimsWrap.textContent = '';
+	const list = Array.isArray(claims) ? claims : [];
+	if (!list.length) {
+		claimsWrap.appendChild(extrasEl('p', { className: 'muted small', text: 'No claims yet.' }));
+		updateMarkSelectedButton();
+		return;
+	}
+
+	const totals = computeRewardTotals(list);
+	if (totals.length) {
+		const body = extrasEl('tbody');
+		totals.forEach((t) => {
+			body.appendChild(extrasEl('tr', null,
+				extrasEl('td', { className: 'mono', title: t.claimant, text: shortClaimant(t.claimant) }),
+				extrasEl('td', { text: formatMoney(t.amount, t.currency) }),
+				extrasEl('td', { text: String(t.count) }),
+				extrasEl('td', null, extrasEl('button', {
+					type: 'button',
+					className: 'ghost-btn reward-mark-claimant',
+					dataset: { ids: JSON.stringify(t.ids) },
+					text: 'Mark paid'
+				}))
+			));
+		});
+		totalsWrap.appendChild(extrasEl('h4', { text: 'Owed' }));
+		totalsWrap.appendChild(extrasEl('table', { className: 'claims-table' },
+			extrasEl('thead', null, extrasEl('tr', null,
+				extrasEl('th', { text: 'Claimant' }),
+				extrasEl('th', { text: 'Owed' }),
+				extrasEl('th', { text: 'Claims' }),
+				extrasEl('th', { text: '' })
+			)),
+			body
+		));
+	} else {
+		totalsWrap.appendChild(extrasEl('p', { className: 'muted small', text: 'Nothing owed. Every claim is marked paid.' }));
+	}
+
+	const body = extrasEl('tbody');
+	list.forEach((claim) => {
+		const owed = claim.status === 'owed';
+		body.appendChild(extrasEl('tr', null,
+			extrasEl('td', null, owed
+				? extrasEl('input', { type: 'checkbox', className: 'reward-claim-select', 'aria-label': 'Select claim', dataset: { id: String(claim.id) } })
+				: ''),
+			extrasEl('td', { className: 'mono', title: String(claim.claimant || ''), text: shortClaimant(claim.claimant) }),
+			extrasEl('td', { text: claim.changeAt ? formatDateTimeYmd(new Date(Number(claim.changeAt))) : '' }),
+			extrasEl('td', { text: String(Number(claim.entities) || 0) }),
+			extrasEl('td', { text: formatMoney(claim.amount, claim.currency) }),
+			extrasEl('td', null, extrasEl('span', { className: `claim-status claim-${owed ? 'owed' : 'paid'}`, text: owed ? 'Owed' : 'Paid' }))
+		));
+	});
+	claimsWrap.appendChild(extrasEl('h4', { text: 'All claims' }));
+	claimsWrap.appendChild(extrasEl('table', { className: 'claims-table' },
+		extrasEl('thead', null, extrasEl('tr', null,
+			extrasEl('th', { text: '' }),
+			extrasEl('th', { text: 'Claimant' }),
+			extrasEl('th', { text: 'Change' }),
+			extrasEl('th', { text: 'Entities' }),
+			extrasEl('th', { text: 'Amount' }),
+			extrasEl('th', { text: 'Status' })
+		)),
+		body
+	));
+	updateMarkSelectedButton();
+}
+
+function updateMarkSelectedButton() {
+	const btn = document.getElementById('rewardClaimsMarkSelected');
+	if (!btn) return;
+	btn.disabled = document.querySelectorAll('#rewardClaims .reward-claim-select:checked').length === 0;
+}
+
+async function loadRewardClaims() {
+	if (!getManageKeyForCurrent()) return;
+	setManageExtrasStatus('rewardClaimsStatus', 'Loading…');
+	try {
+		const data = await manageExtrasRequest('/reward-claims/list', {});
+		const payload = data.data;
+		const claims = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.claims) ? payload.claims : []);
+		rewardClaimsCache = claims;
+		renderRewardClaims(claims);
+		setManageExtrasStatus('rewardClaimsStatus', '');
+	} catch (error) {
+		setManageExtrasStatus('rewardClaimsStatus', `Could not load claims: ${error.message || 'Unknown error'}`, 'error');
+	}
+}
+
+async function markRewardClaimsPaid(ids) {
+	const list = (ids || []).map(String).filter(Boolean);
+	if (!list.length) return;
+	setManageExtrasStatus('rewardClaimsStatus', 'Saving…');
+	try {
+		await manageExtrasRequest('/reward-claims/mark-paid', { ids: list });
+		await loadRewardClaims();
+		setManageExtrasStatus('rewardClaimsStatus', `Marked ${list.length} claim${list.length === 1 ? '' : 's'} as paid.`, 'success');
+	} catch (error) {
+		setManageExtrasStatus('rewardClaimsStatus', `Failed: ${error.message || 'Unknown error'}`, 'error');
+	}
+}
+
+function setupSwitchExtrasListeners() {
+	const commercePanel = document.getElementById('commercePanel');
+	if (commercePanel) {
+		commercePanel.addEventListener('click', (e) => {
+			const target = e.target && e.target.closest ? e.target.closest('button') : null;
+			if (!target) return;
+			if (target.id === 'publicToggleBtn') publicToggleCurrentSwitch();
+			else if (target.id === 'paidToggleBtn') startVisitorCheckout('switch');
+			else if (target.id === 'tipBtn') startVisitorCheckout('tip');
+		});
+	}
+
+	const propsForm = document.getElementById('managePropsForm');
+	if (propsForm) {
+		propsForm.addEventListener('submit', (e) => {
+			e.preventDefault();
+			submitManageProperties();
+		});
+		propsForm.addEventListener('click', (e) => {
+			const target = e.target && e.target.closest ? e.target.closest('button') : null;
+			if (!target) return;
+			if (target.id === 'managePropsAdd') {
+				addPropertyRow();
+			} else if (target.classList.contains('prop-remove')) {
+				const row = target.closest('.prop-row');
+				if (row) row.remove();
+				updatePropertyAddButton();
+			}
+		});
+	}
+
+	const commerceForm = document.getElementById('manageCommerceForm');
+	if (commerceForm) {
+		commerceForm.addEventListener('submit', (e) => {
+			e.preventDefault();
+			submitManageCommerce();
+		});
+	}
+
+	const secretCopy = document.getElementById('webhookSecretCopy');
+	if (secretCopy) {
+		secretCopy.addEventListener('click', () => {
+			const value = document.getElementById('webhookSecretValue')?.textContent || '';
+			if (value) copyText(value, secretCopy, 'Copy secret');
+		});
+	}
+
+	const rewardForm = document.getElementById('manageRewardForm');
+	if (rewardForm) {
+		rewardForm.addEventListener('submit', (e) => {
+			e.preventDefault();
+			submitManageReward();
+		});
+	}
+	const rewardRemove = document.getElementById('rewardRemoveBtn');
+	if (rewardRemove) {
+		rewardRemove.addEventListener('click', () => saveManageReward(null));
+	}
+
+	const connectStart = document.getElementById('connectStartBtn');
+	if (connectStart) connectStart.addEventListener('click', () => startConnectOnboarding());
+	const connectRefresh = document.getElementById('connectRefreshBtn');
+	if (connectRefresh) connectRefresh.addEventListener('click', () => loadConnectStatus());
+
+	const claimsRefresh = document.getElementById('rewardClaimsRefresh');
+	if (claimsRefresh) claimsRefresh.addEventListener('click', () => loadRewardClaims());
+	const markSelected = document.getElementById('rewardClaimsMarkSelected');
+	if (markSelected) {
+		markSelected.addEventListener('click', () => {
+			const ids = Array.from(document.querySelectorAll('#rewardClaims .reward-claim-select:checked'))
+				.map((box) => box.dataset.id);
+			markRewardClaimsPaid(ids);
+		});
+	}
+	const claimsWrap = document.getElementById('rewardClaims');
+	if (claimsWrap) {
+		claimsWrap.addEventListener('change', (e) => {
+			if (e.target && e.target.classList && e.target.classList.contains('reward-claim-select')) {
+				updateMarkSelectedButton();
+			}
+		});
+	}
+	const totalsWrap = document.getElementById('rewardTotals');
+	if (totalsWrap) {
+		totalsWrap.addEventListener('click', (e) => {
+			const target = e.target && e.target.closest ? e.target.closest('.reward-mark-claimant') : null;
+			if (!target) return;
+			let ids = [];
+			try {
+				ids = JSON.parse(target.dataset.ids || '[]');
+			} catch {
+				ids = [];
+			}
+			markRewardClaimsPaid(ids);
+		});
+	}
 }
 
 // Expose functions for inline handlers
@@ -3838,3 +5245,13 @@ window.copyUID = copyUID;
 window.startPromoteCheckout = startPromoteCheckout;
 window.startPremiumCheckout = startPremiumCheckout;
 window.startBillingPortal = startBillingPortal;
+window.formatMoney = formatMoney;
+window.publicToggleCurrentSwitch = publicToggleCurrentSwitch;
+window.startVisitorCheckout = startVisitorCheckout;
+window.handleStateUpdate = handleStateUpdate;
+window.submitManageProperties = submitManageProperties;
+window.submitManageCommerce = submitManageCommerce;
+window.submitManageReward = submitManageReward;
+window.loadConnectStatus = loadConnectStatus;
+window.loadRewardClaims = loadRewardClaims;
+window.markRewardClaimsPaid = markRewardClaimsPaid;

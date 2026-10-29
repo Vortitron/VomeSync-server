@@ -221,6 +221,18 @@ describe('Switch extras', () => {
 			.expect(200);
 		expect(second.body.data.commerce).toMatchObject({ tips: true, note: 'Tips welcome' });
 
+		const view = await request(app).post(`/api/v2/switch/${ctx.uid}/owner-view`)
+			.set('x-api-key', key)
+			.expect(200);
+		expect(view.body.data.commerce).toMatchObject({ tips: true, note: 'Tips welcome', webhookUrl: '' });
+		expect(JSON.stringify(view.body)).not.toMatch(/whsec_/);
+
+		const cleared = await request(app).post(`/api/v2/switch/${ctx.uid}/metadata`)
+			.set('x-api-key', key)
+			.send({ properties: {}, propertiesReplace: true, reward: null })
+			.expect(200);
+		expect(cleared.body.data.properties).toEqual({});
+
 		const multipart = await request(app).post(`/api/v2/switch/${ctx.uid}/metadata`)
 			.set('x-api-key', key)
 			.field('properties', '{"only":"this"}')

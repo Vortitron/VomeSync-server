@@ -11,7 +11,7 @@
 	<meta property="og:url" content="https://sync.vome.io/">
 	<meta property="og:type" content="website">
 	<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"VomeSync","url":"https://sync.vome.io/","description":"Public on/off switches for Home Assistant."}</script>
-	<link rel="stylesheet" href="/styles.css?v=20260921-1">
+	<link rel="stylesheet" href="/styles.css?v=20261029-1">
 	<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-icon-180x180.png">
 	<link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
 	<link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
@@ -76,6 +76,7 @@
 	</header>
 
 	<main class="container">
+		<div id="siteNotice" class="comment-status site-notice hidden" role="status"></div>
 		<section class="stats">
 			<div class="stat-box">
 				<span class="stat-number" id="totalSwitches">-</span>
@@ -180,6 +181,16 @@
 					</div>
 				</div>
 
+				<div id="switchExtras" class="switch-extras hidden">
+					<div id="detailNote" class="last-note hidden" aria-live="polite"></div>
+					<div id="detailPropertiesWrap" class="extras-block hidden">
+						<h3>Properties</h3>
+						<table id="detailProperties" class="props-table"></table>
+					</div>
+					<div id="commercePanel" class="extras-block commerce-panel hidden"></div>
+					<div id="rewardOffer" class="extras-block reward-offer hidden"></div>
+				</div>
+
 				<div class="detail-grid-two">
 					<div>
 						<h3>Activity</h3>
@@ -222,7 +233,7 @@
 						</div>
 
 						<div id="managePanel" class="manage-panel hidden">
-							<h3>Owner tools (appearance)</h3>
+							<h3>Owner tools</h3>
 							<p class="muted small">Use a delegated access key with <span class="mono">metadata</span>, <span class="mono">toggle</span>, and <span class="mono">comment</span> permissions (created in Home Assistant) to update icon/banner/link and toggle/comment here.</p>
 							<form id="manageForm" class="comment-form">
 								<label for="manageLink">Link (optional):</label>
@@ -275,6 +286,171 @@
 									<span id="manageStatus" class="comment-status"></span>
 								</div>
 							</form>
+							<div id="manageExtras" class="manage-extras">
+								<details class="extras-section">
+									<summary>Properties</summary>
+									<p class="muted small">Fixed facts about the switch, such as <span class="mono">wattage: 40</span> or <span class="mono">colour: warm white</span>. Up to 12. They are shown on the switch page and in Home Assistant. Public switches show them to everyone, so leave anything private out.</p>
+									<form id="managePropsForm" class="comment-form">
+										<div id="managePropsRows" class="props-rows"></div>
+										<p class="muted small">Names use lower-case letters, digits and _ (for example <span class="mono">radio_station</span>).</p>
+										<div class="comment-actions">
+											<button id="managePropsAdd" type="button" class="ghost-btn">Add property</button>
+											<button type="submit" class="refresh-btn">Save properties</button>
+										</div>
+										<span id="managePropsStatus" class="comment-status hidden"></span>
+									</form>
+								</details>
+
+								<details class="extras-section">
+									<summary>Who can switch it, payments and tips</summary>
+									<form id="manageCommerceForm" class="comment-form">
+										<label for="commerceToggleMode">Who can change it from this page</label>
+										<select id="commerceToggleMode">
+											<option value="owner">Only you and access key holders</option>
+											<option value="public">Anyone, for free (rate-limited)</option>
+											<option value="paid">Anyone who pays</option>
+										</select>
+										<p class="muted small comment-note">Anyone and paid switching only work on public switches. Paid switching needs payouts set up below.</p>
+
+										<label for="commerceAction">What a visitor's change does</label>
+										<select id="commerceAction">
+											<option value="toggle">Flip it (on to off, off to on)</option>
+											<option value="on">Turn it on</option>
+											<option value="off">Turn it off</option>
+										</select>
+
+										<div class="form-row-two">
+											<div>
+												<label for="commerceHoldSeconds">Put it back after (seconds, 0 = never)</label>
+												<input id="commerceHoldSeconds" type="number" min="0" max="3600" step="1" inputmode="numeric">
+											</div>
+											<div>
+												<label for="commerceCooldownSeconds">Minimum gap between visitor changes (seconds)</label>
+												<input id="commerceCooldownSeconds" type="number" min="0" max="3600" step="1" inputmode="numeric">
+											</div>
+										</div>
+										<p class="muted small comment-note">When anyone can switch it, the gap is at least 5 seconds.</p>
+
+										<div class="form-row-two">
+											<div>
+												<label for="commercePriceAmount">Price to switch</label>
+												<input id="commercePriceAmount" type="text" inputmode="decimal" autocomplete="off" placeholder="1.00">
+											</div>
+											<div>
+												<label for="commercePriceCurrency">Currency</label>
+												<select id="commercePriceCurrency">
+													<option value="eur">EUR</option>
+													<option value="sek">SEK</option>
+													<option value="gbp">GBP</option>
+													<option value="usd">USD</option>
+												</select>
+											</div>
+										</div>
+										<p class="muted small comment-note">Minimum 1.00 (10 kr in SEK), maximum 500.00 (5000 kr). Tips use the same currency.</p>
+
+										<label class="check-row"><input id="commerceTips" type="checkbox"> Show a Tip button (card payment through Stripe)</label>
+										<label class="check-row"><input id="commerceAllowMessage" type="checkbox"> Let visitors add a short message to their change (140 characters, no links)</label>
+
+										<label for="commerceNote">Note on the switch page (optional)</label>
+										<textarea id="commerceNote" rows="2" maxlength="200" placeholder="What happens when someone switches it"></textarea>
+
+										<label for="commercePayLink">Your own payment link (optional)</label>
+										<input id="commercePayLink" type="url" autocomplete="off" placeholder="https://buy.stripe.com/… or https://ko-fi.com/…">
+										<p class="muted small comment-note">Shown as a button to your own page (a Stripe Payment Link, Ko-fi or similar). Vome does not handle or see those payments.</p>
+
+										<label for="commerceWebhookUrl">Webhook URL (optional)</label>
+										<input id="commerceWebhookUrl" type="url" autocomplete="off" placeholder="https://example.com/vomesync-hook">
+										<p id="commerceWebhookHint" class="muted small comment-note">We send a signed POST here for every visitor, paid and automatic change, every tip and every reward claim. Must use https.</p>
+										<label class="check-row"><input id="commerceWebhookRemove" type="checkbox"> Remove the webhook</label>
+										<label class="check-row"><input id="commerceWebhookRotate" type="checkbox"> Make a new signing secret</label>
+
+										<div class="comment-actions">
+											<button type="submit" class="refresh-btn">Save settings</button>
+										</div>
+										<span id="manageCommerceStatus" class="comment-status hidden"></span>
+										<div id="webhookSecretBox" class="secret-box hidden">
+											<p><strong>Webhook signing secret.</strong> Copy it now: you will not see it again.</p>
+											<code id="webhookSecretValue" class="mono"></code>
+											<button id="webhookSecretCopy" type="button" class="ghost-btn">Copy secret</button>
+										</div>
+									</form>
+								</details>
+
+								<details class="extras-section">
+									<summary>Reward offer</summary>
+									<p class="muted small">Offer subscribers a reward each time their Home Assistant acts on this switch, for example 2 kr for turning a heat pump down at peak. You pay claims yourself; Vome only keeps the list.</p>
+									<form id="manageRewardForm" class="comment-form">
+										<div class="form-row-two">
+											<div>
+												<label for="rewardAmount">Amount per change</label>
+												<input id="rewardAmount" type="text" inputmode="decimal" autocomplete="off" placeholder="2.00">
+											</div>
+											<div>
+												<label for="rewardCurrency">Currency</label>
+												<select id="rewardCurrency">
+													<option value="sek">SEK</option>
+													<option value="eur">EUR</option>
+													<option value="gbp">GBP</option>
+													<option value="usd">USD</option>
+												</select>
+											</div>
+										</div>
+										<label for="rewardOn">Which change counts</label>
+										<select id="rewardOn">
+											<option value="on">When it turns on</option>
+											<option value="off">When it turns off</option>
+											<option value="any">Any change</option>
+										</select>
+										<div class="form-row-two">
+											<div>
+												<label for="rewardWindowMinutes">Claim within (minutes)</label>
+												<input id="rewardWindowMinutes" type="number" min="1" max="1440" step="1" inputmode="numeric">
+											</div>
+											<div>
+												<label for="rewardMaxPerDay">Most per person per day</label>
+												<input id="rewardMaxPerDay" type="number" min="1" max="100" step="1" inputmode="numeric">
+											</div>
+										</div>
+										<label for="rewardNote">Note (optional)</label>
+										<textarea id="rewardNote" rows="2" maxlength="200" placeholder="Thanks for easing the grid at peak"></textarea>
+										<div class="comment-actions">
+											<button type="submit" class="refresh-btn">Save reward offer</button>
+											<button id="rewardRemoveBtn" type="button" class="ghost-btn hidden">Remove offer</button>
+										</div>
+										<span id="manageRewardStatus" class="comment-status hidden"></span>
+									</form>
+								</details>
+
+								<details class="extras-section">
+									<summary>Payouts</summary>
+									<div class="comment-form">
+										<p class="muted small">To take card payments for paid switching or tips, connect a Stripe account. Stripe pays the money out to you; Vome keeps a fee from each payment. Your own payment link above does not need this.</p>
+										<p id="connectStatusText" class="small">Not checked yet.</p>
+										<ul id="connectRequirements" class="small extras-list hidden"></ul>
+										<div class="comment-actions">
+											<button id="connectStartBtn" type="button" class="refresh-btn">Set up payouts with Stripe</button>
+											<button id="connectRefreshBtn" type="button" class="ghost-btn">Check status</button>
+											<a id="connectDashboardLink" class="ghost-btn hidden" href="#" target="_blank" rel="noopener">Open Stripe dashboard</a>
+										</div>
+										<span id="connectStatus" class="comment-status hidden"></span>
+									</div>
+								</details>
+
+								<details class="extras-section">
+									<summary>Reward claims</summary>
+									<div class="comment-form">
+										<p class="muted small">Claims sent by subscribers' Home Assistant for your reward offer. They are self-reported, so check they look right, pay them however you like, then mark them paid here.</p>
+										<div id="rewardTotals" class="table-scroll"></div>
+										<div id="rewardClaims" class="table-scroll"></div>
+										<div class="comment-actions">
+											<button id="rewardClaimsRefresh" type="button" class="ghost-btn">Refresh</button>
+											<button id="rewardClaimsMarkSelected" type="button" class="refresh-btn" disabled>Mark selected as paid</button>
+										</div>
+										<span id="rewardClaimsStatus" class="comment-status hidden"></span>
+									</div>
+								</details>
+							</div>
+
 							<div id="promotePanel" class="promote-panel hidden">
 								<h4>Promote this listing</h4>
 								<p id="promoteCopy" class="muted small">Paid placement pins this card to the top of the directory with a Promoted badge. You pay Vome; the switch stays public for everyone else. The listed price includes VAT.</p>
@@ -618,6 +794,6 @@
 
 	<script src="/network-bg.js?v=20260114-5"></script>
 	<script src="/vome-nav-wait.js?v=3"></script>
-	<script src="/script.js?v=20260921-1"></script>
+	<script src="/script.js?v=20261029-1"></script>
 </body>
 </html>
