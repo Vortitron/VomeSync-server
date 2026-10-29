@@ -289,6 +289,44 @@ describe('WebSocket Integration Tests', () => {
 			});
 		});
 
+		test('should forward note, source and paid with a state update', async () => {
+			const testUID = global.testUtils.generateTestUUID();
+			const personalKey = global.testUtils.createTestPersonalKey();
+			await redisClient.createSwitch(testUID, personalKey, global.testUtils.createTestSwitchData());
+
+			return new Promise((resolve, reject) => {
+				const ws = new WebSocket(`ws://localhost:${testPort}/ws?uid=${testUID}`);
+				ws.on('message', (data) => {
+					const message = JSON.parse(data.toString());
+					if (message.type === 'state_update' && message.state === true) {
+						try {
+							expect(message.note).toBe('Paid by a visitor');
+							expect(message.source).toBe('paid');
+							expect(message.paid).toEqual({ amount: 100, currency: 'eur' });
+							expect(message.params).toEqual({ song: 'SOS' });
+							ws.close();
+							resolve();
+						} catch (error) {
+							reject(error);
+						}
+					}
+				});
+				ws.on('error', reject);
+				setTimeout(async () => {
+					try {
+						await redisClient.publishSwitchUpdate(testUID, true, { song: 'SOS' }, {
+							note: 'Paid by a visitor',
+							source: 'paid',
+							paid: { amount: 100, currency: 'eur' }
+						});
+					} catch (error) {
+						reject(error);
+					}
+				}, 100);
+				setTimeout(() => reject(new Error('Timeout waiting for broadcast')), 5000);
+			});
+		});
+
 		test('should handle malformed JSON messages gracefully', async () => {
 			const testUID = global.testUtils.generateTestUUID();
 

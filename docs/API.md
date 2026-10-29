@@ -124,6 +124,14 @@ sequenceDiagram
 | POST | `/api/v2/owner/premium` | Signed (v2) | Start Stripe Checkout for owner premium |
 | POST | `/api/v2/owner/billing-portal` | Signed (v2) | Open Stripe Customer Portal |
 | POST | `/api/v2/owner/tier` | Signed (v2) | Current owner tier and limits |
+| POST | `/api/v2/switch/{uid}/public-toggle` | Public (owner opted in) | Anyone switches it; cooldown, optional message |
+| POST | `/api/v2/switch/{uid}/pay` | Public (owner opted in) | Stripe Checkout to pay to switch, or tip |
+| POST | `/api/v2/owner/connect` / `/connect/status` | Signed (v2) | Owner sets up payouts (Stripe Connect) |
+| POST | `/api/v2/switch/{uid}/connect` / `/connect/status` | X‑Api‑Key (`metadata`) | Same, from the website |
+| POST | `/api/v2/switch/{uid}/reward-claims` | Signed (v2, claimant) | Claim a reward for acting on a switch |
+| POST | `/api/v2/switch/{uid}/reward-claims/list` / `/mark-paid` | X‑Api‑Key (`metadata`) | Publisher's reward ledger |
+| POST | `/api/v2/owner/reward-claims` | Signed (v2, publisher) | Publisher's reward ledger from Home Assistant |
+| POST | `/api/v2/owner/my-rewards` | Signed (v2, claimant) | What a claimant is owed |
 | POST | `/api/generate-key` | Public | Create personal key |
 | POST | `/api/create-switch` | Personal key | Create legacy switch |
 | POST | `/api/toggle/{uid}` | Personal key | Toggle legacy switch |
@@ -279,6 +287,8 @@ Header:
 X-Api-Key: uuid-v4-string
 ```
 
+Optional body: `{ "state": true, "note": "From the kitchen", "params": {} }`. Without `state` it flips.
+
 #### Comment using access key (v2)
 
 **POST** `/api/v2/switch/{uid}/comment`
@@ -419,7 +429,9 @@ List switches owned by the signing owner key.
 
 ### Set Switch State (v2)
 
-Set a switch state and optionally pass parameters (e.g. light colour/brightness). Parameters are forwarded to WebSocket subscribers.
+Set a switch state and optionally pass a short `note` and `params` (e.g. light colour/brightness, "now playing"). Both are forwarded to WebSocket subscribers, logged, and shown on public switches. Each change replaces the previous note and params. Limits: note ≤ 280 characters; params ≤ 16 keys, ≤ 2 KB, values text/number/boolean/null or a short array, no nested objects.
+
+The signed canonical JSON is `{ v: 2, action: 'set_state', uid, ts, nonce, state, params }`, plus `note` **only when a non-empty note is sent**.
 
 **POST** `/api/v2/switch/{uid}/state`
 
@@ -430,12 +442,30 @@ Set a switch state and optionally pass parameters (e.g. light colour/brightness)
   "nonce": "random-string",
   "sigSwitch": "base64url-ed25519-signature",
   "state": true,
+  "note": "Now playing: SOS",
   "params": {
     "rgb_color": [10, 20, 30],
     "brightness": 200
   }
 }
 ```
+
+WebSocket subscribers receive:
+```json
+{ "type": "state_update", "uid": "vs_…", "state": true, "timestamp": 1712345678901,
+  "note": "Now playing: SOS", "params": { "brightness": 200 }, "source": "owner" }
+```
+`source` is `owner`, `key`, `public`, `paid` or `auto`; paid changes add `"paid": { "amount": 100, "currency": "eur" }`.
+
+### Properties, commerce and rewards (v2)
+
+Fixed `properties`, `commerce` settings (public or paid switching, tips, the owner's own payment link, a webhook) and a `reward` offer are set through the signed update (each replaces the stored value whole), the access-key metadata route (merges; `null` deletes a property; `propertiesReplace: true` replaces) and, for properties only, the signed create. Field rules, the webhook signature and every money flow are in [SWITCH_EXTRAS.md](SWITCH_EXTRAS.md).
+
+#### Public toggle
+
+**POST** `/api/v2/switch/{uid}/public-toggle` — `{ "message"?: "God jul!" }`
+
+Only when the owner set `commerce.toggleMode` to `public` on a public switch. 429 with `retryAfterMs` during the cooldown. Messages only when the owner allows them (≤ 140 characters, no links).
 
 ## Legacy / classic endpoints (compat)
 
