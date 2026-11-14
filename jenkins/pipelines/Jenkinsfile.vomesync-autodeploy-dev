@@ -82,18 +82,21 @@ pipeline {
 				// The image carries the commit and the check below refuses a
 				// container that does not, the same rule LIVE has had since 21 Oct.
 				//
-				// The website containers (live and dev alike) serve the host
-				// checkout's website/ folder, so a website change does not reach
-				// sync.vome.io or dev from here. That is deliberate for now:
-				// updating that folder would publish to LIVE without approval.
+				// The website comes from the same commit, copied into the dev
+				// lane's own folder (docker-compose.yml, VOMESYNC_WEBSITE_DEV_DIR).
+				// Live has its own folder, filled only by the approved LIVE
+				// deploy, so a Develop push no longer reaches sync.vome.io.
 				script {
 					env.DEV_COMMIT = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
 					sh """
 						echo "Building DEV from ${env.DEV_COMMIT}..."
 						docker build --label vome.commit=${env.DEV_COMMIT} \\
 							-t docker-vomesync-webserver-dev:latest "${env.WORKSPACE}/webserver"
+						mkdir -p /var/www/VomeSync-server/lanes/dev/website
+						rsync -a --delete "${env.WORKSPACE}/website/" /var/www/VomeSync-server/lanes/dev/website/
+						export VOMESYNC_WEBSITE_DEV_DIR=/var/www/VomeSync-server/lanes/dev/website
 						cd /var/www/VomeSync-server/docker
-						docker compose up -d --no-build --force-recreate vomesync-redis-dev vomesync-webserver-dev
+						docker compose up -d --no-build --force-recreate vomesync-redis-dev vomesync-webserver-dev vomesync-website-dev
 					"""
 				}
 			}

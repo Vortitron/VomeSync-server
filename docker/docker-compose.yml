@@ -135,7 +135,12 @@ services:
     restart: unless-stopped
     logging: *default-logging
     volumes:
-      - ../website:/usr/share/nginx/html:ro
+      # The live lane's own copy of website/, put there by the LIVE deploy
+      # from the commit it deployed (jenkins/pipelines/Jenkinsfile.vomesync-deploy).
+      # Not ../website: that is the shared host checkout, which sits on Develop
+      # and is edited by other sessions, so it showed dev work on sync.vome.io
+      # and never moved when its pull failed.
+      - ${VOMESYNC_WEBSITE_LIVE_DIR:-../website}:/usr/share/nginx/html:ro
       - ./nginx/website.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "${VOMESYNC_WEBSITE_HOST_PORT:-8111}:80"
@@ -253,7 +258,8 @@ services:
     restart: unless-stopped
     logging: *default-logging
     volumes:
-      - ../website:/usr/share/nginx/html:ro
+      # The dev lane's own copy, from the commit the DEV deploy built.
+      - ${VOMESYNC_WEBSITE_DEV_DIR:-../website}:/usr/share/nginx/html:ro
       - ./nginx/website.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "${VOMESYNC_WEBSITE_DEV_HOST_PORT:-8112}:80"
