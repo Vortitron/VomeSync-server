@@ -172,6 +172,20 @@ change cancels the pending revert.
 
 ## 5. Owners taking money: Stripe Connect (Accounts v2)
 
+**Invite-only.** With destination charges Vome is liable for whatever goes
+wrong on an owner's switch: disputes and their fee (often €15–20, even on a
+€1 flip), card testers probing stolen cards with small charges, and an
+owner's negative balance (`losses_collector: application`). Stripe's card fee
+is Vome's too, which the 10 % + 30 fee covers. So only owners Vome has
+chosen can take money: `STRIPE_PAID_SWITCHING_OWNERS` (owner ids,
+comma-separated; `*` = everyone) plus the catalogue owner. Unset with a
+test-mode key (`sk_test_…`, dev on the sandbox) means everyone. Everyone else
+gets 403 `invite_only` from `connect`, `invited: false` from the status
+routes, `canTakePayments: false` publicly and 409 from `/pay`, even with an
+account made earlier. Their own `payLink` still works. Before widening it:
+Radar rules for small charges, a higher floor than 1.00, and handling
+`charge.dispute.created` (reverse the transfer to recover from the owner).
+
 - One connected account per **owner** (Ed25519 owner id), Redis
   `owner_connect:<ownerId>` → `{ accountId, createdAt, ready, checkedAt }`.
 - Created with Accounts v2: `dashboard: 'express'`,
@@ -193,8 +207,14 @@ change cancels the pending revert.
   `email`; a missing one answers 400 with `needs: ['country', 'email']`.
   Both go to Stripe and are not stored by Vome. In the owner-signed route
   they are part of the signed canonical JSON, only when sent.
-- Connect was switched on in the sandbox on 14 Nov 2026; account creation
-  and onboarding links work there with the parameters above.
+- Connect was switched on in the sandbox on 14 Nov 2026. Tried end to end on
+  dev the same day: onboarding a test owner (Stripe's test phone, code,
+  1901-01-01, `address_full_match`, test IBAN) made them ready; a €1 paid
+  switch in Checkout (4242…) turned the switch on with the visitor's note,
+  split €0.60 to the owner and €0.40 fee (`on_behalf_of` + transfer), and
+  the 60 s hold switched it back (`auto`). Onboarding also asks for an
+  industry and a website; pre-filling those (the switch page) would cut it
+  down for hobbyists.
 - Routes:
   - owner-signed (Home Assistant): `POST /api/v2/owner/connect`
     (start/resume onboarding → `{ url }`), `POST /api/v2/owner/connect/status`

@@ -1502,6 +1502,23 @@ describe('Website switch extras (properties, notes, commerce, rewards)', () => {
 		expect(JSON.parse(opts.body)).toEqual({ country: 'SE', email: 'owner@example.com' });
 	});
 
+	test('an owner who is not invited sees why, and no setup button', async () => {
+		const uid = 'vs_extras_connect_invite';
+		const accessKey = '00000000-0000-4000-8000-888888888888';
+		await loadSite({
+			uid,
+			manageKey: accessKey,
+			routes: {
+				[`/v2/switch/${uid}/connect/status`]: { success: true, data: { connected: false, ready: false, requirementsDue: 0, invited: false } },
+				[`/v2/switch/${uid}/reward-claims/list`]: { success: true, data: { claims: [] } }
+			}
+		});
+		await flush();
+		expect(document.getElementById('connectStatusText').textContent).toContain('invite-only');
+		expect(document.getElementById('connectStartBtn').classList.contains('hidden')).toBe(true);
+		expect(document.getElementById('connectDetails').classList.contains('hidden')).toBe(true);
+	});
+
 	test('formatMoney uses minor units and the currency', () => {
 		const html = fs.readFileSync(path.join(websiteRoot, 'index.html'), 'utf8');
 		document.documentElement.innerHTML = html;

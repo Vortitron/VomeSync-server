@@ -1,6 +1,7 @@
 const redisClient = require('../../../src/utils/redis');
 const { setStripeForTests } = require('../../../src/utils/stripe');
 const connect = require('../../../src/utils/connect');
+const config = require('../../../src/config/config');
 
 const DETAILS = { country: 'SE', email: 'owner@example.com' };
 
@@ -55,11 +56,15 @@ describe('Stripe Connect (Accounts v2)', () => {
 		}
 	});
 
+	const savedPaidOwners = config.stripe.paidSwitchingOwners;
+
 	beforeEach(async () => {
 		await redisClient.client.flushDb();
+		config.stripe.paidSwitchingOwners = ['*'];
 	});
 
 	afterEach(() => {
+		config.stripe.paidSwitchingOwners = savedPaidOwners;
 		setStripeForTests(null);
 	});
 

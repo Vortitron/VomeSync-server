@@ -131,6 +131,8 @@ describe('commerce routes', () => {
 		await redisClient.client.flushDb();
 		config.stripe.secretKey = 'sk_test_fake';
 		config.stripe.webhookSecret = 'whsec_fake';
+		// Open to every owner here; the invite-only tests narrow it.
+		config.stripe.paidSwitchingOwners = ['*'];
 		stripe = fakeStripe();
 		jest.spyOn(switchActions, 'dispatchOwnerWebhook').mockResolvedValue(true);
 	});
@@ -233,6 +235,41 @@ describe('commerce routes', () => {
 		});
 	});
 
+	describe('invite-only payments', () => {
+		test('an owner not on the list cannot onboard, sees invited: false, and cannot be paid', async () => {
+			config.stripe.paidSwitchingOwners = ['someone-else'];
+			const owner = makeOwner();
+			const refused = await request(app).post('/api/v2/owner/connect')
+				.send(signed(owner, 'connect_onboard', { country: 'se', email: 'owner@example.com' }))
+				.expect(403);
+			expect(refused.body.code).toBe('invite_only');
+			expect(stripe.v2.core.accounts.create).not.toHaveBeenCalled();
+
+			const status = await request(app).post('/api/v2/owner/connect/status').send(signed(owner, 'connect_status')).expect(200);
+			expect(status.body.data).toMatchObject({ connected: false, ready: false, invited: false });
+
+			// Even an account made earlier stops taking money when the owner is not on the list.
+			await makeReadyOwner(owner);
+			const uid = await makeSwitch(owner, { commerce: PAID });
+			await request(app).post(`/api/v2/switch/${uid}/pay`).send({ kind: 'switch' }).expect(409);
+			const key = await redisClient.createV2AccessKey(owner.ownerId, uid, 'web', ['metadata']);
+			await request(app).post(`/api/v2/switch/${uid}/connect`)
+				.send({ apiKey: key.apiKey, country: 'SE', email: 'owner@example.com' })
+				.expect(403);
+			const detail = await redisClient.getPublicSwitchDetail(uid);
+			expect(detail.commerce.canTakePayments).toBe(false);
+			expect(stripe.checkout.sessions.create).not.toHaveBeenCalled();
+		});
+
+		test('listing the owner id opens it to them alone', async () => {
+			const owner = makeOwner();
+			config.stripe.paidSwitchingOwners = [String(owner.ownerId).toLowerCase()];
+			await makeReadyOwner(owner);
+			const uid = await makeSwitch(owner, { commerce: PAID });
+			await request(app).post(`/api/v2/switch/${uid}/pay`).send({ kind: 'switch' }).expect(200);
+		});
+	});
+
 	describe('Connect onboarding and status', () => {
 		test('owner-signed onboarding returns a Stripe link; replays and bad signatures fail', async () => {
 			const owner = makeOwner();
@@ -257,7 +294,7 @@ describe('commerce routes', () => {
 		test('owner-signed status reads Stripe and offers the dashboard when ready', async () => {
 			const owner = makeOwner();
 			await request(app).post('/api/v2/owner/connect/status').send(signed(owner, 'connect_status')).expect(200)
-				.then((res) => expect(res.body.data).toEqual({ connected: false, ready: false, requirementsDue: 0 }));
+				.then((res) => expect(res.body.data).toEqual({ connected: false, ready: false, requirementsDue: 0, invited: true }));
 
 			await request(app).post('/api/v2/owner/connect').send(signed(owner, 'connect_onboard', { country: 'se', email: 'owner@example.com' })).expect(200);
 			const res = await request(app).post('/api/v2/owner/connect/status').send(signed(owner, 'connect_status')).expect(200);
@@ -265,6 +302,7 @@ describe('commerce routes', () => {
 				connected: true,
 				ready: true,
 				requirementsDue: 0,
+				invited: true,
 				dashboardUrl: 'https://connect.stripe.com/express/login/x'
 			});
 		});

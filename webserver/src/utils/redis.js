@@ -4,6 +4,7 @@ const config = require('../config/config');
 const logger = require('./logger');
 const { listingPromotion, sortPublicSwitches } = require('./promote');
 const { publicCommerce } = require('./switchExtras');
+const { isPaidSwitchingAllowed } = require('./paidOwners');
 let testRedisServer = null;
 
 const DEFAULT_REDIS_CONNECT_MAX_ATTEMPTS = 30;
@@ -1625,6 +1626,9 @@ class RedisClient {
 		const catalogueOwner = String((config.limits && config.limits.catalogueOwnerId) || '').toLowerCase();
 		if (catalogueOwner && String(ownerId).toLowerCase() === catalogueOwner) {
 			return true;
+		}
+		if (!isPaidSwitchingAllowed(ownerId)) {
+			return false;
 		}
 		const ready = await this.client.hGet(`owner_connect:${ownerId}`, 'ready');
 		return ready === 'true';

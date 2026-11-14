@@ -4957,8 +4957,11 @@ function renderConnectStatus(status) {
 		reqList.classList.add('hidden');
 	}
 	const details = document.getElementById('connectDetails');
-	if (details) details.classList.toggle('hidden', Boolean(s.connected));
-	if (!s.connected) {
+	if (details) details.classList.toggle('hidden', Boolean(s.connected) || s.invited === false);
+	if (startBtn) startBtn.classList.toggle('hidden', s.invited === false);
+	if (s.invited === false) {
+		text.textContent = 'Card payments through Vome are invite-only for now. Your own payment link above works without them; ask Vome if you want card payments.';
+	} else if (!s.connected) {
 		text.textContent = 'Payouts are not set up.';
 		if (startBtn) startBtn.textContent = 'Set up payouts with Stripe';
 	} else if (!s.ready) {

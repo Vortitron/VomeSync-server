@@ -15,6 +15,7 @@ const logger = require('../utils/logger');
 const config = require('../config/config');
 const stripeUtil = require('../utils/stripe');
 const connect = require('../utils/connect');
+const { isPaidSwitchingAllowed, INVITE_ONLY_MESSAGE } = require('../utils/paidOwners');
 const switchActions = require('../utils/switchActions');
 const { getSwitchEarnings } = require('./stripe-routes');
 const {
@@ -360,6 +361,9 @@ router.post('/v2/owner/connect',
 			if (!stripeUtil.isPaymentsConfigured()) {
 				return res.status(503).json({ success: false, error: 'Payments are not configured' });
 			}
+			if (!isPaidSwitchingAllowed(ownerId)) {
+				return res.status(403).json({ success: false, error: INVITE_ONLY_MESSAGE, code: 'invite_only' });
+			}
 			const { country, email } = req.validatedData;
 			const link = await connect.createOnboardingLink(ownerId, { country, email });
 			return res.json({ success: true, data: { url: link.url } });
@@ -381,8 +385,11 @@ router.post('/v2/owner/connect/status',
 			if (!stripeUtil.isPaymentsConfigured()) {
 				return res.status(503).json({ success: false, error: 'Payments are not configured' });
 			}
+			if (!isPaidSwitchingAllowed(ownerId)) {
+				return res.json({ success: true, data: { connected: false, ready: false, requirementsDue: 0, invited: false } });
+			}
 			const status = await connect.connectStatusResponse(ownerId);
-			return res.json({ success: true, data: status });
+			return res.json({ success: true, data: { ...status, invited: true } });
 		} catch (error) {
 			return sendError(res, error, 'Failed to read payment status', 'Owner connect status');
 		}
@@ -402,6 +409,9 @@ router.post('/v2/switch/:uid/connect',
 			const ownerId = req.switchData && req.switchData.ownerId;
 			if (!ownerId) {
 				return res.status(400).json({ success: false, error: 'Switch has no owner' });
+			}
+			if (!isPaidSwitchingAllowed(ownerId)) {
+				return res.status(403).json({ success: false, error: INVITE_ONLY_MESSAGE, code: 'invite_only' });
 			}
 			const { error: bodyError, value: body } = schemas.switchConnect.validate(req.body || {}, { stripUnknown: true });
 			if (bodyError) {
@@ -439,12 +449,19 @@ router.post('/v2/switch/:uid/connect/status',
 					data: { connected: false, ready: false, requirementsDue: 0, paymentsEnabled: false, earnings }
 				});
 			}
+			const invited = isPaidSwitchingAllowed(ownerId);
+			if (!invited) {
+				return res.json({
+					success: true,
+					data: { connected: false, ready: false, requirementsDue: 0, paymentsEnabled: true, platformSale, invited, earnings }
+				});
+			}
 			const status = platformSale
 				? { connected: true, ready: true, requirementsDue: 0 }
 				: await connect.connectStatusResponse(ownerId);
 			return res.json({
 				success: true,
-				data: { ...status, paymentsEnabled: true, platformSale, earnings }
+				data: { ...status, paymentsEnabled: true, platformSale, invited, earnings }
 			});
 		} catch (error) {
 			return sendError(res, error, 'Failed to read payment status', `Switch connect status ${uid}`);

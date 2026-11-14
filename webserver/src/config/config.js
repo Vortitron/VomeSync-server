@@ -233,7 +233,18 @@ const config = {
 		// Paid switches and tips through an owner's connected account: Vome's
 		// application fee is percent of the amount plus a fixed part (minor units).
 		connectFeePercent: parsePositiveInt(process.env.STRIPE_CONNECT_FEE_PERCENT, 10),
-		connectFeeFixed: parsePositiveInt(process.env.STRIPE_CONNECT_FEE_FIXED, 30)
+		connectFeeFixed: parsePositiveInt(process.env.STRIPE_CONNECT_FEE_FIXED, 30),
+		// Owners (Ed25519 owner ids) who may take money for paid switching and
+		// tips, comma-separated; '*' opens it to everyone. Destination charges
+		// leave Vome liable for disputes and card testing, so live starts with
+		// nobody but the catalogue owner and grows by hand.
+		// Unset with a test-mode key (dev on the sandbox) means everyone: no
+		// real money can move there.
+		paidSwitchingOwners: String(process.env.STRIPE_PAID_SWITCHING_OWNERS
+			|| (String(process.env.STRIPE_SECRET_KEY || '').startsWith('sk_test_') ? '*' : ''))
+			.split(',')
+			.map((id) => id.trim().toLowerCase())
+			.filter(Boolean)
 	}
 };
 
