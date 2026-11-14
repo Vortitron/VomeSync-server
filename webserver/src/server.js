@@ -81,6 +81,8 @@ class VomeSyncServer {
 			// Start heartbeat for WebSocket connections
 			webSocketManager.startHeartbeat();
 			relayManager.startHeartbeat();
+			// Puts public/paid changes back after the owner's hold time.
+			require('./utils/switchActions').startRevertLoop();
 
 			// Setup graceful shutdown
 			this.setupGracefulShutdown();

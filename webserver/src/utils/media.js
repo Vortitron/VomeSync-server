@@ -242,6 +242,7 @@ async function deleteSwitchMedia(uid) {
 }
 
 module.exports = {
+	assertSafeRemoteUrl,
 	getMediaRootDir,
 	isLocalMediaUrl,
 	ingestImageFromUrl,

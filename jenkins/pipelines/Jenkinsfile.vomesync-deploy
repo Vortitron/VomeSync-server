@@ -92,19 +92,38 @@ pipeline {
                 // read as "local changes", the pull was skipped, and every
                 // deploy rebuilt whatever the checkout already held. LIVE no
                 // longer builds from here at all (see Deploy LIVE).
-                sh '''
-                    cd /var/www/VomeSync-server
-                    git config --global --add safe.directory /var/www/VomeSync-server
-                    if ! git rev-parse --git-dir >/dev/null 2>&1; then
-                        echo "ERROR: /var/www/VomeSync-server is not a git checkout Jenkins can read" >&2
-                        exit 1
-                    fi
-                    if git diff --quiet && git diff --cached --quiet; then
-                        git pull --ff-only || echo "WARNING: git pull failed; continuing with existing working copy"
-                    else
-                        echo "WARNING: Git working tree has local changes; skipping git pull"
-                    fi
-                '''
+                // Over HTTPS with the job's own GitHub token: the checkout's
+                // remote is SSH, and this container has no key, so until
+                // 14 Nov 2026 every pull failed ("Host key verification
+                // failed") behind a warning and the compose file stayed as it
+                // was in October. Files git writes are handed back to the
+                // checkout's owner, since this runs as root.
+                withCredentials([usernamePassword(credentialsId: 'vomesync-github-token',
+                        usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
+                    sh '''
+                        cd /var/www/VomeSync-server
+                        git config --global --add safe.directory /var/www/VomeSync-server
+                        if ! git rev-parse --git-dir >/dev/null 2>&1; then
+                            echo "ERROR: /var/www/VomeSync-server is not a git checkout Jenkins can read" >&2
+                            exit 1
+                        fi
+                        owner=$(stat -c %u:%g .)
+                        branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
+                        if [ -z "$branch" ]; then
+                            echo "WARNING: checkout is not on a branch; skipping git pull"
+                        elif ! git diff --quiet || ! git diff --cached --quiet; then
+                            echo "WARNING: Git working tree has local changes; skipping git pull"
+                        elif git -c credential.helper= \
+                                -c credential.helper='!f() { echo "username=$GH_USER"; echo "password=$GH_TOKEN"; }; f' \
+                                pull --ff-only https://github.com/Vortitron/VomeSync-server.git "$branch"; then
+                            chown -R "$owner" .git
+                            git ls-files -z | xargs -0 -r chown -h "$owner"
+                            echo "Checkout now at $(git log -1 --format='%h %s')"
+                        else
+                            echo "WARNING: git pull failed; continuing with existing working copy"
+                        fi
+                    '''
+                }
             }
         }
 
@@ -138,6 +157,10 @@ pipeline {
                         cd /var/www/VomeSync-server/docker
                         echo "Building DEV services..."
                         docker compose build ${cacheFlag} vomesync-webserver-dev
+                        # DEV here builds the host checkout, so its website comes from there too.
+                        mkdir -p /var/www/VomeSync-server/lanes/dev/website
+                        rsync -a --delete /var/www/VomeSync-server/website/ /var/www/VomeSync-server/lanes/dev/website/
+                        export VOMESYNC_WEBSITE_DEV_DIR=/var/www/VomeSync-server/lanes/dev/website
                         echo "Starting DEV services..."
                         docker compose up -d --force-recreate vomesync-redis-dev vomesync-webserver-dev vomesync-website-dev
                     """
@@ -189,6 +212,10 @@ pipeline {
                         echo "Building LIVE services from ${commit}..."
                         docker build ${cacheFlag} --label vome.commit=${commit} \\
                             -t docker-vomesync-webserver:latest "${env.WORKSPACE}/webserver"
+                        # The website from the same approved commit, into the live lane's folder.
+                        mkdir -p /var/www/VomeSync-server/lanes/live/website
+                        rsync -a --delete "${env.WORKSPACE}/website/" /var/www/VomeSync-server/lanes/live/website/
+                        export VOMESYNC_WEBSITE_LIVE_DIR=/var/www/VomeSync-server/lanes/live/website
                         cd /var/www/VomeSync-server/docker
                         echo "Starting LIVE services..."
                         # NB: vomesync-proxy is intentionally NOT started on LIVE — this

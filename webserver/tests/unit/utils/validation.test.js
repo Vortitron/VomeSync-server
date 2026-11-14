@@ -292,7 +292,14 @@ describe('Validation Utilities', () => {
 				bannerUrl: '',
 				ownerProfileUrl: '',
 				promoted: false,
-				promotedUntil: 0
+				promotedUntil: 0,
+				properties: {},
+				note: '',
+				lastParams: {},
+				lastSource: '',
+				lastChangeAt: 1234567890,
+				commerce: null,
+				reward: null
 			});
 
 			expect(sanitized.personalKey).toBeUndefined();
@@ -364,7 +371,15 @@ describe('Validation Utilities', () => {
 				publicize: true,
 				link: '',
 				iconUrl: '',
-				bannerUrl: ''
+				bannerUrl: '',
+				properties: {},
+				note: '',
+				lastParams: {},
+				lastSource: '',
+				lastChangeAt: 1234567890,
+				commerce: null,
+				hasWebhookSecret: false,
+				reward: null
 			});
 
 			// Personal key should still be excluded

@@ -19,3 +19,6 @@ catalogue/.local-state.json
 catalogue/.env
 website/sitemap.xml
 website/switch/
+
+# Each lane's deployed website (Jenkins fills them; docker-compose.yml)
+lanes/

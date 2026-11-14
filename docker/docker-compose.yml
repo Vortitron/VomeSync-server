@@ -70,6 +70,8 @@ services:
       - VOMESYNC_TRUSTED_CALLER_SECRET=${VOMESYNC_TRUSTED_CALLER_SECRET:-}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      # Owner ids allowed to take card payments (comma-separated). Empty = only the catalogue owner.
+      - STRIPE_PAID_SWITCHING_OWNERS=${STRIPE_PAID_SWITCHING_OWNERS:-}
       - STRIPE_PRICE_PROMOTE=${STRIPE_PRICE_PROMOTE:-}
       - STRIPE_PROMOTE_AMOUNT=${STRIPE_PROMOTE_AMOUNT:-500}
       - STRIPE_PROMOTE_CURRENCY=${STRIPE_PROMOTE_CURRENCY:-eur}
@@ -133,7 +135,12 @@ services:
     restart: unless-stopped
     logging: *default-logging
     volumes:
-      - ../website:/usr/share/nginx/html:ro
+      # The live lane's own copy of website/, put there by the LIVE deploy
+      # from the commit it deployed (jenkins/pipelines/Jenkinsfile.vomesync-deploy).
+      # Not ../website: that is the shared host checkout, which sits on Develop
+      # and is edited by other sessions, so it showed dev work on sync.vome.io
+      # and never moved when its pull failed.
+      - ${VOMESYNC_WEBSITE_LIVE_DIR:-../website}:/usr/share/nginx/html:ro
       - ./nginx/website.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "${VOMESYNC_WEBSITE_HOST_PORT:-8111}:80"
@@ -198,6 +205,7 @@ services:
       - VOMESYNC_TRUSTED_CALLER_SECRET=${VOMESYNC_TRUSTED_CALLER_SECRET:-}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY_DEV:-}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET_DEV:-}
+      - STRIPE_PAID_SWITCHING_OWNERS=${STRIPE_PAID_SWITCHING_OWNERS_DEV:-}
       - STRIPE_PRICE_PROMOTE=${STRIPE_PRICE_PROMOTE_DEV:-}
       - STRIPE_PROMOTE_AMOUNT=${STRIPE_PROMOTE_AMOUNT:-500}
       - STRIPE_PROMOTE_CURRENCY=${STRIPE_PROMOTE_CURRENCY:-eur}
@@ -250,7 +258,8 @@ services:
     restart: unless-stopped
     logging: *default-logging
     volumes:
-      - ../website:/usr/share/nginx/html:ro
+      # The dev lane's own copy, from the commit the DEV deploy built.
+      - ${VOMESYNC_WEBSITE_DEV_DIR:-../website}:/usr/share/nginx/html:ro
       - ./nginx/website.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "${VOMESYNC_WEBSITE_DEV_HOST_PORT:-8112}:80"

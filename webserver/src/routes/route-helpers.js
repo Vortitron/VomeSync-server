@@ -6,6 +6,8 @@ const multer = require('multer');
 const config = require('../config/config');
 const redisClient = require('../utils/redis');
 const { stableJsonStringify } = require('../utils/crypto_v2');
+const extras = require('../utils/switchExtras');
+const { newWebhookSecret } = require('../utils/switchActions');
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -285,7 +287,8 @@ const pickSwitchMetadata = (data) => ({
 	publicize: Boolean(data.publicize),
 	link: data.link || '',
 	...(typeof data.iconUrl === 'string' ? { iconUrl: data.iconUrl } : {}),
-	...(typeof data.bannerUrl === 'string' ? { bannerUrl: data.bannerUrl } : {})
+	...(typeof data.bannerUrl === 'string' ? { bannerUrl: data.bannerUrl } : {}),
+	...(data.properties !== undefined ? { properties: data.properties } : {})
 });
 
 const pickSwitchMetadataUpdatesV2 = (data) => {
@@ -304,8 +307,69 @@ const pickSwitchMetadataUpdatesV2 = (data) => {
 	maybeSet('link');
 	maybeSet('iconUrl');
 	maybeSet('bannerUrl');
+	maybeSet('properties');
+	maybeSet('commerce');
+	maybeSet('reward');
+	maybeSet('rotateWebhookSecret');
 
 	return updates;
+};
+
+const hasField = (obj, field) => Boolean(obj) && Object.prototype.hasOwnProperty.call(obj, field);
+
+/**
+ * Turn the properties/commerce/reward fields of an update request into what
+ * gets stored. `merge` (access keys) patches the existing values; otherwise
+ * (signed owner updates) each field sent replaces the stored one whole.
+ *
+ * Returns { updates, webhookSecret } where webhookSecret is only set when a
+ * new one was minted (shown to the owner once). Throws ExtrasError (400).
+ */
+const buildExtrasUpdates = (existing, raw, { merge = false } = {}) => {
+	const current = existing || {};
+	const updates = {};
+
+	if (hasField(raw, 'properties')) {
+		if (merge && !raw.propertiesReplace) {
+			const patch = extras.cleanProperties(raw.properties, { allowNullDeletes: true });
+			updates.properties = extras.mergeProperties(current.properties, patch);
+		} else {
+			updates.properties = extras.cleanProperties(raw.properties);
+		}
+	}
+
+	if (hasField(raw, 'commerce')) {
+		const patch = extras.cleanCommerce(raw.commerce, { partial: merge });
+		updates.commerce = extras.finaliseCommerce(merge ? current.commerce : null, patch);
+	}
+
+	if (hasField(raw, 'reward')) {
+		// An empty string is how a removed object is stored (null is skipped by hSet).
+		updates.reward = extras.cleanReward(raw.reward) || '';
+	}
+
+	let webhookSecret = null;
+	const commerce = updates.commerce || current.commerce;
+	const webhookUrl = commerce && commerce.webhookUrl;
+	if (webhookUrl && (!current.commerceWebhookSecret || raw.rotateWebhookSecret === true)) {
+		webhookSecret = newWebhookSecret();
+		updates.commerceWebhookSecret = webhookSecret;
+	} else if (!webhookUrl && current.commerceWebhookSecret && updates.commerce) {
+		updates.commerceWebhookSecret = '';
+	}
+
+	return { updates, webhookSecret };
+};
+
+/** The metadata fields that are stored as-is (everything except the extras). */
+const plainMetadataUpdates = (updates) => {
+	const out = { ...updates };
+	delete out.properties;
+	delete out.commerce;
+	delete out.reward;
+	delete out.rotateWebhookSecret;
+	delete out.propertiesReplace;
+	return out;
 };
 
 // ── V2 canonical JSON builders ─────────────────────────────────────────────────
@@ -337,7 +401,9 @@ const v2CanonicalSetState = (uid, data) => stableJsonStringify({
 	ts: data.ts,
 	nonce: data.nonce,
 	state: Boolean(data.state),
-	params: data.params || {}
+	params: data.params || {},
+	// Only when sent, so clients that predate notes still verify.
+	...(typeof data.note === 'string' && data.note !== '' ? { note: data.note } : {})
 });
 
 const v2CanonicalUpdateSwitch = (uid, data, updates) => stableJsonStringify({
@@ -456,6 +522,8 @@ module.exports = {
 	assertFreshTimestamp,
 	pickSwitchMetadata,
 	pickSwitchMetadataUpdatesV2,
+	buildExtrasUpdates,
+	plainMetadataUpdates,
 
 	clockSkewError,
 

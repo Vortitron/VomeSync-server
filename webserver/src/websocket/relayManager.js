@@ -90,7 +90,12 @@ class RelayManager {
 		// noServer: upgrades arrive via handleUpgrade() from the shared
 		// upgrade router (see ./upgradeRouter.js for why path-attached
 		// servers must not be used).
-		this.wss = new WebSocket.Server({ noServer: true });
+		// The largest frame a home may send.  ws's default is 100 MiB; the
+		// biggest legitimate frame is a 2 MB file read or a camera still,
+		// base64 (esphomeStream caps itself at 4 MB).  A hostile home should
+		// not be able to make this process -- shared by every home -- hold
+		// 100 MiB per frame.
+		this.wss = new WebSocket.Server({ noServer: true, maxPayload: 16 * 1024 * 1024 });
 		this.wss.on('connection', (ws, req) => this.handleConnection(ws, req));
 		logger.info('Relay manager initialized');
 	}
