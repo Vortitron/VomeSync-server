@@ -186,10 +186,15 @@ change cancels the pending revert.
   from onboarding is seen quickly). `requirementsDue` is a count. The v2
   account-updated thin events are not handled; they need an event
   destination of their own.
-- **Not yet tried for real:** Connect and Accounts v2 are not enabled on the
-  Stripe sandbox (`non_connect_platform_accounts_v2_access_blocked`). The
-  destination-charge parameters were accepted by Stripe up to the account
-  lookup; a platform-sale Checkout was created in the sandbox.
+- Creating the account needs the owner's **country** (`identity.country`,
+  else Stripe refuses the merchant configuration) and a **contact email**
+  (else it refuses the recipient one). VomeSync owners are keys, not
+  accounts, so the first `connect` call carries `country` (two letters) and
+  `email`; a missing one answers 400 with `needs: ['country', 'email']`.
+  Both go to Stripe and are not stored by Vome. In the owner-signed route
+  they are part of the signed canonical JSON, only when sent.
+- Connect was switched on in the sandbox on 14 Nov 2026; account creation
+  and onboarding links work there with the parameters above.
 - Routes:
   - owner-signed (Home Assistant): `POST /api/v2/owner/connect`
     (start/resume onboarding → `{ url }`), `POST /api/v2/owner/connect/status`

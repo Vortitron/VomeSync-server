@@ -66,7 +66,16 @@ const schemas = {
 		amount: Joi.number().integer().min(1).max(10000000).optional(),
 		message: Joi.string().allow('').max(1000).optional()
 	}),
-	ownerConnect: Joi.object({ ...ownerSigned }),
+	ownerConnect: Joi.object({
+		...ownerSigned,
+		// Only needed the first time, when the Stripe account is created.
+		country: Joi.string().max(8).optional(),
+		email: Joi.string().max(254).optional()
+	}),
+	switchConnect: Joi.object({
+		country: Joi.string().max(8).allow('').optional(),
+		email: Joi.string().max(254).allow('').optional()
+	}),
 	rewardClaim: Joi.object({
 		...ownerSigned,
 		changeAt: Joi.number().integer().min(1).required(),
@@ -92,7 +101,16 @@ const canonicalConnect = (action, data) => stableJsonStringify({
 	nonce: data.nonce
 });
 
-const canonicalConnectOnboard = (data) => canonicalConnect('connect_onboard', data);
+// country/email are signed only when sent, like set_state's note.
+const canonicalConnectOnboard = (data) => stableJsonStringify({
+	v: 2,
+	action: 'connect_onboard',
+	ownerPubKey: data.ownerPubKey,
+	ts: data.ts,
+	nonce: data.nonce,
+	...(typeof data.country === 'string' && data.country !== '' ? { country: data.country } : {}),
+	...(typeof data.email === 'string' && data.email !== '' ? { email: data.email } : {})
+});
 const canonicalConnectStatus = (data) => canonicalConnect('connect_status', data);
 const canonicalMyRewards = (data) => canonicalConnect('my_rewards', data);
 
@@ -153,7 +171,7 @@ async function verifyOwnerSigned(req, res, canonical) {
 
 function sendError(res, error, fallback, context) {
 	if (error && error.expose) {
-		return res.status(error.status || 400).json({ success: false, error: error.message });
+		return res.status(error.status || 400).json({ success: false, error: error.message, ...(error.extra || {}) });
 	}
 	if (error && error.type && String(error.type).startsWith('Stripe')) {
 		logger.warn(`${context}: Stripe ${error.type} ${error.code || ''} ${error.message}`);
@@ -342,7 +360,8 @@ router.post('/v2/owner/connect',
 			if (!stripeUtil.isPaymentsConfigured()) {
 				return res.status(503).json({ success: false, error: 'Payments are not configured' });
 			}
-			const link = await connect.createOnboardingLink(ownerId);
+			const { country, email } = req.validatedData;
+			const link = await connect.createOnboardingLink(ownerId, { country, email });
 			return res.json({ success: true, data: { url: link.url } });
 		} catch (error) {
 			return sendError(res, error, 'Failed to start payment setup', 'Owner connect onboarding');
@@ -384,7 +403,16 @@ router.post('/v2/switch/:uid/connect',
 			if (!ownerId) {
 				return res.status(400).json({ success: false, error: 'Switch has no owner' });
 			}
-			const link = await connect.createOnboardingLink(ownerId, { uid });
+			const { error: bodyError, value: body } = schemas.switchConnect.validate(req.body || {}, { stripUnknown: true });
+			if (bodyError) {
+				return res.status(400).json({ success: false, error: bodyError.message });
+			}
+			const link = await connect.createOnboardingLink(ownerId, {
+				uid,
+				displayName: req.switchData.name || '',
+				country: body.country,
+				email: body.email
+			});
 			return res.json({ success: true, data: { url: link.url } });
 		} catch (error) {
 			return sendError(res, error, 'Failed to start payment setup', `Switch connect onboarding ${uid}`);

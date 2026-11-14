@@ -33,12 +33,41 @@ const connectKey = (ownerId) => `owner_connect:${ownerId}`;
 const createLockKey = (ownerId) => `owner_connect_lock:${ownerId}`;
 
 class ConnectError extends Error {
-	constructor(message, status = 400) {
+	constructor(message, status = 400, extra = {}) {
 		super(message);
 		this.name = 'ConnectError';
 		this.status = status;
 		this.expose = true;
+		this.extra = extra;
 	}
+}
+
+const COUNTRY = /^[a-z]{2}$/;
+const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
+
+/**
+ * Stripe will not add the merchant configuration without the account's
+ * country, nor the recipient one without a contact email. VomeSync owners
+ * are keys, not accounts, so we ask, pass both to Stripe, and keep neither.
+ */
+function cleanAccountDetails({ country = '', email = '' } = {}) {
+	const c = String(country || '').trim().toLowerCase();
+	const e = String(email || '').trim();
+	const needs = [];
+	if (!COUNTRY.test(c)) {
+		needs.push('country');
+	}
+	if (!EMAIL.test(e) || e.length > 254) {
+		needs.push('email');
+	}
+	if (needs.length > 0) {
+		throw new ConnectError(
+			'To set up payouts Stripe needs your country (two letters, e.g. SE) and an email address it can write to.',
+			400,
+			{ needs }
+		);
+	}
+	return { country: c, email: e };
 }
 
 function requireStripe() {
@@ -119,7 +148,7 @@ async function writeStatus(ownerId, readiness, now = Date.now()) {
  * Create the owner's connected account if they have none. A short lock
  * keeps two quick clicks from creating two accounts.
  */
-async function ensureConnectAccount(ownerId, { displayName = '' } = {}) {
+async function ensureConnectAccount(ownerId, { displayName = '', country = '', email = '' } = {}) {
 	if (!ownerId) {
 		throw new ConnectError('Owner id required');
 	}
@@ -127,6 +156,7 @@ async function ensureConnectAccount(ownerId, { displayName = '' } = {}) {
 	if (existing) {
 		return existing;
 	}
+	const details = cleanAccountDetails({ country, email });
 	const stripe = requireStripe();
 	const locked = await redisClient.client.set(createLockKey(ownerId), '1', { NX: true, EX: CREATE_LOCK_SECONDS });
 	if (locked !== 'OK') {
@@ -138,6 +168,8 @@ async function ensureConnectAccount(ownerId, { displayName = '' } = {}) {
 	}
 	try {
 		const params = {
+			identity: { country: details.country },
+			contact_email: details.email,
 			dashboard: 'express',
 			defaults: {
 				responsibilities: {
@@ -179,8 +211,8 @@ async function ensureConnectAccount(ownerId, { displayName = '' } = {}) {
 }
 
 /** Start or resume onboarding. Returns { url, accountId }. */
-async function createOnboardingLink(ownerId, { uid = '', displayName = '' } = {}) {
-	const record = await ensureConnectAccount(ownerId, { displayName });
+async function createOnboardingLink(ownerId, { uid = '', displayName = '', country = '', email = '' } = {}) {
+	const record = await ensureConnectAccount(ownerId, { displayName, country, email });
 	const stripe = requireStripe();
 	const link = await stripe.v2.core.accountLinks.create({
 		account: record.accountId,
@@ -270,6 +302,7 @@ async function markNotReady(ownerId) {
 }
 
 module.exports = {
+	cleanAccountDetails,
 	READY_CACHE_MS,
 	NOT_READY_CACHE_MS,
 	ACCOUNT_INCLUDE,

@@ -236,17 +236,22 @@ describe('commerce routes', () => {
 	describe('Connect onboarding and status', () => {
 		test('owner-signed onboarding returns a Stripe link; replays and bad signatures fail', async () => {
 			const owner = makeOwner();
-			const body = signed(owner, 'connect_onboard');
+			const body = signed(owner, 'connect_onboard', { country: 'se', email: 'owner@example.com' });
 			const res = await request(app).post('/api/v2/owner/connect').send(body).expect(200);
 			expect(res.body.data).toEqual({ url: 'https://connect.stripe.com/setup/e/acct_owner/x' });
 			await request(app).post('/api/v2/owner/connect').send(body).expect(409);
 
 			const other = makeOwner();
-			const forged = { ...signed(other, 'connect_onboard'), ownerPubKey: owner.ownerPubKey };
+			const forged = { ...signed(other, 'connect_onboard', { country: 'se', email: 'owner@example.com' }), ownerPubKey: owner.ownerPubKey };
 			await request(app).post('/api/v2/owner/connect').send(forged).expect(401);
 
 			const wrongAction = signed(owner, 'connect_status');
 			await request(app).post('/api/v2/owner/connect').send(wrongAction).expect(401);
+
+			// Country and email are part of what the owner signs.
+			const tampered = { ...signed(makeOwner(), 'connect_onboard', { country: 'se', email: 'owner@example.com' }) };
+			tampered.email = 'someone-else@example.com';
+			await request(app).post('/api/v2/owner/connect').send(tampered).expect(401);
 		});
 
 		test('owner-signed status reads Stripe and offers the dashboard when ready', async () => {
@@ -254,7 +259,7 @@ describe('commerce routes', () => {
 			await request(app).post('/api/v2/owner/connect/status').send(signed(owner, 'connect_status')).expect(200)
 				.then((res) => expect(res.body.data).toEqual({ connected: false, ready: false, requirementsDue: 0 }));
 
-			await request(app).post('/api/v2/owner/connect').send(signed(owner, 'connect_onboard')).expect(200);
+			await request(app).post('/api/v2/owner/connect').send(signed(owner, 'connect_onboard', { country: 'se', email: 'owner@example.com' })).expect(200);
 			const res = await request(app).post('/api/v2/owner/connect/status').send(signed(owner, 'connect_status')).expect(200);
 			expect(res.body.data).toEqual({
 				connected: true,
@@ -271,7 +276,11 @@ describe('commerce routes', () => {
 			await request(app).post(`/api/v2/switch/${uid}/connect`).send({ apiKey: toggleOnly.apiKey }).expect(403);
 
 			const key = await redisClient.createV2AccessKey(owner.ownerId, uid, 'web', ['metadata']);
-			const res = await request(app).post(`/api/v2/switch/${uid}/connect`).send({ apiKey: key.apiKey }).expect(200);
+			const missing = await request(app).post(`/api/v2/switch/${uid}/connect`).send({ apiKey: key.apiKey }).expect(400);
+			expect(missing.body.needs).toEqual(['country', 'email']);
+			const res = await request(app).post(`/api/v2/switch/${uid}/connect`)
+				.send({ apiKey: key.apiKey, country: 'SE', email: 'owner@example.com' })
+				.expect(200);
 			expect(res.body.data.url).toContain('connect.stripe.com');
 			const linkParams = stripe.v2.core.accountLinks.create.mock.calls[0][0];
 			expect(linkParams.use_case.account_onboarding.return_url).toContain(`/switch/${uid}?connect=return`);

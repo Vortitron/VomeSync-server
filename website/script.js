@@ -4956,6 +4956,8 @@ function renderConnectStatus(status) {
 		reqList.textContent = '';
 		reqList.classList.add('hidden');
 	}
+	const details = document.getElementById('connectDetails');
+	if (details) details.classList.toggle('hidden', Boolean(s.connected));
 	if (!s.connected) {
 		text.textContent = 'Payouts are not set up.';
 		if (startBtn) startBtn.textContent = 'Set up payouts with Stripe';
@@ -5001,9 +5003,22 @@ async function loadConnectStatus() {
 async function startConnectOnboarding() {
 	const btn = document.getElementById('connectStartBtn');
 	if (btn) btn.disabled = true;
+	const body = {};
+	const details = document.getElementById('connectDetails');
+	if (details && !details.classList.contains('hidden')) {
+		const country = String((document.getElementById('connectCountry') || {}).value || '').trim().toUpperCase();
+		const email = String((document.getElementById('connectEmail') || {}).value || '').trim();
+		if (!/^[A-Z]{2}$/.test(country) || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+			setManageExtrasStatus('connectStatus', 'Stripe needs your country (two letters, e.g. SE) and an email address first.', 'error');
+			if (btn) btn.disabled = false;
+			return;
+		}
+		body.country = country;
+		body.email = email;
+	}
 	setManageExtrasStatus('connectStatus', 'Opening Stripe…');
 	try {
-		const data = await manageExtrasRequest('/connect', {});
+		const data = await manageExtrasRequest('/connect', body);
 		const url = data.data && safeExternalUrl(data.data.url);
 		if (!url) throw new Error('Stripe did not return a link.');
 		window.location.assign(url);

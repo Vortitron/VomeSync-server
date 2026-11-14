@@ -2,6 +2,8 @@ const redisClient = require('../../../src/utils/redis');
 const { setStripeForTests } = require('../../../src/utils/stripe');
 const connect = require('../../../src/utils/connect');
 
+const DETAILS = { country: 'SE', email: 'owner@example.com' };
+
 function account({ card = 'active', transfers = 'active', entries = [] } = {}) {
 	return {
 		id: 'acct_test_1',
@@ -88,9 +90,22 @@ describe('Stripe Connect (Accounts v2)', () => {
 		});
 	});
 
+	test('a new account needs a country and an email, and says which are missing', async () => {
+		const stripe = fakeStripe();
+		await expect(connect.createOnboardingLink('owner-8')).rejects.toMatchObject({
+			status: 400,
+			extra: { needs: ['country', 'email'] }
+		});
+		await expect(connect.createOnboardingLink('owner-8', { country: 'Sweden', email: 'owner@example.com' }))
+			.rejects.toMatchObject({ extra: { needs: ['country'] } });
+		await expect(connect.createOnboardingLink('owner-8', { country: 'se', email: 'not-an-email' }))
+			.rejects.toMatchObject({ extra: { needs: ['email'] } });
+		expect(stripe.v2.core.accounts.create).not.toHaveBeenCalled();
+	});
+
 	test('creates one express account with the contract settings and an onboarding link', async () => {
 		const stripe = fakeStripe();
-		const link = await connect.createOnboardingLink('owner-1', { uid: 'vs_abc' });
+		const link = await connect.createOnboardingLink('owner-1', { uid: 'vs_abc', ...DETAILS });
 		expect(link.url).toContain('connect.stripe.com');
 		expect(link.accountId).toBe('acct_test_1');
 
@@ -104,6 +119,10 @@ describe('Stripe Connect (Accounts v2)', () => {
 		expect(params.configuration.merchant.capabilities.card_payments.requested).toBe(true);
 		expect(params.configuration.recipient.capabilities.stripe_balance.stripe_transfers.requested).toBe(true);
 		expect(params.metadata).toEqual({ vomesyncOwnerId: 'owner-1' });
+		// Stripe refuses the merchant configuration without a country and the
+		// recipient one without a contact email; the email is not kept here.
+		expect(params.identity).toEqual({ country: 'se' });
+		expect(params.contact_email).toBe('owner@example.com');
 
 		const linkParams = stripe.v2.core.accountLinks.create.mock.calls[0][0];
 		expect(linkParams.account).toBe('acct_test_1');
@@ -113,6 +132,7 @@ describe('Stripe Connect (Accounts v2)', () => {
 		expect(linkParams.use_case.account_onboarding.refresh_url).toMatch(/\/switch\/vs_abc\?connect=refresh$/);
 
 		const stored = await redisClient.client.hGetAll('owner_connect:owner-1');
+		expect(JSON.stringify(stored)).not.toContain('owner@example.com');
 		expect(stored.accountId).toBe('acct_test_1');
 		expect(stored.ready).toBe('false');
 		expect(Number(stored.createdAt)).toBeGreaterThan(0);
@@ -127,7 +147,7 @@ describe('Stripe Connect (Accounts v2)', () => {
 	test('a second create while one is in flight is refused, not duplicated', async () => {
 		const stripe = fakeStripe();
 		await redisClient.client.set('owner_connect_lock:owner-2', '1');
-		await expect(connect.ensureConnectAccount('owner-2')).rejects.toMatchObject({ status: 409 });
+		await expect(connect.ensureConnectAccount('owner-2', DETAILS)).rejects.toMatchObject({ status: 409 });
 		expect(stripe.v2.core.accounts.create).not.toHaveBeenCalled();
 	});
 
@@ -142,7 +162,7 @@ describe('Stripe Connect (Accounts v2)', () => {
 		const stripe = fakeStripe({
 			accounts: { retrieve: jest.fn().mockResolvedValue(account()) }
 		});
-		await connect.ensureConnectAccount('owner-3');
+		await connect.ensureConnectAccount('owner-3', DETAILS);
 		const now = Date.now();
 		const status = await connect.getConnectStatus('owner-3', { now });
 		expect(status.ready).toBe(true);
@@ -159,7 +179,7 @@ describe('Stripe Connect (Accounts v2)', () => {
 
 	test('a not-ready account is re-read after 30 seconds', async () => {
 		const stripe = fakeStripe();
-		await connect.ensureConnectAccount('owner-4');
+		await connect.ensureConnectAccount('owner-4', DETAILS);
 		const now = Date.now();
 		expect((await connect.getConnectStatus('owner-4', { now })).ready).toBe(false);
 		await connect.getConnectStatus('owner-4', { now: now + 10 * 1000 });
@@ -172,7 +192,7 @@ describe('Stripe Connect (Accounts v2)', () => {
 
 	test('a ready owner gets an Express dashboard link; a failed link is left out', async () => {
 		const stripe = fakeStripe({ accounts: { retrieve: jest.fn().mockResolvedValue(account()) } });
-		await connect.ensureConnectAccount('owner-5');
+		await connect.ensureConnectAccount('owner-5', DETAILS);
 		const status = await connect.connectStatusResponse('owner-5');
 		expect(status).toEqual({
 			connected: true,
@@ -190,7 +210,7 @@ describe('Stripe Connect (Accounts v2)', () => {
 
 	test('markNotReady forces the next check and stops payments at once', async () => {
 		fakeStripe({ accounts: { retrieve: jest.fn().mockResolvedValue(account()) } });
-		await connect.ensureConnectAccount('owner-6');
+		await connect.ensureConnectAccount('owner-6', DETAILS);
 		await connect.getConnectStatus('owner-6');
 		expect(await redisClient.ownerCanTakePayments('owner-6')).toBe(true);
 		await connect.markNotReady('owner-6');
@@ -199,6 +219,6 @@ describe('Stripe Connect (Accounts v2)', () => {
 
 	test('without Stripe keys, onboarding fails with 503', async () => {
 		setStripeForTests(null);
-		await expect(connect.createOnboardingLink('owner-7')).rejects.toMatchObject({ status: 503 });
+		await expect(connect.createOnboardingLink('owner-7', DETAILS)).rejects.toMatchObject({ status: 503 });
 	});
 });

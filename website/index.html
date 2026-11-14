@@ -11,7 +11,7 @@
 	<meta property="og:url" content="https://sync.vome.io/">
 	<meta property="og:type" content="website">
 	<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"VomeSync","url":"https://sync.vome.io/","description":"Public on/off switches for Home Assistant."}</script>
-	<link rel="stylesheet" href="/styles.css?v=20261029-1">
+	<link rel="stylesheet" href="/styles.css?v=20261114-1">
 	<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-icon-180x180.png">
 	<link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
 	<link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
@@ -427,6 +427,18 @@
 										<p class="muted small">To take card payments for paid switching or tips, connect a Stripe account. Stripe pays the money out to you; Vome keeps a fee from each payment. Your own payment link above does not need this.</p>
 										<p id="connectStatusText" class="small">Not checked yet.</p>
 										<ul id="connectRequirements" class="small extras-list hidden"></ul>
+										<div id="connectDetails" class="hidden">
+											<label for="connectCountry">Country your bank account is in (two letters, e.g. SE, GB, DE)</label>
+											<input id="connectCountry" type="text" maxlength="2" autocomplete="country" placeholder="SE" list="connectCountryList">
+											<datalist id="connectCountryList">
+												<option value="SE"></option><option value="NO"></option><option value="DK"></option><option value="FI"></option>
+												<option value="GB"></option><option value="IE"></option><option value="DE"></option><option value="NL"></option>
+												<option value="FR"></option><option value="ES"></option><option value="IT"></option><option value="US"></option>
+											</datalist>
+											<label for="connectEmail">Email Stripe can write to about your payouts</label>
+											<input id="connectEmail" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com">
+											<p class="muted small">Both go straight to Stripe to open your account. Vome does not keep the email.</p>
+										</div>
 										<div class="comment-actions">
 											<button id="connectStartBtn" type="button" class="refresh-btn">Set up payouts with Stripe</button>
 											<button id="connectRefreshBtn" type="button" class="ghost-btn">Check status</button>
@@ -794,6 +806,6 @@
 
 	<script src="/network-bg.js?v=20260114-5"></script>
 	<script src="/vome-nav-wait.js?v=3"></script>
-	<script src="/script.js?v=20261029-1"></script>
+	<script src="/script.js?v=20261114-1"></script>
 </body>
 </html>

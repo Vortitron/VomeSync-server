@@ -1476,6 +1476,32 @@ describe('Website switch extras (properties, notes, commerce, rewards)', () => {
 		expect(window.location.search).toBe('');
 	});
 
+	test('first payout setup asks for country and email and sends them to Stripe', async () => {
+		const uid = 'vs_extras_connect_new';
+		const accessKey = '00000000-0000-4000-8000-777777777777';
+		await loadSite({
+			uid,
+			manageKey: accessKey,
+			routes: {
+				[`/v2/switch/${uid}/connect/status`]: { success: true, data: { connected: false, ready: false, requirementsDue: 0 } },
+				[`/v2/switch/${uid}/connect`]: { success: true, data: { url: 'https://connect.stripe.com/setup/e/acct_x/y' } },
+				[`/v2/switch/${uid}/reward-claims/list`]: { success: true, data: { claims: [] } }
+			}
+		});
+		await flush();
+		expect(document.getElementById('connectDetails').classList.contains('hidden')).toBe(false);
+
+		await window.eval('startConnectOnboarding()');
+		expect(document.getElementById('connectStatus').textContent).toContain('country');
+		expect(callsTo(`/v2/switch/${uid}/connect`)).toHaveLength(0);
+
+		document.getElementById('connectCountry').value = 'se';
+		document.getElementById('connectEmail').value = 'owner@example.com';
+		await window.eval('startConnectOnboarding()');
+		const [, opts] = callsTo(`/v2/switch/${uid}/connect`)[0];
+		expect(JSON.parse(opts.body)).toEqual({ country: 'SE', email: 'owner@example.com' });
+	});
+
 	test('formatMoney uses minor units and the currency', () => {
 		const html = fs.readFileSync(path.join(websiteRoot, 'index.html'), 'utf8');
 		document.documentElement.innerHTML = html;
@@ -1488,7 +1514,7 @@ describe('Website switch extras (properties, notes, commerce, rewards)', () => {
 
 	test('script and stylesheet cache-busting versions were bumped', () => {
 		const html = fs.readFileSync(path.join(websiteRoot, 'index.html'), 'utf8');
-		expect(html).toContain('/script.js?v=20261029-1');
-		expect(html).toContain('/styles.css?v=20261029-1');
+		expect(html).toContain('/script.js?v=20261114-1');
+		expect(html).toContain('/styles.css?v=20261114-1');
 	});
 });
