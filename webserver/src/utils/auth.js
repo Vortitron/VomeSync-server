@@ -17,6 +17,12 @@ function _constantTimeEqual(a, b) {
 	return crypto.timingSafeEqual(bufA, bufB);
 }
 
+// Vome passes (see verifyVomePass). The portal mints them with the same
+// label and secret: portal/vomesync_client.py mint_vome_pass.
+const VOME_PASS_PREFIX = 'vsp1.';
+const VOME_PASS_KEY_LABEL = 'vomesync-captcha-pass-v1';
+const VOME_PASS_MAX_TTL_SECONDS = 15 * 60;
+
 class AuthManager {
 	generatePersonalKey() {
 		return uuidv4();
@@ -117,6 +123,13 @@ class AuthManager {
 			return { success: false, error: 'Captcha required' };
 		}
 
+		// A Vome pass: the portal mints one for an account paying for Vome,
+		// and the caller (its HA integration, or an agent through the Vome
+		// MCP) sends it in place of a widget's token.
+		if (String(token).startsWith(VOME_PASS_PREFIX)) {
+			return this.verifyVomePass(token, trustedCallerSecret);
+		}
+
 		// Test/staging bypass
 		if (bypassToken) {
 			if (token === bypassToken) {
@@ -148,6 +161,53 @@ class AuthManager {
 			logger.error('Captcha verification error:', error);
 			return { success: false, error: 'Captcha verification failed' };
 		}
+	}
+
+	/**
+	 * Check a Vome pass: `vsp1.<expiry s>.<nonce>.<account ref>.<sig>`.
+	 *
+	 * sig is HMAC-SHA256 over everything before it, base64url, keyed by
+	 * HMAC-SHA256(trustedCallerSecret, VOME_PASS_KEY_LABEL), so a pass never
+	 * reveals or equals the trusted-caller secret itself. A pass works once
+	 * and for minutes; the account ref is an opaque hash the portal can map
+	 * back to the account, logged so a public switch made with a pass can be
+	 * traced to who paid for it.
+	 */
+	async verifyVomePass(token, trustedCallerSecret) {
+		const refused = { success: false, error: 'Vome pass not valid' };
+		if (!trustedCallerSecret) {
+			return refused;
+		}
+		const parts = String(token).split('.');
+		if (parts.length !== 5 || `${parts[0]}.` !== VOME_PASS_PREFIX) {
+			return refused;
+		}
+		const [, expiry, nonce, accountRef, sig] = parts;
+		if (!/^\d{1,12}$/.test(expiry) || !/^[A-Za-z0-9_-]{16,64}$/.test(nonce)
+			|| !/^[A-Za-z0-9_-]{1,64}$/.test(accountRef)) {
+			return refused;
+		}
+		const key = crypto.createHmac('sha256', trustedCallerSecret).update(VOME_PASS_KEY_LABEL).digest();
+		const expected = crypto.createHmac('sha256', key)
+			.update(parts.slice(0, 4).join('.'))
+			.digest('base64url');
+		if (!_constantTimeEqual(sig, expected)) {
+			return refused;
+		}
+		const nowSeconds = Math.floor(Date.now() / 1000);
+		const expires = Number(expiry);
+		if (expires < nowSeconds) {
+			return { success: false, error: 'Vome pass expired' };
+		}
+		if (expires > nowSeconds + VOME_PASS_MAX_TTL_SECONDS) {
+			return refused;
+		}
+		const fresh = await redisClient.claimV2Nonce('vomepass', nonce, VOME_PASS_MAX_TTL_SECONDS * 2000);
+		if (!fresh) {
+			return { success: false, error: 'Vome pass already used' };
+		}
+		logger.info('Public listing allowed by a Vome pass', { accountRef });
+		return { success: true, reason: 'vome_pass', accountRef };
 	}
 
 	// Middleware for protecting routes that require personal key
