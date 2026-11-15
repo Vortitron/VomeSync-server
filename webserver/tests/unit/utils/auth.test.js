@@ -254,6 +254,66 @@ describe('AuthManager', () => {
 			expect(result.success).toBe(false);
 		});
 
+		// ── Vome passes (minted by the portal for accounts paying for Vome) ──
+		const crypto = require('crypto');
+		function mintPass(secret, { expiry, nonce, ref = 'acct0ref' } = {}) {
+			const exp = expiry ?? Math.floor(Date.now() / 1000) + 600;
+			const n = nonce ?? crypto.randomBytes(16).toString('base64url');
+			const body = `vsp1.${exp}.${n}.${ref}`;
+			const key = crypto.createHmac('sha256', secret).update('vomesync-captcha-pass-v1').digest();
+			return `${body}.${crypto.createHmac('sha256', key).update(body).digest('base64url')}`;
+		}
+		const enforced = {
+			secret: 'real-hcaptcha-secret',
+			bypassToken: '',
+			trustedCallerSecret: 'portal-shared-secret',
+		};
+
+		test('a Vome pass stands in for the CAPTCHA, once', async () => {
+			config.hcaptcha = { ...enforced };
+			const pass = mintPass('portal-shared-secret');
+
+			const first = await AuthManager.verifyCaptcha(pass);
+			expect(first.success).toBe(true);
+			expect(first.reason).toBe('vome_pass');
+			expect(first.accountRef).toBe('acct0ref');
+
+			const again = await AuthManager.verifyCaptcha(pass);
+			expect(again.success).toBe(false);
+			expect(again.error).toBe('Vome pass already used');
+		});
+
+		test('a pass signed with another secret, expired, or too long-lived is refused', async () => {
+			config.hcaptcha = { ...enforced };
+			const now = Math.floor(Date.now() / 1000);
+
+			expect((await AuthManager.verifyCaptcha(mintPass('someone-elses-secret'))).success).toBe(false);
+			expect(await AuthManager.verifyCaptcha(mintPass('portal-shared-secret', { expiry: now - 1 })))
+				.toEqual({ success: false, error: 'Vome pass expired' });
+			expect((await AuthManager.verifyCaptcha(mintPass('portal-shared-secret', { expiry: now + 86400 }))).success)
+				.toBe(false);
+		});
+
+		test('a tampered or malformed pass is refused', async () => {
+			config.hcaptcha = { ...enforced };
+			const pass = mintPass('portal-shared-secret');
+			const parts = pass.split('.');
+			parts[3] = 'someoneelse';
+
+			expect((await AuthManager.verifyCaptcha(parts.join('.'))).success).toBe(false);
+			expect((await AuthManager.verifyCaptcha('vsp1.garbage')).success).toBe(false);
+			// The trusted-caller secret itself is not a pass.
+			expect((await AuthManager.verifyCaptcha('vsp1.portal-shared-secret')).success).toBe(false);
+		});
+
+		test('no pass works while the server has no trusted-caller secret', async () => {
+			config.hcaptcha = { ...enforced, trustedCallerSecret: '' };
+
+			const result = await AuthManager.verifyCaptcha(mintPass(''));
+
+			expect(result.success).toBe(false);
+		});
+
 		test('the generic test/staging bypassToken still works on its own, independent of trustedCallerSecret', async () => {
 			config.hcaptcha = {
 				secret: 'real-hcaptcha-secret',
